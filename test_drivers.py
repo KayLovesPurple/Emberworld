@@ -12,6 +12,7 @@ The LLM sign-off tests use fake Anthropic clients -- no network, no key needed.
 import json
 import os
 import tempfile
+from datetime import datetime
 
 import drivers as drv
 from _test_helpers import fresh
@@ -50,6 +51,29 @@ def test_stale_save_file_is_set_aside_not_crashed():
             drv.SAVE = orig
         assert w.day() == 1, "should have started a fresh world"
         assert os.path.exists(save_path + ".bak"), "old save wasn't preserved"
+
+
+def test_llm_session_log_uses_descriptive_name_and_italic_thoughts():
+    """A visit gets its own Markdown record; thoughts must be visually distinct."""
+    with tempfile.TemporaryDirectory() as d:
+        original = drv.SESSIONS_DIR
+        drv.SESSIONS_DIR = d
+        try:
+            path, log = drv._start_session_log("Claude Sonnet 5", 10, 30,
+                                               datetime(2026, 7, 31, 14, 30, 52))
+            drv._log_turn(log, 1, "I should wait.", "wait", "Time passes.")
+            log.close()
+            duplicate, duplicate_log = drv._start_session_log(
+                "Claude Sonnet 5", 10, 30, datetime(2026, 7, 31, 14, 30, 52))
+            duplicate_log.close()
+        finally:
+            drv.SESSIONS_DIR = original
+        assert os.path.basename(path) == "20260731-143052_claude-sonnet-5_day-10_30-turns.md"
+        assert os.path.basename(duplicate) == "20260731-143052_claude-sonnet-5_day-10_30-turns-2.md"
+        with open(path, encoding="utf-8") as f:
+            transcript = f.read()
+        assert "> *I should wait.*" in transcript
+        assert "**Command:** `wait`" in transcript
 
 
 # ===========================================================================
@@ -201,6 +225,30 @@ def test_extract_command_is_a_no_op_on_a_bare_command():
 def test_extract_command_falls_back_to_last_line_when_no_verb_matches():
     assert drv._extract_command("hmm, tricky, let me think about this") == \
         "hmm, tricky, let me think about this"
+
+
+# ===========================================================================
+# 4. THE SYSTEM PROMPT -- standing, once-per-visit instructions to the agent.
+# ===========================================================================
+def test_system_prompt_encourages_experimentation_without_naming_features():
+    """As the world grows we keep adding objects/actions a goal list never
+    mentions (a well, a bucket...). An agent that treats its goals and its
+    allowed-actions list as the whole universe never experiments, so new
+    features go undiscovered. The standing system prompt must nudge toward
+    trying unfamiliar things -- generically, so it scales without an edit for
+    every future addition -- and tie discovery back to the journal so it's
+    passed on to whoever comes next."""
+    prompt = drv.LLM_SYSTEM_PROMPT.lower()
+    assert "well" not in prompt and "bucket" not in prompt, \
+        "the nudge must stay generic, not name specific features"
+    assert "experiment" in prompt or "curio" in prompt, \
+        "should actively encourage trying unfamiliar things"
+    assert "journal" in prompt, "should tie discovery back to the journal"
+    # additive, not a replacement: the pre-existing instructions must survive
+    assert "no memory" in prompt, "no-memory reminder must still be present"
+    assert "free" in prompt and "do not pass time" in prompt, \
+        "the time rule must still be present"
+    assert "one command" in prompt, "the one-command format rule must still be present"
 
 
 def test_journal_excerpt_caps_length_but_keeps_seed_entry():

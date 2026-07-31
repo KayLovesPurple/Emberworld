@@ -161,6 +161,16 @@ exists (each fixed a real failure we watched happen):
 - **The time rule in the system prompt**: the agent can't deduce that looking is
   free and only `wait`/`go`/etc. advance time, and can't remember being told — so
   we state it every turn. This broke the "wait by looking" deadlock.
+- **A standing nudge toward curiosity** (`LLM_SYSTEM_PROMPT`, once, not
+  per-turn): as the world grows we keep adding objects and actions a goal list
+  never names (a well, a bucket…). An agent that treats its stated goals and
+  its allowed-actions list as the whole universe never experiments, so new
+  features go undiscovered — and we can't enumerate every feature in the
+  prompt, it won't scale. So the standing instructions carry one generic
+  sentence encouraging the agent to try unfamiliar objects or actions it
+  notices, and to leave what it learns in the journal, so a discovery becomes
+  part of the lineage instead of being rediscovered (or missed) by every
+  visitor after it.
 
 Model and thinking config (see `_ask_claude`), current as of Sonnet 5:
 

@@ -14,12 +14,58 @@ import sys
 import random
 import string
 import json
+from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
 from content import build_world, VERBS, FREE_VERBS
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
+SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
+
+
+def _session_filename(agent_name, start_day, turns, started_at=None):
+    """Return a portable, descriptive filename for one LLM visit."""
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "-"
+                        for c in agent_name.lower()).strip("-") or "agent"
+    started_at = started_at or datetime.now()
+    return (f"{started_at:%Y%m%d-%H%M%S}_{safe_name}_day-{start_day}_"
+            f"{turns}-turns.md")
+
+
+def _start_session_log(agent_name, start_day, turns, started_at=None):
+    """Create a per-visit Markdown transcript and return its open file handle."""
+    started_at = started_at or datetime.now()
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
+    filename = _session_filename(agent_name, start_day, turns, started_at)
+    path = os.path.join(SESSIONS_DIR, filename)
+    # A visitor can return with the same model, day, and turn budget. Keep the
+    # requested filename for the first visit, then add a small suffix instead
+    # of overwriting an earlier transcript.
+    stem, extension = os.path.splitext(path)
+    suffix = 2
+    while os.path.exists(path):
+        path = f"{stem}-{suffix}{extension}"
+        suffix += 1
+    log = open(path, "x", encoding="utf-8")
+    log.write(f"# {agent_name} session\n\n"
+              f"- Started: {started_at.isoformat(timespec='seconds')}\n"
+              f"- World day at arrival: {start_day}\n"
+              f"- Turn budget: {turns}\n\n")
+    log.flush()
+    return path, log
+
+
+def _log_turn(log, number, thoughts, command, result):
+    """Append one completed LLM turn; Markdown italics distinguish thoughts."""
+    log.write(f"## Turn {number}\n\n")
+    if thoughts:
+        # A line-by-line blockquote keeps multi-line summaries readable while
+        # putting every thought line in Markdown italics.
+        log.write("\n".join(f"> *{line}*" if line else ">"
+                            for line in thoughts.splitlines()) + "\n\n")
+    log.write(f"**Command:** `{command}`\n\n{result}\n\n")
+    log.flush()
 
 
 def load_or_build(quiet=False):
@@ -244,6 +290,30 @@ def _looks_stuck(history, n=3):
     return verb in FREE_VERBS
 
 
+# The standing instructions for every turn of a visit -- built once, not
+# per-turn (per-turn state like the journal excerpt and turns-left lives in
+# the prompt built inside the loop below). Pulled out to a module-level
+# constant so it can be asserted on directly in tests without spinning up a
+# real (or fake) API call.
+LLM_SYSTEM_PROMPT = (
+    "You are someone living in a small text world that persists between "
+    "visitors -- and you have no memory of past turns, so trust what "
+    "the world and the journal tell you. Goal: keep a light through "
+    "the night, grow and cook a potato, eat when hungry. There's a cat "
+    "-- feed it if it's hungry, pet it if you like. Read the journal "
+    "early. IMPORTANT: looking, reading, and checking inventory are "
+    "FREE and do NOT pass time -- only actions like wait, go, plant, "
+    "cook advance the world. To let a crop grow or the night pass, use "
+    "`wait` (repeatedly). This world holds more than your goals name -- if "
+    "you notice an object or an available action you haven't tried, an "
+    "unfamiliar item or a feature of the landscape, it's worth "
+    "experimenting; the world sometimes rewards curiosity, and what you "
+    "learn you can leave in the journal for those who follow. Reply with "
+    "EXACTLY ONE command from the allowed list. For 'write', include your "
+    "note text. Nothing else."
+)
+
+
 def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True):
     model = model or LLM_MODEL
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -253,6 +323,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     from anthropic import Anthropic          # lazy import: file runs without it
     client = Anthropic()
     w, actor = load_or_build(quiet=True)
+    session_path, session_log = _start_session_log(model, w.day(), turns)
     color = color and sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
@@ -260,16 +331,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     print(f"(Someone arrives -- {w.timestr()}. {turns} turns to spend. "
           f"[{model}, {think_note}])\n")
 
-    system = ("You are someone living in a small text world that persists between "
-              "visitors -- and you have no memory of past turns, so trust what "
-              "the world and the journal tell you. Goal: keep a light through "
-              "the night, grow and cook a potato, eat when hungry. There's a cat "
-              "-- feed it if it's hungry, pet it if you like. Read the journal "
-              "early. IMPORTANT: looking, reading, and checking inventory are "
-              "FREE and do NOT pass time -- only actions like wait, go, plant, "
-              "cook advance the world. To let a crop grow or the night pass, use "
-              "`wait` (repeatedly). Reply with EXACTLY ONE command from the "
-              "allowed list. For 'write', include your note text. Nothing else.")
+    system = LLM_SYSTEM_PROMPT
 
     history = deque(maxlen=5)
     journal_text = None                       # once read, kept in view so it needn't re-read
@@ -291,13 +353,14 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                       f"\n\nTurns left this visit: {turns_left}.\n\nAllowed:\n"
                       + "\n".join(actions) + "\n\nYour command:")
             try:
-                if show_thoughts and think:
+                thoughts = ""
+                if think:
                     thoughts, reply = _ask_claude(client, system, prompt, model,
                                                   think, return_thinking=True)
-                    if thoughts:
+                    if show_thoughts and thoughts:
                         block = "\n".join("    " + ln for ln in thoughts.splitlines())
                         print(_paint(block, "90", color))     # dim grey
-                    else:
+                    elif show_thoughts:
                         print(_paint("    (no reasoning surfaced this turn)",
                                      "90", color))
                 else:
@@ -305,10 +368,14 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                 choice = _extract_command(reply)
             except Exception as ex:                       # network/API hiccup
                 print(f"(a turn slipped away: {ex})")
+                session_log.write(f"## Turn {i + 1}\n\n"
+                                  f"_The API call failed: {ex}_\n\n")
+                session_log.flush()
                 continue
             print(_paint(f">>> {choice}", "1;36", color))     # bold cyan
             result = w.act(actor, choice)
             print(result, "\n")
+            _log_turn(session_log, i + 1, thoughts, choice, result)
             # remember the journal's contents the first time it's read this visit
             if choice.split()[:1] == ["read"] and "journal reads" in result:
                 jrnl = w.get("journal")
@@ -326,10 +393,13 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
             history.append((choice, first))
     except KeyboardInterrupt:
         print("\n(the visit is cut short -- but the note still gets left.)")
-
-    _leave_signoff(client, w, actor, model, think, did)
-    w.save(SAVE)
-    print(f"(They depart. Their note is in the journal.)\n(saved: {SAVE})")
+    finally:
+        _leave_signoff(client, w, actor, model, think, did)
+        w.save(SAVE)
+        session_log.write(f"## Departure\n\nEnded on world day {w.day()}. "
+                          "A closing note was left in the shared journal.\n")
+        session_log.close()
+    print(f"(They depart. Their note is in the journal.)\n(saved: {SAVE}; session: {session_path})")
 
 
 def _leave_signoff(client, w, actor, model=None, think=True, did=None):
