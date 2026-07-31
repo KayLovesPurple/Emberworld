@@ -35,6 +35,7 @@
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **cat_wander** -- Autonomous: the cat drifts between rooms, drawn toward a lit hearth.
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
+- **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle
 
 ## World rules (from the code's own constants)
 

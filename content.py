@@ -154,9 +154,29 @@ def cat_hunger(world, cat):
                        f"meowing to be fed.", cat.location)
 
 
+CAT_IDLE_LINES = (
+    "{cat} stretches long, then folds itself smaller.",
+    "{cat} washes one paw with great seriousness.",
+    "{cat}'s purr rumbles somewhere deep in its chest.",
+    "{cat} blinks at you, slow and unbothered.",
+    "{cat} curls its tail neatly around its feet.",
+)
+
+
+def cat_idle(world, cat):
+    """Autonomous: a content, well-fed cat occasionally does a small idle
+    cat-thing -- purely cosmetic ambient life, never while it's hungry."""
+    if cat.attrs.get("hunger", 0) >= 6:
+        return
+    if world.rng.random() < 0.12:
+        line = world.rng.choice(CAT_IDLE_LINES).format(cat=_cat_cap(cat))
+        world.announce(line, cat.location)
+
+
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
                    "bucket_state": bucket_state, "hungering": hungering,
-                   "cat_wander": cat_wander, "cat_hunger": cat_hunger})
+                   "cat_wander": cat_wander, "cat_hunger": cat_hunger,
+                   "cat_idle": cat_idle})
 
 
 def _patch_in(world, room_id):
@@ -577,6 +597,7 @@ def build_world():
         location="hut", attrs={"hunger": 0}))
     cat.attach("cat_hunger")
     cat.attach("cat_wander")
+    cat.attach("cat_idle")
 
     patch = w.add(Entity("patch", "vegetable patch",
         "a strip of turned soil, dark and ready", location="yard"))

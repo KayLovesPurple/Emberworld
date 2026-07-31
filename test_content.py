@@ -11,7 +11,7 @@ import json
 
 from world import World, check_world
 from content import (
-    VERBS, BEHAVIORS, CAT_HUNGER_CAP, cat_wander, cat_hunger,
+    VERBS, BEHAVIORS, CAT_HUNGER_CAP, cat_wander, cat_hunger, cat_idle,
     generate_reference, _crop_in, BUCKET_CAPACITY, bucket_state,
 )
 from _test_helpers import fresh, run
@@ -277,6 +277,75 @@ def test_named_cat_uses_its_name_in_announcements():
     w.log = []
     cat_hunger(w, cat)
     assert any("Shadow" in m for (m, _) in w.log), "meow didn't use the cat's name"
+
+
+def test_content_cat_idle_line_is_heard_only_in_its_own_room():
+    """Sibling scoping stress test to the meow: a content cat's idle line
+    scopes to its own room, never through a wall."""
+    class Roll:                              # force the idle roll to fire
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.attrs["hunger"] = 0                  # content, not hungry
+    cat.location = "yard"
+    w.rng = Roll()
+    w.log = []
+    cat_idle(w, cat)
+    heard_in_hut = [m for (m, where) in w.log
+                    if where is None or where == "hut"]
+    heard_in_yard = [m for (m, where) in w.log
+                     if where is None or where == "yard"]
+    assert not heard_in_hut, "heard the content cat through a wall"
+    assert heard_in_yard, "content cat stayed silent where it was"
+
+
+def test_hungry_cat_never_produces_an_idle_line():
+    """The gate must hold: a hungry cat meows, it doesn't also mooch. Force
+    the roll and confirm the idle behaviour stays silent."""
+    class Roll:                              # force the idle roll to fire
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.attrs["hunger"] = 10                 # hungry
+    cat.location = "yard"
+    w.rng = Roll()
+    w.log = []
+    cat_idle(w, cat)
+    assert w.log == [], f"hungry cat produced an idle line: {w.log}"
+
+
+def test_named_content_cat_idle_line_uses_its_name():
+    class Roll:
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.attrs["given_name"] = "Shadow"
+    cat.attrs["hunger"] = 0
+    w.rng = Roll()
+    w.log = []
+    cat_idle(w, cat)
+    assert any("Shadow" in m for (m, _) in w.log), "idle line didn't use the cat's name"
+
+
+def test_cat_idle_is_purely_cosmetic():
+    """No state change -- it only announces. Hunger, location, and every
+    other attr must be untouched by a fired idle line."""
+    class Roll:
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.attrs["hunger"] = 3
+    cat.location = "yard"
+    before_attrs = dict(cat.attrs)
+    before_location = cat.location
+    w.rng = Roll()
+    cat_idle(w, cat)
+    assert cat.attrs == before_attrs, "idle behaviour mutated an attr"
+    assert cat.location == before_location, "idle behaviour moved the cat"
 
 
 # ===========================================================================
