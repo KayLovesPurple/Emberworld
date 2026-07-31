@@ -172,7 +172,7 @@ class World:
         # imports World/Entity from here, making a module-level import back
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in
+        from content import _crop_in, _patch_in, find_visible
         acts = ["look", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
@@ -188,6 +188,11 @@ class World:
         crop = _crop_in(self, room.id)
         if crop and crop.attrs.get("ready"):
             acts.append("harvest")
+        if find_visible(self, actor, "well"):
+            acts.append("draw water")
+        bucket = find_visible(self, actor, "bucket")
+        if crop and not crop.attrs.get("ready") and bucket and bucket.attrs.get("water", 0) > 0:
+            acts.append("water crop")
         for e in carried:
             acts.append(f"drop {e.name}")
         for e in here + carried:

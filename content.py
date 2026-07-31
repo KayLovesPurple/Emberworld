@@ -30,10 +30,17 @@ def burning(world, e):
 
 
 def growing(world, plant):
-    """Autonomous: a planted crop ages each tick and eventually ripens."""
+    """Autonomous: a planted crop ages each tick and eventually ripens -- twice
+    as fast on any tick it spends a unit of stored water."""
     if plant.attrs.get("ready"):
         return
-    plant.attrs["growth"] = plant.attrs.get("growth", 0) + 1
+    boosted = plant.attrs.get("watered", 0) > 0
+    plant.attrs["boosted"] = boosted   # so patch_state can describe THIS tick truthfully
+    if boosted:
+        plant.attrs["growth"] = plant.attrs.get("growth", 0) + 2
+        plant.attrs["watered"] -= 1
+    else:
+        plant.attrs["growth"] = plant.attrs.get("growth", 0) + 1
     if plant.attrs["growth"] >= plant.attrs.get("ripe_at", 8):
         plant.attrs["ready"] = True
         world.announce("In the patch, the potato plant has ripened.",
@@ -41,7 +48,8 @@ def growing(world, plant):
 
 
 def patch_state(world, patch):
-    """Autonomous: the vegetable patch describes itself by what's growing in it."""
+    """Autonomous: the vegetable patch describes itself by what's growing in
+    it, including whether it was just watered."""
     # the patch describes itself by what's growing in it -- so planting shows.
     plants = world.contents(patch.id)
     if not plants:
@@ -52,12 +60,22 @@ def patch_state(world, patch):
         patch.description = "turned soil with a potato plant, lush and ready to lift"
         return
     g, ripe = p.attrs.get("growth", 0), p.attrs.get("ripe_at", 8)
+    watered = ", well-watered" if p.attrs.get("boosted") else ""
     if g < 3:
-        patch.description = "turned soil, a fresh mound where a potato was just set"
+        patch.description = f"turned soil, a fresh mound where a potato was just set{watered}"
     elif g < ripe - 2:
-        patch.description = "turned soil, green potato shoots pushing up"
+        patch.description = f"turned soil, green potato shoots pushing up{watered}"
     else:
-        patch.description = "turned soil, a potato plant leafing out, not far off ripe"
+        patch.description = f"turned soil, a potato plant leafing out, not far off ripe{watered}"
+
+
+def bucket_state(world, bucket):
+    """Autonomous: the bucket describes itself by how much water it's holding."""
+    water = bucket.attrs.get("water", 0)
+    if water <= 0:
+        bucket.description = "an empty wooden bucket by the well"
+    else:
+        bucket.description = f"a wooden bucket, holding water ({water})"
 
 
 def hungering(world, actor):
@@ -137,8 +155,8 @@ def cat_hunger(world, cat):
 
 
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
-                   "hungering": hungering, "cat_wander": cat_wander,
-                   "cat_hunger": cat_hunger})
+                   "bucket_state": bucket_state, "hungering": hungering,
+                   "cat_wander": cat_wander, "cat_hunger": cat_hunger})
 
 
 def _patch_in(world, room_id):
@@ -313,6 +331,36 @@ def cmd_harvest(world, actor, arg):
     return "You lift the plant and shake two fat potatoes from the roots."
 
 
+BUCKET_CAPACITY = 5
+
+
+def cmd_draw(world, actor, arg):
+    """draw water -- fill the bucket from the well (holds up to its capacity)."""
+    well = find_visible(world, actor, "well")
+    if not well:
+        return "There's no well here to draw from."
+    bucket = find_visible(world, actor, "bucket")
+    if not bucket:
+        return "There's no bucket here to fill."
+    if bucket.attrs.get("water", 0) >= BUCKET_CAPACITY:
+        return f"The bucket is already full ({BUCKET_CAPACITY})."
+    bucket.attrs["water"] = BUCKET_CAPACITY
+    return f"You draw water from the well. The bucket now holds {BUCKET_CAPACITY}."
+
+
+def cmd_water(world, actor, arg):
+    """water crop -- pour a bucket's stored water onto the planted crop here."""
+    crop = _crop_in(world, actor.location)
+    if not crop:
+        return "There's nothing planted here to water."
+    bucket = find_visible(world, actor, "bucket")
+    if not bucket or bucket.attrs.get("water", 0) <= 0:
+        return "The bucket's empty. Draw water from the well first."
+    bucket.attrs["water"] -= 1
+    crop.attrs["watered"] = crop.attrs.get("watered", 0) + 1
+    return "You pour water over the soil. The crop drinks it in."
+
+
 def cmd_cook(world, actor, arg):
     """cook potato -- broil a potato at a lit cooking fire, making it edible."""
     e = find_visible(world, actor, arg or "potato")
@@ -426,6 +474,7 @@ VERBS.update({
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
     "feed": cmd_feed, "pet": cmd_pet, "stroke": cmd_pet, "name": cmd_name,
+    "draw": cmd_draw, "water": cmd_water,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "read", "save"})
 
@@ -473,6 +522,8 @@ def generate_reference():
             "- The candle only gives light; the **hearth** is what cooks.",
             f"- The cat's hunger is capped at **{CAT_HUNGER_CAP}** and it can "
             "come to no harm -- it only ever wants feeding.",
+            f"- A full bucket holds **{BUCKET_CAPACITY}** units of water; "
+            "each unit spent doubles a crop's growth for that one tick.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "
@@ -530,6 +581,16 @@ def build_world():
     patch = w.add(Entity("patch", "vegetable patch",
         "a strip of turned soil, dark and ready", location="yard"))
     patch.attach("patch_state")
+
+    w.add(Entity("well", "well",
+        "a stone well, its bucket-rope disappearing into the dark",
+        location="yard"))
+
+    bucket = w.add(Entity("bucket", "bucket",
+        "an empty wooden bucket by the well", location="yard",
+        attrs={"water": 0}))
+    bucket.attach("bucket_state")
+
     w.add(Entity("knife", "knife",
         "a small iron knife, good for whittling or gutting fish",
         location="hut", portable=True))

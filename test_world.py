@@ -74,6 +74,22 @@ def test_regression_patch_reflects_its_crop_in_sync():
         f"patch lagged behind the ripen event: {ripened_turn_desc!r}"
 
 
+def test_regression_watered_patch_description_stays_in_sync():
+    """Same class of bug as the ripening lag: watering must show up as
+    'well-watered' the moment it takes effect, and read dry again the very
+    next tick once the stored water is spent -- never lagging a tick behind."""
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "plant potato", "draw water")
+    patch = w.get("patch")
+    w.act(actor, "water crop")
+    assert "well-watered" in patch.description, \
+        f"watering didn't show up as well-watered: {patch.description!r}"
+    # the water was spent that same tick -- the next tick must read dry again
+    w.act(actor, "wait")
+    assert "well-watered" not in patch.description, \
+        f"water should be spent by now: {patch.description!r}"
+
+
 def test_time_only_passes_on_real_actions():
     w, actor = fresh()
     t0 = w.time

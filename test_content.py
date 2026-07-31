@@ -12,7 +12,7 @@ import json
 from world import World, check_world
 from content import (
     VERBS, BEHAVIORS, CAT_HUNGER_CAP, cat_wander, cat_hunger,
-    generate_reference, _crop_in,
+    generate_reference, _crop_in, BUCKET_CAPACITY, bucket_state,
 )
 from _test_helpers import fresh, run
 
@@ -47,7 +47,113 @@ def test_cannot_plant_without_a_seed():
 
 
 # ===========================================================================
-# 2. THE CAT -- must never come to harm, and behaves sensibly.
+# 2. THE WELL, THE BUCKET, AND WATERING -- a pure accelerator: crops still
+#    grow unwatered, just slower. Nothing can fail or be harmed by this.
+# ===========================================================================
+def test_draw_water_fills_the_bucket_and_caps_at_capacity():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    result = w.act(actor, "draw water")
+    bucket = w.get("bucket")
+    assert bucket.attrs["water"] == BUCKET_CAPACITY, f"bucket not filled: {bucket.attrs}"
+    assert str(BUCKET_CAPACITY) in result
+
+    again = w.act(actor, "draw water")
+    assert "already full" in again.lower()
+    assert bucket.attrs["water"] == BUCKET_CAPACITY, "drawing again overfilled the bucket"
+
+
+def test_watering_requires_a_plant_and_water_in_the_bucket():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    # no plant yet
+    result = w.act(actor, "water crop")
+    assert "nothing planted" in result.lower()
+
+    run(w, actor, "take potato", "plant potato")
+    # bucket still empty
+    result = w.act(actor, "water crop")
+    assert "empty" in result.lower()
+
+    w.act(actor, "draw water")
+    result = w.act(actor, "water crop")
+    assert "pour" in result.lower()
+    assert w.get("bucket").attrs["water"] == BUCKET_CAPACITY - 1
+
+
+def test_watered_plant_ripens_faster_than_unwatered():
+    """The core mechanic: a crop watered whenever possible ripens in fewer
+    ticks than one left dry -- without ever failing or needing exact timing."""
+    def ticks_to_ripen(water_it):
+        w, actor = fresh()
+        run(w, actor, "go out", "take potato", "plant potato")
+        if water_it:
+            w.act(actor, "draw water")
+        ticks = 0
+        while not _crop_in(w, "yard").attrs.get("ready"):
+            if water_it and w.get("bucket").attrs.get("water", 0) > 0:
+                w.act(actor, "water crop")
+            else:
+                w.act(actor, "wait")
+            ticks += 1
+            assert ticks < 30, "never ripened"
+        return ticks
+
+    unwatered = ticks_to_ripen(False)
+    watered = ticks_to_ripen(True)
+    assert watered < unwatered, \
+        f"watered ({watered} ticks) should ripen faster than unwatered ({unwatered})"
+
+
+def test_watered_water_is_consumed_by_growing():
+    """One unit of stored water buys exactly one fast tick; once it's spent,
+    growth returns to the normal +1 pace."""
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "plant potato", "draw water")
+    plant = _crop_in(w, "yard")
+    g0 = plant.attrs["growth"]
+    w.act(actor, "water crop")
+    assert plant.attrs.get("watered", 0) == 0, \
+        "the stored water should be spent the same tick it's used"
+    g1 = plant.attrs["growth"]
+    assert g1 - g0 == 2, f"a watered tick should give +2 growth, got +{g1 - g0}"
+    w.act(actor, "wait")
+    g2 = plant.attrs["growth"]
+    assert g2 - g1 == 1, f"growth should return to +1 once water is spent, got +{g2 - g1}"
+
+
+def test_bucket_description_always_shows_its_water_count():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    bucket = w.get("bucket")
+    assert "empty" in bucket.description.lower()
+    w.act(actor, "draw water")
+    assert str(BUCKET_CAPACITY) in bucket.description, \
+        f"full bucket description doesn't show its count: {bucket.description!r}"
+    bucket.attrs["water"] = 3
+    bucket_state(w, bucket)
+    assert "3" in bucket.description
+
+
+def test_water_and_bucket_state_survive_save_load_roundtrip():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "plant potato", "draw water", "water crop")
+    bucket = w.get("bucket")
+    plant = _crop_in(w, "yard")
+    bucket_water = bucket.attrs["water"]
+    plant_watered = plant.attrs.get("watered", 0)
+    plant_growth = plant.attrs["growth"]
+
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    bucket2 = w2.get("bucket")
+    plant2 = _crop_in(w2, "yard")
+    assert bucket2.attrs["water"] == bucket_water
+    assert plant2.attrs.get("watered", 0) == plant_watered
+    assert plant2.attrs["growth"] == plant_growth
+
+
+# ===========================================================================
+# 3. THE CAT -- must never come to harm, and behaves sensibly.
 # ===========================================================================
 def test_cat_is_never_harmed_however_long_it_goes_unfed():
     """The gentle guarantee, enforced: no matter how long nobody feeds it, the
@@ -174,7 +280,7 @@ def test_named_cat_uses_its_name_in_announcements():
 
 
 # ===========================================================================
-# 3. DOCUMENTATION -- the reference generates from code, and nothing new can
+# 4. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.
 # ===========================================================================
