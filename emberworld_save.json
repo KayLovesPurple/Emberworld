@@ -1,0 +1,173 @@
+{
+  "version": 2,
+  "time": 55,
+  "seq": 10,
+  "entities": [
+    {
+      "id": "hut",
+      "name": "A One-Room Hut",
+      "description": "Rough plank walls, a dirt floor, the smell of old woodsmoke. A cold hearth waits against one wall. Through the doorway, the yard.",
+      "location": null,
+      "portable": false,
+      "exits": {
+        "out": "yard"
+      },
+      "attrs": {},
+      "behaviors": []
+    },
+    {
+      "id": "yard",
+      "name": "The Yard",
+      "description": "Long grass, wet with evening. A vegetable patch of turned soil runs along the fence; the dark shape of a well stands near the gate.",
+      "location": null,
+      "portable": false,
+      "exits": {
+        "in": "hut"
+      },
+      "attrs": {},
+      "behaviors": []
+    },
+    {
+      "id": "candle",
+      "name": "candle",
+      "description": "a spent candle, a curl of smoke off the black wick",
+      "location": "hut",
+      "portable": true,
+      "exits": {},
+      "attrs": {
+        "lit": false,
+        "fuel": 0,
+        "lit_desc": "a stub of tallow candle, burning steadily",
+        "unlit_desc": "an unlit stub of tallow candle",
+        "spent_desc": "a spent candle, a curl of smoke off the black wick",
+        "out_msg": "The candle sputters and goes out."
+      },
+      "behaviors": [
+        "burning"
+      ]
+    },
+    {
+      "id": "hearth",
+      "name": "hearth",
+      "description": "the hearth, full of red embers and low flame",
+      "location": "hut",
+      "portable": false,
+      "exits": {},
+      "attrs": {
+        "lit": true,
+        "fuel": 24,
+        "cooks": true,
+        "lit_desc": "the hearth, full of red embers and low flame",
+        "unlit_desc": "a cold stone hearth, ash and a few charred sticks",
+        "spent_desc": "the hearth, gone to grey ash",
+        "out_msg": "The fire in the hearth sinks to embers, then ash."
+      },
+      "behaviors": [
+        "burning"
+      ]
+    },
+    {
+      "id": "journal",
+      "name": "journal",
+      "description": "a worn journal, its cover soft with handling",
+      "location": "hut",
+      "portable": true,
+      "exits": {},
+      "attrs": {
+        "entries": [
+          "[Day 1] To whoever comes next: the hearth cooks, the candle only lights. Plant early -- the potatoes take their time. There's a cat; feed it a potato if it's hungry, and it likes the fire lit. I left before the harvest. -- a hand before yours",
+          "[Day 2] Fed the cat, laid a new fire in the hearth but didn't light it \u2014 strike the flint before dark and don't let the candle burn unwatched.",
+          "[Day 3] Day 3, day: Harvested two potatoes, cooked and ate one. Hearth still burning. Cat seems content, not hungry -- didn't feed it this visit. Remember to light the candle before dark if the hearth ever goes out. -- a hand passing through",
+          "[Day 3] Fed the cat, banked the embers low but alive\u2014add wood before dark, and mind the candle's nearly spent."
+        ]
+      },
+      "behaviors": []
+    },
+    {
+      "id": "cat",
+      "name": "cat",
+      "description": "a small cat, watching you with mild interest, tail curled",
+      "location": "yard",
+      "portable": false,
+      "exits": {},
+      "attrs": {
+        "hunger": 12
+      },
+      "behaviors": [
+        "cat_hunger",
+        "cat_wander"
+      ]
+    },
+    {
+      "id": "patch",
+      "name": "vegetable patch",
+      "description": "turned soil, green potato shoots pushing up",
+      "location": "yard",
+      "portable": false,
+      "exits": {},
+      "attrs": {},
+      "behaviors": [
+        "patch_state"
+      ]
+    },
+    {
+      "id": "knife",
+      "name": "knife",
+      "description": "a small iron knife, good for whittling or gutting fish",
+      "location": "hut",
+      "portable": true,
+      "exits": {},
+      "attrs": {},
+      "behaviors": []
+    },
+    {
+      "id": "you",
+      "name": "you",
+      "description": "It's you.",
+      "location": "hut",
+      "portable": false,
+      "exits": {},
+      "attrs": {
+        "hunger": 14
+      },
+      "behaviors": [
+        "hungering"
+      ]
+    },
+    {
+      "id": "potato_8",
+      "name": "potato",
+      "description": "a firm potato, fresh from the earth",
+      "location": "you",
+      "portable": true,
+      "exits": {},
+      "attrs": {},
+      "behaviors": []
+    },
+    {
+      "id": "potato_9",
+      "name": "potato",
+      "description": "a firm potato, fresh from the earth",
+      "location": "you",
+      "portable": true,
+      "exits": {},
+      "attrs": {},
+      "behaviors": []
+    },
+    {
+      "id": "plant_10",
+      "name": "potato plant",
+      "description": "a just-planted potato",
+      "location": "patch",
+      "portable": false,
+      "exits": {},
+      "attrs": {
+        "growth": 5,
+        "ripe_at": 8
+      },
+      "behaviors": [
+        "growing"
+      ]
+    }
+  ]
+}
