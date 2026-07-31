@@ -78,6 +78,23 @@ def bucket_state(world, bucket):
         bucket.description = f"a wooden bucket, holding water ({water})"
 
 
+HEARTH_FUEL_START = 40      # the hearth's starting fuel, in build_world
+HEARTH_LOW_FUEL = HEARTH_FUEL_START // 4    # below this, it reads as dying
+
+
+def hearth_state(world, hearth):
+    """Autonomous: while lit, the hearth's description shows whether it's
+    dying low on fuel or burning steady, so a hand can see it needs wood
+    before it goes dark, not just be told after the fact."""
+    if not hearth.attrs.get("lit"):
+        return          # burning() already owns the unlit/spent description
+    if hearth.attrs.get("fuel", 0) <= HEARTH_LOW_FUEL:
+        hearth.description = "the hearth, embers dying low -- it wants more wood"
+    else:
+        hearth.description = hearth.attrs.get(
+            "lit_desc", "the hearth, full of red embers and low flame")
+
+
 def hungering(world, actor):
     """Autonomous: the actor slowly gets hungrier over time (capped, harmless)."""
     actor.attrs["hunger"] = min(actor.attrs.get("hunger", 0) + 1, 20)
@@ -174,9 +191,9 @@ def cat_idle(world, cat):
 
 
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
-                   "bucket_state": bucket_state, "hungering": hungering,
-                   "cat_wander": cat_wander, "cat_hunger": cat_hunger,
-                   "cat_idle": cat_idle})
+                   "bucket_state": bucket_state, "hearth_state": hearth_state,
+                   "hungering": hungering, "cat_wander": cat_wander,
+                   "cat_hunger": cat_hunger, "cat_idle": cat_idle})
 
 
 def _patch_in(world, room_id):
@@ -208,14 +225,25 @@ def _carrying(world, actor, e):
     return e is not None and e.location == actor.id
 
 
+def _carried_names(world, actor):
+    # wood is stored as a plain integer attr on the actor, not an entity, so
+    # it's folded in here as one line item -- everywhere carried things are
+    # listed shows it, not just a place that happens to loop over entities.
+    names = [e.name for e in world.contents(actor.id)]
+    wood = actor.attrs.get("wood", 0)
+    if wood > 0:
+        names.insert(0, f"firewood ({wood})")
+    return names
+
+
 def _carried_line(world, actor):
     # carried items are part of the standing perception (not hidden behind a
     # separate 'inventory' command an amnesiac agent has to choose to run),
     # and stay visible even in the dark -- you can feel what's in your hands.
-    items = world.contents(actor.id)
-    if not items:
+    names = _carried_names(world, actor)
+    if not names:
         return "Your hands are empty."
-    return "You are carrying: " + ", ".join(e.name for e in items) + "."
+    return "You are carrying: " + ", ".join(names) + "."
 
 
 def cmd_look(world, actor, arg):
@@ -278,14 +306,14 @@ def cmd_drop(world, actor, arg):
 
 def cmd_inventory(world, actor, arg):
     """inventory -- list what you're carrying and how hungry you feel."""
-    items = world.contents(actor.id)
+    names = _carried_names(world, actor)
     hunger = actor.attrs.get("hunger", 0)
     mood = ("stuffed" if hunger < 3 else "fine" if hunger < 10
             else "hungry" if hunger < 16 else "ravenous")
     head = f"You feel {mood}."
-    if not items:
+    if not names:
         return head + "\nYour hands are empty."
-    return head + "\nYou are carrying:\n" + "\n".join(f"  - {e.name}" for e in items)
+    return head + "\nYou are carrying:\n" + "\n".join(f"  - {n}" for n in names)
 
 
 def cmd_wait(world, actor, arg):
@@ -379,6 +407,34 @@ def cmd_water(world, actor, arg):
     bucket.attrs["water"] -= 1
     crop.attrs["watered"] = crop.attrs.get("watered", 0) + 1
     return "You pour water over the soil. The crop drinks it in."
+
+
+WOOD_PER_GATHER = 3          # a little more than one night's worth, to stock up
+FUEL_PER_WOOD = HEARTH_FUEL_START    # one add wood restores a full night's fuel
+
+
+def cmd_gather(world, actor, arg):
+    """gather wood -- forage the yard's long grass and fallen branches for firewood."""
+    if actor.location != "yard":
+        return "There's nothing to forage here -- try the yard."
+    actor.attrs["wood"] = actor.attrs.get("wood", 0) + WOOD_PER_GATHER
+    return (f"You push through the long grass and gather fallen branches. "
+            f"You now have {actor.attrs['wood']} wood.")
+
+
+def cmd_add_wood(world, actor, arg):
+    """add wood -- feed carried firewood into the hearth, raising its fuel."""
+    hearth = find_visible(world, actor, "hearth")
+    if not hearth:
+        return "There's no hearth here to feed."
+    if actor.attrs.get("wood", 0) <= 0:
+        return "You've no wood to add. Gather some in the yard first."
+    actor.attrs["wood"] -= 1
+    hearth.attrs["fuel"] = hearth.attrs.get("fuel", 0) + FUEL_PER_WOOD
+    if hearth.attrs.get("lit"):
+        return "You feed wood into the fire. It catches and burns brighter."
+    hearth.description = "a stone hearth, freshly stacked with wood, ready for a light"
+    return "You stack wood in the cold hearth, ready for a light."
 
 
 def cmd_cook(world, actor, arg):
@@ -495,6 +551,10 @@ VERBS.update({
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
     "feed": cmd_feed, "pet": cmd_pet, "stroke": cmd_pet, "name": cmd_name,
     "draw": cmd_draw, "water": cmd_water,
+    "gather": cmd_gather,
+    # not "feed": that verb key is already cmd_feed (feeds the cat), and the
+    # parser only looks at the first word -- "feed fire" would collide with it.
+    "add": cmd_add_wood, "stoke": cmd_add_wood,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "read", "save"})
 
@@ -544,6 +604,9 @@ def generate_reference():
             "come to no harm -- it only ever wants feeding.",
             f"- A full bucket holds **{BUCKET_CAPACITY}** units of water; "
             "each unit spent doubles a crop's growth for that one tick.",
+            f"- Gathering wood yields **{WOOD_PER_GATHER}**; feeding one unit "
+            f"into the hearth restores **{FUEL_PER_WOOD}** fuel -- a full "
+            "night's burn, and enough to revive a spent hearth.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "
@@ -576,12 +639,13 @@ def build_world():
 
     hearth = w.add(Entity("hearth", "hearth",
         "a cold stone hearth, ash and a few charred sticks", location="hut",
-        attrs={"lit": False, "fuel": 40, "cooks": True,
+        attrs={"lit": False, "fuel": HEARTH_FUEL_START, "cooks": True,
             "lit_desc": "the hearth, full of red embers and low flame",
             "unlit_desc": "a cold stone hearth, ash and a few charred sticks",
             "spent_desc": "the hearth, gone to grey ash",
             "out_msg": "The fire in the hearth sinks to embers, then ash."}))
     hearth.attach("burning")
+    hearth.attach("hearth_state")
 
     journal = w.add(Entity("journal", "journal",
         "a worn journal, its cover soft with handling", location="hut",

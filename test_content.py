@@ -13,6 +13,8 @@ from world import World, check_world
 from content import (
     VERBS, BEHAVIORS, CAT_HUNGER_CAP, cat_wander, cat_hunger, cat_idle,
     generate_reference, _crop_in, BUCKET_CAPACITY, bucket_state,
+    WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD, HEARTH_LOW_FUEL,
+    hearth_state,
 )
 from _test_helpers import fresh, run
 
@@ -153,7 +155,120 @@ def test_water_and_bucket_state_survive_save_load_roundtrip():
 
 
 # ===========================================================================
-# 3. THE CAT -- must never come to harm, and behaves sensibly.
+# 3. FIREWOOD -- forage wood in the yard, feed the hearth, revive a dead fire.
+#    BUG WE HIT: fire was a countdown with no reset, so a long lineage always
+#    inherited a cold hearth with no recourse. Wood fixes that.
+# ===========================================================================
+def test_gather_wood_in_the_yard_increases_carried_wood():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    result = w.act(actor, "gather wood")
+    assert actor.attrs["wood"] == WOOD_PER_GATHER, \
+        f"gather didn't add {WOOD_PER_GATHER} wood: {actor.attrs}"
+    assert str(WOOD_PER_GATHER) in result, f"result didn't name the new amount: {result!r}"
+
+
+def test_gather_wood_is_gated_to_the_yard():
+    w, actor = fresh()
+    result = w.act(actor, "gather wood")           # still in the hut
+    assert actor.attrs.get("wood", 0) == 0, "gathered wood outside the yard"
+    assert "yard" in result.lower()
+
+
+def test_add_wood_requires_wood_and_the_hearth_present():
+    w, actor = fresh()
+    # in the hut (hearth present) but no wood carried
+    result = w.act(actor, "add wood")
+    assert "no wood" in result.lower(), f"unclear refusal: {result!r}"
+    assert w.get("hearth").attrs["fuel"] == HEARTH_FUEL_START, "fuel changed on a refusal"
+
+    # wood carried, but the wrong room (no hearth in the yard)
+    run(w, actor, "go out")
+    actor.attrs["wood"] = 1
+    result = w.act(actor, "add wood")
+    assert "no hearth" in result.lower(), f"unclear refusal: {result!r}"
+    assert actor.attrs["wood"] == 1, "wood was spent on a refusal"
+
+
+def test_add_wood_moves_wood_from_actor_to_hearth():
+    w, actor = fresh()
+    actor.attrs["wood"] = 2
+    hearth = w.get("hearth")
+    fuel0 = hearth.attrs["fuel"]
+    w.act(actor, "add wood")
+    assert actor.attrs["wood"] == 1, "wood wasn't taken from the actor"
+    assert hearth.attrs["fuel"] == fuel0 + FUEL_PER_WOOD, \
+        "hearth fuel didn't rise by one wood's worth"
+
+
+def test_add_wood_revives_a_spent_hearth():
+    """The core fix, pinned: a spent hearth (fuel 0, unlit) can be fed and
+    lit again -- a lineage is no longer stuck with a cold hearth forever."""
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    hearth.attrs["fuel"] = 0
+    hearth.attrs["lit"] = False
+    actor.attrs["wood"] = 1
+    w.act(actor, "add wood")
+    assert hearth.attrs["fuel"] > 0, "adding wood didn't restore fuel"
+    assert not hearth.attrs["lit"], "add wood must not auto-light the hearth"
+
+    result = w.act(actor, "light hearth")
+    assert hearth.attrs["lit"], f"a refuelled hearth should be lightable again: {result!r}"
+
+
+def test_add_wood_to_a_lit_hearth_extends_its_fuel():
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    hearth.attrs["lit"] = True
+    hearth.attrs["fuel"] = 5
+    actor.attrs["wood"] = 1
+    w.act(actor, "add wood")
+    assert hearth.attrs["fuel"] > 5, "adding wood to a lit hearth should extend it"
+    assert hearth.attrs["lit"], "adding wood shouldn't snuff a lit hearth"
+
+
+def test_carried_wood_shows_in_the_standing_perception():
+    w, actor = fresh()
+    run(w, actor, "go out", "gather wood")
+    seen = w.perceive(actor)
+    assert f"firewood ({WOOD_PER_GATHER})" in seen, \
+        f"carried wood missing from the standing perception: {seen!r}"
+
+
+def test_low_fuel_hearth_reads_as_needing_wood_a_well_fed_one_reads_steady():
+    """A hand must be able to see a dying fire coming, not just be told after
+    the fact that it went out."""
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    hearth.attrs["lit"] = True
+    hearth.attrs["fuel"] = HEARTH_LOW_FUEL
+    hearth_state(w, hearth)
+    low_desc = hearth.description.lower()
+    assert "wood" in low_desc or "low" in low_desc or "dying" in low_desc, \
+        f"low-fuel hearth doesn't read as needing wood: {hearth.description!r}"
+
+    hearth.attrs["fuel"] = HEARTH_FUEL_START
+    hearth_state(w, hearth)
+    steady_desc = hearth.description.lower()
+    assert "dying" not in steady_desc and "wants more wood" not in steady_desc, \
+        f"well-fed hearth still reads as needing wood: {hearth.description!r}"
+
+
+def test_wood_and_hearth_fuel_survive_save_load_roundtrip():
+    w, actor = fresh()
+    run(w, actor, "go out", "gather wood")
+    hearth = w.get("hearth")
+    hearth.attrs["fuel"] = 15                    # mid-burn, partially fuelled
+    actor.attrs["wood"] = 2                        # leftover after gathering
+
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert w2.get("you").attrs.get("wood", 0) == 2
+    assert w2.get("hearth").attrs["fuel"] == 15
+
+
+# ===========================================================================
+# 4. THE CAT -- must never come to harm, and behaves sensibly.
 # ===========================================================================
 def test_cat_is_never_harmed_however_long_it_goes_unfed():
     """The gentle guarantee, enforced: no matter how long nobody feeds it, the
@@ -349,7 +464,7 @@ def test_cat_idle_is_purely_cosmetic():
 
 
 # ===========================================================================
-# 4. DOCUMENTATION -- the reference generates from code, and nothing new can
+# 5. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.
 # ===========================================================================

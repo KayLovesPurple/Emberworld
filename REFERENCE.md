@@ -24,6 +24,8 @@
 - `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
+- `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood.
+- `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
@@ -32,6 +34,7 @@
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in
 - **bucket_state** -- Autonomous: the bucket describes itself by how much water it's holding.
+- **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **cat_wander** -- Autonomous: the cat drifts between rooms, drawn toward a lit hearth.
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
@@ -43,6 +46,7 @@
 - The candle only gives light; the **hearth** is what cooks.
 - The cat's hunger is capped at **12** and it can come to no harm -- it only ever wants feeding.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
+- Gathering wood yields **3**; feeding one unit into the hearth restores **40** fuel -- a full night's burn, and enough to revive a spent hearth.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.
 

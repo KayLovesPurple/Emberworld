@@ -193,6 +193,10 @@ class World:
         bucket = find_visible(self, actor, "bucket")
         if crop and not crop.attrs.get("ready") and bucket and bucket.attrs.get("water", 0) > 0:
             acts.append("water crop")
+        if room.id == "yard":
+            acts.append("gather wood")
+        if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
+            acts.append("add wood")
         for e in carried:
             acts.append(f"drop {e.name}")
         for e in here + carried:
