@@ -9,9 +9,17 @@ reads that note and harvests the crop.
 
 ## Files
 
-- `emberworld.py` — the whole game (engine, world, drivers). One file, no
+- `emberworld.py` — the CLI entrypoint (`python3 emberworld.py ...`). No
   dependencies to play.
-- `test_emberworld.py` — the safety net. Runs with or without pytest.
+- `world.py` — the engine: Entity/World, the tick loop, persistence, the
+  invariant checker.
+- `content.py` — Emberworld itself: the verbs, the autonomous behaviors, the
+  cat, and the world as assembled fresh.
+- `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
+  the persistence-loading glue, and the headless fuzzer.
+- `test_world.py` / `test_content.py` / `test_drivers.py` — the safety net,
+  split to match. Each runs with or without pytest; `_test_helpers.py` holds
+  the handful of things they share.
 - `REFERENCE.md` — every verb, behavior, and rule. **Generated from the code**
   (`python3 emberworld.py --reference`), so it's always current.
 - `ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
@@ -36,7 +44,7 @@ Add `--show-thoughts` to see *why* the agent chose each command (its thinking,
 printed dimmed above the command) — the best way to debug odd behaviour. Colours
 auto-disable when output isn't a terminal; `--no-color` forces them off.
 The agent uses **Claude Sonnet 5** by default (set by `LLM_MODEL` at the top of
-`emberworld.py`); override per run with `--model`, e.g.
+`drivers.py`); override per run with `--model`, e.g.
 `--llm --model claude-opus-4-8`. Sonnet 5 runs adaptive thinking on by default,
 which makes for a more deliberate visit; add `--no-think` for cheaper, faster
 runs (better for long `--turns`).
@@ -54,8 +62,8 @@ the code and pinned by a test.
 ## Testing
 
 ```bash
-python3 test_emberworld.py       # built-in runner, no dependencies
-python3 -m pytest -q             # if you have pytest
+python3 test_world.py && python3 test_content.py && python3 test_drivers.py   # built-in runner
+python3 -m pytest -q                                                          # if you have pytest
 ```
 
 Run the tests before any change. Green means the world still holds together;

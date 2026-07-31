@@ -1,0 +1,367 @@
+"""
+drivers.py -- the three ways to drive the world (human, dumb agent, LLM),
+the persistence-loading glue, and the headless fuzzer.
+
+Human and LLM drive the exact same surface:
+    world.perceive(actor)          -> text: where you are, what you see
+    world.available_actions(actor) -> list of legal commands right now
+    world.act(actor, command)      -> apply it, advance one tick, return result
+Only the choice of command differs between them.
+"""
+
+import os
+import sys
+import random
+import string
+import json
+from collections import deque
+
+from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
+from content import build_world, VERBS, FREE_VERBS
+
+LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
+
+
+def load_or_build(quiet=False):
+    if os.path.exists(SAVE):
+        try:
+            w = World.load(SAVE)
+            actor = w.get("you")
+            if actor:
+                if not quiet:
+                    print(f"(You return to a world already in progress -- {w.timestr()}.)")
+                return w, actor
+        except IncompatibleSaveError as ex:
+            _set_aside(SAVE, quiet,
+                       f"That save is from an older world (v{ex.args[0]} vs "
+                       f"v{SAVE_VERSION})")
+        except (json.JSONDecodeError, KeyError, ValueError, OSError) as ex:
+            _set_aside(SAVE, quiet, f"That save couldn't be read ({ex})")
+    return build_world()
+
+
+def _set_aside(path, quiet, why):
+    bak = path + ".bak"
+    try:
+        os.replace(path, bak)
+        where = f" It's been moved to {bak}."
+    except OSError:
+        where = ""
+    if not quiet:
+        print(f"({why}; starting fresh.{where})")
+
+
+# ---------------------------------------------------------------------------
+# Driver 1: a human at a prompt.
+# ---------------------------------------------------------------------------
+BANNER = """\
+============================================================
+  EMBERWORLD  --  a very small living world that remembers
+  'help' for verbs, 'quit' to leave (the world is saved)
+============================================================"""
+
+HELP = """\
+Verbs:  look [thing] / go <exit> / take / drop / inventory
+        light <thing> / snuff <thing> / wait
+        plant potato / harvest / cook potato / eat <thing>
+        feed cat / pet cat / write <note> / read journal / save / quit
+The candle only lights; the hearth cooks. Night is dark without a flame.
+There's a cat -- it wanders, it likes the fire lit, and it can be fed a potato.
+The world (and your journal) persist between runs. Leave a note for whoever comes next."""
+
+
+def play(strict=False):
+    w, actor = load_or_build()
+    w.strict = strict
+    if strict:
+        print("(--check on: invariants are verified after every action.)")
+    print(BANNER)
+    print("\n" + w.perceive(actor))
+    while True:
+        try:
+            cmd = input("\n> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            w.save(SAVE)
+            print(f"\nThe world settles into memory, and goes on without you.\n(saved: {SAVE})")
+            return
+        if cmd in ("quit", "exit", "q"):
+            w.save(SAVE)
+            print(f"The world settles into memory, and goes on without you.\n(saved: {SAVE})")
+            return
+        if cmd in ("help", "?"):
+            print(HELP)
+            continue
+        try:
+            print(w.act(actor, cmd))
+        except WorldInvariantError as ex:
+            print(f"!! The world just entered an impossible state: {ex}\n"
+                  f"!! That's a bug. Not saving over your good file.")
+            return
+
+
+# ---------------------------------------------------------------------------
+# Driver 2: a dumb agent. Proves the world runs headless with a non-human
+# driver -- the exact shape an LLM slots into. No API key needed.
+# ---------------------------------------------------------------------------
+def random_agent(steps=20):
+    w, actor = load_or_build(quiet=True)
+    print(w.perceive(actor), "\n")
+    for _ in range(steps):
+        choice = random.choice([a for a in w.available_actions(actor)
+                                if "<" not in a])
+        print(f">>> {choice}")
+        print(w.act(actor, choice), "\n")
+    w.save(SAVE)
+
+
+# ---------------------------------------------------------------------------
+# Headless fuzzer. The dumb agent, but seeded and checked: random legal play
+# for thousands of steps, invariants verified after every single tick. Random
+# play wanders into state nobody would script by hand -- highest-leverage catch
+# for emergent breakage, and nearly free since the agent already exists.
+# ---------------------------------------------------------------------------
+def fuzz_run(steps=2000, seed=0, verbose=False):
+    rng = random.Random(seed)
+    w, actor = build_world()
+    w.rng = random.Random(seed)          # make the cat's wandering reproducible too
+    w.strict = True                      # act() raises on any invariant break
+    for i in range(steps):
+        options = [a for a in w.available_actions(actor) if "<" not in a]
+        w.act(actor, rng.choice(options))
+    issues = check_world(w)
+    if verbose:
+        state = "clean" if not issues else f"BROKEN: {issues}"
+        print(f"fuzz: {steps} steps, seed {seed} -> {state} "
+              f"(ended {w.timestr()})")
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Driver 3: an LLM. Same loop as the dumb agent, except the choice comes from
+# Claude. Because the world persists, successive runs share it: one Claude
+# plants, another returns days later to a grown crop and a journal of notes.
+#
+# Each turn is a FRESH instance with no memory of the last -- it re-reads the
+# world every time. The continuity lives in the journal and the save file, not
+# in the agent's head. So every visit ends by leaving a note on purpose: the
+# only thread between one visit and the next.
+# ---------------------------------------------------------------------------
+def _ask_claude(client, system, user, model=LLM_MODEL, think=True, return_thinking=False):
+    # Sonnet 5 has adaptive thinking on by default, but display defaults to
+    # "omitted" -- thinking blocks come back EMPTY. To read the reasoning we must
+    # explicitly ask for a summary. (You're billed for full thinking either way,
+    # so this is free to surface.) Thinking tokens count against max_tokens, so
+    # give generous headroom or the command gets truncated.
+    kwargs = dict(model=model, max_tokens=1024, system=system,
+                  messages=[{"role": "user", "content": user}])
+    if not think:                            # Sonnet 5 accepts this at any effort
+        kwargs["thinking"] = {"type": "disabled"}
+    elif return_thinking:                    # opt in to a readable reasoning summary
+        kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
+    msg = client.messages.create(**kwargs)
+    text = "".join(b.text for b in msg.content
+                   if getattr(b, "type", None) == "text").strip()
+    if return_thinking:
+        thinking = "".join(getattr(b, "thinking", "") for b in msg.content
+                           if getattr(b, "type", None) == "thinking").strip()
+        return thinking, text
+    return text
+
+
+def _paint(text, code, on):
+    return f"\033[{code}m{text}\033[0m" if on else text
+
+
+def _recent_block(history):
+    # a fresh instance has no memory; hand it a short scratch memory of its turns
+    if not history:
+        return "Recently you did: (nothing yet -- you just arrived)."
+    lines = ["Recently you did (most recent last):"]
+    for cmd, res in history:
+        lines.append(f"  - {cmd} -> {res}")
+    return "\n".join(lines)
+
+
+def _extract_command(text):
+    # the agent sometimes reasons in prose before stating the command, e.g.
+    # "I'll plant a potato...\n\nplant potato" -- taking the first word of the
+    # raw reply ("i'll") silently fails to parse and wastes the turn. Prefer
+    # the first line that actually starts with a known verb; if none does,
+    # fall back to the last non-empty line (still better than the first).
+    lines = [ln.strip().strip("`\"'") for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return text.strip()
+    for ln in lines:
+        words = ln.split()
+        if words and words[0].lower().strip(string.punctuation) in VERBS:
+            return ln
+    return lines[-1]
+
+
+def _journal_excerpt(entries, keep=5):
+    # feeding the agent the WHOLE journal every turn grows the prompt without
+    # bound over many visits. Cap it to the last `keep` entries, but always
+    # keep the first (seed) entry -- it's the one that orients someone new.
+    if not entries:
+        return ""
+    if len(entries) <= keep:
+        return "\n".join(entries)
+    tail = entries[-keep:]
+    first = entries[0]
+    if first in tail:
+        return "\n".join(tail)
+    return "\n".join([first, "...", *tail])
+
+
+# Substrings that mark a verb's result as a refusal or no-op rather than a
+# real accomplishment -- kept in sync with the messages the verbs return
+# in content.py; a new refusal needs a matching marker here. Checked lowercase.
+_REFUSAL_MARKERS = (
+    "i don't understand", "don't see any", "too dark", "can't",
+    "there's no", "have no '", "aren't carrying", "already",
+    "isn't lit", "need a", "nothing left to burn", "nothing here is ready",
+    "nothing written there", "nothing to feed", "you'd regret it",
+    "write what?", "name it what?",
+)
+
+
+def _looks_like_refusal(result):
+    # active verbs still tick the clock even when they fail, so ticking isn't
+    # a signal -- only the RESULT text tells us whether the command landed.
+    low = result.lower()
+    return any(m in low for m in _REFUSAL_MARKERS)
+
+
+def _looks_stuck(history, n=3):
+    # repeating the SAME free verb (look/read/inventory) means spinning -- the
+    # world isn't changing. Repeated `wait` is NOT stuck: that's how time passes.
+    if len(history) < n:
+        return False
+    recent = [cmd for cmd, _ in list(history)[-n:]]
+    if len(set(recent)) != 1:
+        return False
+    verb = recent[0].split()[0].lower() if recent[0].split() else ""
+    return verb in FREE_VERBS
+
+
+def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True):
+    model = model or LLM_MODEL
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("No ANTHROPIC_API_KEY set. Export your key first:\n"
+              "  export ANTHROPIC_API_KEY=sk-ant-...")
+        return
+    from anthropic import Anthropic          # lazy import: file runs without it
+    client = Anthropic()
+    w, actor = load_or_build(quiet=True)
+    color = color and sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+    if show_thoughts and not think:
+        print("(--show-thoughts has nothing to show with --no-think.)")
+    think_note = "thinking" if think else "no-think"
+    print(f"(Someone arrives -- {w.timestr()}. {turns} turns to spend. "
+          f"[{model}, {think_note}])\n")
+
+    system = ("You are someone living in a small text world that persists between "
+              "visitors -- and you have no memory of past turns, so trust what "
+              "the world and the journal tell you. Goal: keep a light through "
+              "the night, grow and cook a potato, eat when hungry. There's a cat "
+              "-- feed it if it's hungry, pet it if you like. Read the journal "
+              "early. IMPORTANT: looking, reading, and checking inventory are "
+              "FREE and do NOT pass time -- only actions like wait, go, plant, "
+              "cook advance the world. To let a crop grow or the night pass, use "
+              "`wait` (repeatedly). Reply with EXACTLY ONE command from the "
+              "allowed list. For 'write', include your note text. Nothing else.")
+
+    history = deque(maxlen=5)
+    journal_text = None                       # once read, kept in view so it needn't re-read
+    did = []           # visit-long, ordered, NOT deduped -- what really happened
+    try:
+        for i in range(turns):
+            turns_left = turns - i
+            actions = w.available_actions(actor)
+            nudge = ""
+            if _looks_stuck(history):
+                nudge = ("\n(You keep repeating the same free action and nothing "
+                         "is changing. Free actions like look/read never pass time "
+                         "-- use `wait` to let the world move, or do something new.)")
+            known = ""
+            if journal_text is not None:
+                known = ("\nThe journal (you've already read it, it won't change) "
+                         f"says:\n{journal_text}")
+            prompt = (f"{w.perceive(actor)}{known}\n\n{_recent_block(history)}{nudge}"
+                      f"\n\nTurns left this visit: {turns_left}.\n\nAllowed:\n"
+                      + "\n".join(actions) + "\n\nYour command:")
+            try:
+                if show_thoughts and think:
+                    thoughts, reply = _ask_claude(client, system, prompt, model,
+                                                  think, return_thinking=True)
+                    if thoughts:
+                        block = "\n".join("    " + ln for ln in thoughts.splitlines())
+                        print(_paint(block, "90", color))     # dim grey
+                    else:
+                        print(_paint("    (no reasoning surfaced this turn)",
+                                     "90", color))
+                else:
+                    reply = _ask_claude(client, system, prompt, model, think)
+                choice = _extract_command(reply)
+            except Exception as ex:                       # network/API hiccup
+                print(f"(a turn slipped away: {ex})")
+                continue
+            print(_paint(f">>> {choice}", "1;36", color))     # bold cyan
+            result = w.act(actor, choice)
+            print(result, "\n")
+            # remember the journal's contents the first time it's read this visit
+            if choice.split()[:1] == ["read"] and "journal reads" in result:
+                jrnl = w.get("journal")
+                if jrnl is not None:
+                    journal_text = _journal_excerpt(jrnl.attrs.get("entries", []))
+            # track what really happened, for a grounded sign-off later: active
+            # verbs count unless refused; free look/read count only if they
+            # actually showed something. wait/inventory/etc. never count.
+            verb = choice.split()[:1]
+            verb = verb[0].lower() if verb else ""
+            if verb not in ("wait", "z") and not _looks_like_refusal(result):
+                if verb not in FREE_VERBS or verb in ("look", "l", "examine", "x", "read"):
+                    did.append(choice)
+            first = result.splitlines()[0][:70] if result.strip() else "(nothing)"
+            history.append((choice, first))
+    except KeyboardInterrupt:
+        print("\n(the visit is cut short -- but the note still gets left.)")
+
+    _leave_signoff(client, w, actor, model, think, did)
+    w.save(SAVE)
+    print(f"(They depart. Their note is in the journal.)\n(saved: {SAVE})")
+
+
+def _leave_signoff(client, w, actor, model=None, think=True, did=None):
+    """Always leave one closing note, grounded in `did` -- the visit's real,
+    ordered list of what actually happened -- so the note can't confabulate.
+    Written straight to the journal entity so it lands wherever the agent
+    ended up, even on API failure or Ctrl-C.
+
+    The cat is mentioned to whoever's leaving ONLY if it's actually hungry, so
+    caretaking enters the lineage when it matters -- not every single visit.
+    That keeps the journal from turning into nothing but cat status reports."""
+    journal = w.get("journal")
+    if journal is None:
+        return
+    cat = w.get("cat")
+    extra = ""
+    if cat is not None and cat.attrs.get("hunger", 0) >= 6:
+        extra = "\n(The cat seemed hungry when you left.)"
+    did_block = ("\n".join(f"  - {c}" for c in did) if did
+                 else "  (nothing that left much of a mark -- a quiet visit)")
+    try:
+        note = _ask_claude(client,
+            "You are someone whose visit to a small persistent world is ending. "
+            "Below is everything you actually did this visit, in order -- draw "
+            "only from that list and don't invent anything beyond it. Pick "
+            "whatever's worth passing on and leave ONE short sentence in the "
+            "shared journal for whoever comes next, in your own voice. Just "
+            "the sentence.",
+            f"What you actually did this visit:\n{did_block}\n\n"
+            f"{w.perceive(actor)}{extra}\n\nYour closing note:",
+            model or LLM_MODEL, think)
+    except Exception:
+        note = ""
+    note = note.strip().strip('"') or "A quiet visit. Nothing much changed. -- someone passing through"
+    journal.attrs.setdefault("entries", []).append(f"[Day {w.day()}] {note}")

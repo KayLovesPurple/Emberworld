@@ -4,6 +4,33 @@ This is the map for whoever builds on the world next (including future you, and
 future Claude). It explains how the pieces fit, the few rules that keep it from
 breaking, and the recipe for adding a feature safely.
 
+## File layout
+
+- `world.py` — the engine. `Entity`, `World`, the tick loop, persistence,
+  `check_world`. Generic: it has no knowledge of any specific verb or
+  behavior, only the `VERBS`/`FREE_VERBS`/`BEHAVIORS` registries (declared
+  here as empty containers) that content.py populates.
+- `content.py` — Emberworld itself. The verbs, the autonomous behaviors, the
+  cat, `build_world`, and the self-documenting reference generator. Imports
+  `World`/`Entity` from world.py and fills in its registries.
+- `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
+  `load_or_build`, and the headless fuzzer. Imports both of the above.
+- `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
+  dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
+- `test_world.py` / `test_content.py` / `test_drivers.py` — the test suite,
+  split to match, sharing a couple of helpers via `_test_helpers.py`.
+
+world.py and content.py have a real mutual dependency: content.py needs
+`World`/`Entity` to build things, and world.py's `available_actions` needs a
+couple of content-specific helpers (`_crop_in`/`_patch_in`) to know what's
+contextually available. Importing content.py at module level from world.py
+would be circular (content.py imports world.py for `World`/`Entity` at ITS
+module level), so that one call site uses a deferred import instead — see the
+comment in `World.available_actions`. Keep new content-engine coupling
+flowing the same direction (content depends on world, not the reverse) and
+reach for a deferred import only at the couple of spots that genuinely need
+one both ways.
+
 ## The core model
 
 Everything in the world — rooms, the candle, the cat, you — is one type:
@@ -81,16 +108,18 @@ than reinventing "which room is this in."
 This is the loop we actually use. Following it is why changes don't cascade into
 mystery bugs. Example: adding fishing.
 
-1. **Write the failing test first.** In `test_emberworld.py`, script the new
-   behaviour through `act()`/`perceive()` and assert the outcome you want
+1. **Write the failing test first.** In `test_content.py` (or `test_world.py`
+   if it's really an engine change), script the new behaviour through
+   `act()`/`perceive()` and assert the outcome you want
    (`cast → wait → catch → cook → eat`). Run the tests; watch it fail — that
    proves the test actually bites.
 2. **Add the new invariant, if the feature implies one.** (A fish can't be both
-   on the line and in the bucket.) Put it in `check_world`, and confirm
-   `test_checker_actually_catches_corruption`-style that it fires when violated.
-3. **Write the smallest code that passes.** New verbs go in `VERBS` with a
-   one-line docstring; new autonomy goes in `BEHAVIORS`; new content goes in
-   `build_world`. Route randomness through `world.rng`.
+   on the line and in the bucket.) Put it in `check_world` (world.py), and
+   confirm `test_checker_actually_catches_corruption`-style that it fires when
+   violated.
+3. **Write the smallest code that passes.** New verbs go in `content.py`'s
+   `VERBS` with a one-line docstring; new autonomy goes in `BEHAVIORS`; new
+   content goes in `build_world`. Route randomness through `world.rng`.
 4. **Go green, then prove nothing else broke.** All existing tests pass, and
    `--fuzz` stays clean. Regenerate the reference (`--reference > REFERENCE.md`).
 5. **Bump `SAVE_VERSION`** if the save shape changed.
@@ -163,9 +192,9 @@ from it and invent nothing beyond it.
 
 ## Where to go next (deferred, but planned)
 
-The natural next refactor is a **registration pattern** — a `@verb(...)` /
-`@behavior(...)` decorator so a feature registers itself, and can live entirely
-in its own file (`features/fishing.py`) that the engine discovers without any
-central file knowing about it. Do the mechanical file-split first (the test
-suite proves nothing broke), then the decorator change. Don't over-split before
-the content demands it.
+The mechanical file-split (engine / content / drivers, described above) is
+done. The natural next refactor is a **registration pattern** — a `@verb(...)`
+/ `@behavior(...)` decorator so a feature registers itself, and can live
+entirely in its own file (`features/fishing.py`) that the engine discovers
+without content.py knowing about it up front. Don't over-split before the
+content demands it — a second sizeable feature is the natural trigger.
