@@ -170,6 +170,16 @@ def _carrying(world, actor, e):
     return e is not None and e.location == actor.id
 
 
+def _carried_line(world, actor):
+    # carried items are part of the standing perception (not hidden behind a
+    # separate 'inventory' command an amnesiac agent has to choose to run),
+    # and stay visible even in the dark -- you can feel what's in your hands.
+    items = world.contents(actor.id)
+    if not items:
+        return "Your hands are empty."
+    return "You are carrying: " + ", ".join(e.name for e in items) + "."
+
+
 def cmd_look(world, actor, arg):
     """look [thing] -- describe the room, or examine one thing (dark hides all but what you hold)."""
     room = world.get(actor.location)
@@ -184,13 +194,15 @@ def cmd_look(world, actor, arg):
     stamp = world.timestr()
     if world.is_dark(room.id):
         return (f"[{stamp}] Pitch dark. You can make out nothing without a "
-                f"light. Somewhere out there the world goes on regardless.")
+                f"light. Somewhere out there the world goes on regardless.\n\n"
+                f"{_carried_line(world, actor)}")
     lines = [f"[{stamp}]  {room.name.upper()}", room.description]
     here = [e for e in world.contents(room.id) if e.id != actor.id]
     if here:
         lines += [""] + [f"  - {e.description}" for e in here]
     if room.exits:
         lines += ["", "Exits: " + ", ".join(room.exits)]
+    lines += ["", _carried_line(world, actor)]
     return "\n".join(lines)
 
 

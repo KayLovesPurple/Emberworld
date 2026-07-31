@@ -118,6 +118,41 @@ def test_can_inspect_carried_things_in_the_dark():
         "couldn't read a carried item in the dark"
 
 
+def test_look_shows_what_youre_carrying():
+    """BUG WE HIT: an agent with no memory between turns back-calculated its
+    inventory from memory it doesn't have, and got it badly wrong. Carried
+    items must be part of the standing room view, not hidden behind a
+    separate 'inventory' command the agent has to choose to run."""
+    w, actor = fresh()
+    run(w, actor, "take candle")
+    assert "candle" in w.perceive(actor), "carried candle missing from perception"
+
+
+def test_look_says_hands_are_empty_when_carrying_nothing():
+    w, actor = fresh()
+    assert "hands are empty" in w.perceive(actor).lower()
+
+
+def test_carried_items_stay_visible_in_the_dark_but_the_room_does_not():
+    """Mirrors the existing rule: darkness hides the room, not what's in your
+    own hands. The standing perception must keep showing carried items even
+    when the room itself goes dark."""
+    w, actor = fresh()
+    run(w, actor, "take knife")
+    _make_it_dark(w, actor)
+    seen = w.perceive(actor)
+    assert "pitch dark" in seen.lower(), "the room should still be hidden"
+    assert "knife" in seen, "carried knife should stay visible in the dark"
+
+
+def test_empty_handed_in_the_dark_says_so():
+    w, actor = fresh()
+    _make_it_dark(w, actor)
+    seen = w.perceive(actor)
+    assert "pitch dark" in seen.lower()
+    assert "hands are empty" in seen.lower()
+
+
 # ===========================================================================
 # 2. INVARIANTS -- must hold no matter what features exist.
 # ===========================================================================
