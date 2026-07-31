@@ -49,6 +49,14 @@ The agent uses **Claude Sonnet 5** by default (set by `LLM_MODEL` at the top of
 which makes for a more deliberate visit; add `--no-think` for cheaper, faster
 runs (better for long `--turns`).
 
+## LLM session transcripts
+
+Each `--llm` visit writes a Markdown transcript in `sessions/`. Its name includes
+the model, world day on arrival, requested turn count, and real start time, for
+example `20260731-143052_claude-sonnet-5_day-10_30-turns.md`. Reasoning summaries are
+recorded in italics, followed by the command and outcome for each turn. These
+local transcripts are ignored by Git.
+
 ## The rules, in brief
 
 Type `help` in-game for the verb list, or see `REFERENCE.md` for everything.

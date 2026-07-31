@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 emberworld_save.json
+sessions/*.md
