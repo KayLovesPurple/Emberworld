@@ -109,12 +109,20 @@ Claude that sees only the prompt we build; the world (via this harness) has to
 supply the short-term memory the agent lacks. The mechanisms, and *why* each
 exists (each fixed a real failure we watched happen):
 
+- **Parsing the reply** (`_extract_command`): the agent sometimes reasons in
+  prose before naming the command ("I'll plant a potato...\n\nplant potato").
+  Taking the first word of the raw reply choked on "i'll" and silently wasted
+  the turn. Now the harness looks for the line that actually starts with a
+  known verb (falling back to the last non-empty line) before handing anything
+  to `act()`.
 - **Rolling history** (`_recent_block`): the last ~5 commands+results are fed
   back, so a fresh instance can see what it just did instead of repeating it.
-- **Journal memory**: once the agent reads the journal, its text stays pinned in
-  every later prompt ("you've already read it, it won't change"). Without this
-  the agent re-read the journal ~15 times a run — each fresh instance re-deciding
-  to "understand its situation."
+- **Journal memory, capped** (`_journal_excerpt`): once the agent reads the
+  journal, its text stays pinned in every later prompt ("you've already read
+  it, it won't change"). Without this the agent re-read the journal ~15 times a
+  run — each fresh instance re-deciding to "understand its situation." But the
+  full journal grows without bound across many visits, so what's shown is
+  capped to the seed entry plus the last ~5.
 - **Turns remaining**: shown every turn, so the agent spends a finite budget
   deliberately rather than squandering free actions.
 - **Stuck detection** (`_looks_stuck`): flags the same **free** verb repeated 3×
@@ -143,7 +151,15 @@ Model and thinking config (see `_ask_claude`), current as of Sonnet 5:
 The guarantee that survives all of this: a visit **always** leaves one journal
 note (`_leave_signoff`), written straight to the journal entity so it lands
 wherever the agent ended up, even on API failure or Ctrl-C. That note is the only
-thread between one memoryless hand and the next.
+thread between one memoryless visit and the next — so it must be trustworthy.
+It used to be confabulated: the model was simply asked to summarize its visit
+from memory, and invented details that never happened. Now it's grounded in
+`did`, a visit-long, ordered list of what the harness itself watched happen
+(repetition preserved, so dwelling on something is legible) built from each
+command's actual result text, not its verb — an active verb still ticks the
+clock even when it's refused, so only the result says whether it landed. The
+closing prompt hands the model that list verbatim and is told to draw only
+from it and invent nothing beyond it.
 
 ## Where to go next (deferred, but planned)
 

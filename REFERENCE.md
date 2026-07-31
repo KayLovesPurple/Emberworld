@@ -21,7 +21,7 @@
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `feed` -- feed cat -- give a carried potato to the cat if it's in the room.
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
-- `name` -- name cat <name> -- name the cat; the name is kept for every future hand.
+- `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
@@ -31,7 +31,7 @@
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it.
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **cat_wander** -- Autonomous: the cat drifts between rooms, drawn toward a lit hearth.
-- **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed) and meows to be fed.
+- **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
 
 ## World rules (from the code's own constants)
 

@@ -3,8 +3,8 @@
 A small text world that keeps ticking whether or not anyone's watching — a
 candle burns down, a potato grows, night falls, a cat wanders and gets hungry.
 You can play it yourself, or let a Claude reach in over the API and live in it
-for a while. Because the world saves to disk, visits form a lineage: one hand
-plants a potato and leaves a note; a later hand — with no memory of the first —
+for a while. Because the world saves to disk, visits form a lineage: someone
+plants a potato and leaves a note; someone else — with no memory of the first —
 reads that note and harvests the crop.
 
 ## Files

@@ -297,6 +297,23 @@ def test_signoff_falls_back_when_the_api_fails():
         "a failed API call must still leave a fallback note"
 
 
+def test_signoff_is_grounded_in_what_actually_happened():
+    """BUG WE HIT: the closing note was confabulated -- invented details not
+    grounded in the visit. The prompt must carry the real, ordered list of
+    what happened (repetition preserved, so dwelling is legible) plus an
+    explicit instruction not to invent anything beyond it."""
+    c = _RecordingClient()
+    did = ["plant potato", "look cat", "look cat", "feed cat"]
+    w, actor = fresh()
+    ew._leave_signoff(c, w, actor, did=did)
+    system = c.last["system"]
+    user = c.last["messages"][0]["content"]
+    assert "don't invent" in system.lower() or "do not invent" in system.lower()
+    for action in did:
+        assert action in user, f"real action {action!r} missing from the prompt"
+    assert user.count("look cat") == 2, "repetition (dwelling) must be preserved, not deduped"
+
+
 class _RecordingClient:
     """Captures the kwargs of the last create() call, returns a fixed reply."""
     def __init__(self):
@@ -368,6 +385,37 @@ def test_recent_block_lists_history_for_a_memoryless_agent():
     h = deque([("plant potato", "firm it down"), ("wait", "time passes")])
     block = ew._recent_block(h)
     assert "plant potato" in block and "wait" in block
+
+
+def test_extract_command_pulls_command_from_reasoning_prose():
+    """BUG WE HIT: the agent sometimes reasons first and states the command
+    last, e.g. "I'll plant a potato...\n\nplant potato" -- taking the first
+    word ("i'll") failed to parse. Must find the real command in the reply."""
+    reply = "I'll plant a potato since the patch is empty.\n\nplant potato"
+    assert ew._extract_command(reply) == "plant potato"
+
+
+def test_extract_command_is_a_no_op_on_a_bare_command():
+    assert ew._extract_command("wait") == "wait"
+    assert ew._extract_command("go out") == "go out"
+
+
+def test_extract_command_falls_back_to_last_line_when_no_verb_matches():
+    assert ew._extract_command("hmm, tricky, let me think about this") == \
+        "hmm, tricky, let me think about this"
+
+
+def test_journal_excerpt_caps_length_but_keeps_seed_entry():
+    entries = [f"[Day {i}] entry {i}" for i in range(1, 21)]   # 20 entries
+    excerpt = ew._journal_excerpt(entries)
+    assert entries[0] in excerpt, "seed entry got dropped"
+    for e in entries[-5:]:
+        assert e in excerpt, "recent entry missing from excerpt"
+    assert entries[10] not in excerpt, "middle entries should be capped, not shown"
+
+    small = entries[:3]
+    assert ew._journal_excerpt(small) == "\n".join(small), \
+        "a short journal should pass through unchanged"
 
 
 # ===========================================================================
@@ -447,6 +495,24 @@ def test_cat_meow_is_heard_only_in_its_own_room():
     assert any("meow" in m for m in heard_in_yard), "cat didn't meow where it was"
 
 
+def test_hungry_cat_description_says_so():
+    """Hunger used to only show up as a fleeting meow announcement, so agents
+    missed it. The cat's own description (visible in the room every turn) must
+    say it's hungry once hunger reaches the threshold, and stop once it isn't."""
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "hut"
+    cat.attrs["hunger"] = 6
+    ew.cat_hunger(w, cat)
+    assert "hungry" in cat.description.lower(), \
+        f"hungry cat's description doesn't say so: {cat.description!r}"
+
+    cat.attrs["hunger"] = 0
+    ew.cat_hunger(w, cat)
+    assert "hungry" not in cat.description.lower(), \
+        f"well-fed cat's description still claims hunger: {cat.description!r}"
+
+
 def test_naming_the_cat_sticks_and_persists():
     w, actor = fresh()
     w.get("cat").location = "hut"
@@ -454,7 +520,7 @@ def test_naming_the_cat_sticks_and_persists():
     cat = w.get("cat")
     assert cat.attrs["given_name"] == "Shadow"
     assert cat.name == "Shadow"
-    # the name survives a save/load round-trip -- Shadow is Shadow for every hand
+    # the name survives a save/load round-trip -- Shadow is Shadow for everyone
     w2 = ew.World.from_data(json.loads(json.dumps(w.to_data())))
     assert w2.get("cat").attrs["given_name"] == "Shadow"
 

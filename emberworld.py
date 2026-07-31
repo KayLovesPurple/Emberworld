@@ -8,7 +8,7 @@ heartbeat: the candle burns, crops grow, night falls, whether or not you act.
 And it REMEMBERS. The world saves to disk between runs, and there's a journal
 you can write in. So a later visitor -- you, or another Claude reaching in over
 the API -- inherits the potato you planted and the notes you left. A lineage of
-hands sharing one world, asynchronously, through what they leave behind.
+visitors sharing one world, asynchronously, through what they leave behind.
 
 Play it yourself:     python emberworld.py
 Watch a dumb agent:   python emberworld.py --agent      (no API key needed)
@@ -24,6 +24,7 @@ import os
 import sys
 import json
 import random
+import string
 from collections import deque
 
 # Save next to THIS script, not wherever you happen to launch from -- so the
@@ -31,7 +32,7 @@ from collections import deque
 SAVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "emberworld_save.json")
 SAVE_VERSION = 2                      # bump when the on-disk shape changes
 DAY_LENGTH = 24                       # ticks in a full day
-LLM_MODEL = "claude-sonnet-5"         # which model the --llm hand uses (override: --model)
+LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
 
 
 class IncompatibleSaveError(Exception):
@@ -336,6 +337,20 @@ def _cat_cap(cat):
     return cat.attrs.get("given_name") or "The cat"
 
 
+def _cat_description(cat):
+    # hunger used to only surface as a meow that scrolls past -- fold it into
+    # the cat's own description so it's visible in the room every turn.
+    name = cat.attrs.get("given_name")
+    hungry = cat.attrs.get("hunger", 0) >= 6
+    if name:
+        return (f"{name}, a small cat, pacing and hungry, watching you keenly"
+                if hungry else
+                f"{name}, a small cat, watching you with mild interest")
+    return ("a small cat, pacing and hungry, watching you keenly"
+            if hungry else
+            "a small cat, watching you with mild interest, tail curled")
+
+
 def _cat_go(world, cat, direction):
     src = cat.location
     room = world.get(src)
@@ -366,9 +381,11 @@ def cat_wander(world, cat):
 
 
 def cat_hunger(world, cat):
-    """Autonomous: the cat slowly gets hungry (capped, never harmed) and meows to be fed."""
+    """Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
+    in its own description once hungry, and occasionally meows to be fed."""
     # capped -- the cat gets peckish, never worse.
     cat.attrs["hunger"] = min(cat.attrs.get("hunger", 0) + 1, CAT_HUNGER_CAP)
+    cat.description = _cat_description(cat)
     if cat.attrs["hunger"] >= 6 and world.rng.random() < 0.35:
         world.announce(f"{_cat_cap(cat)} winds around your ankles, "
                        f"meowing to be fed.", cat.location)
@@ -652,7 +669,7 @@ def cmd_read(world, actor, arg):
         return "Too dark to read. Pick it up, or bring a light."
     entries = journal.attrs["entries"]
     if not entries:
-        return "The journal is blank, waiting for a first hand."
+        return "The journal is blank, waiting for someone's first entry."
     return "The journal reads:\n" + "\n".join(f"  {ln}" for ln in entries)
 
 
@@ -679,7 +696,7 @@ def cmd_pet(world, actor, arg):
 
 
 def cmd_name(world, actor, arg):
-    """name cat <name> -- name the cat; the name is kept for every future hand."""
+    """name cat <name> -- name the cat; the name is kept for every future visit."""
     cat = world.get("cat")
     if cat is None or cat.location != actor.location:
         return "There's no cat here to name."
@@ -691,7 +708,7 @@ def cmd_name(world, actor, arg):
         return "Name it what? e.g.  name cat Shadow"
     cat.attrs["given_name"] = given
     cat.name = given
-    cat.description = f"{given}, a small cat, watching you with mild interest"
+    cat.description = _cat_description(cat)
     return f"The cat considers you a moment, then accepts the name {given}."
 
 
@@ -812,7 +829,7 @@ def build_world():
             "[Day 1] To whoever comes next: the hearth cooks, the candle only "
             "lights. Plant early -- the potatoes take their time. There's a cat; "
             "feed it a potato if it's hungry, and it likes the fire lit. I left "
-            "before the harvest. -- a hand before yours"
+            "before the harvest. -- someone before you"
         ]}))
 
     cat = w.add(Entity("cat", "cat",
@@ -882,7 +899,7 @@ Verbs:  look [thing] / go <exit> / take / drop / inventory
         feed cat / pet cat / write <note> / read journal / save / quit
 The candle only lights; the hearth cooks. Night is dark without a flame.
 There's a cat -- it wanders, it likes the fire lit, and it can be fed a potato.
-The world (and your journal) persist between runs. Leave a note for the next hand."""
+The world (and your journal) persist between runs. Leave a note for whoever comes next."""
 
 
 def play(strict=False):
@@ -937,7 +954,7 @@ def random_agent(steps=20):
 # Each turn is a FRESH instance with no memory of the last -- it re-reads the
 # world every time. The continuity lives in the journal and the save file, not
 # in the agent's head. So every visit ends by leaving a note on purpose: the
-# only thread between one hand and the next.
+# only thread between one visit and the next.
 # ---------------------------------------------------------------------------
 def _ask_claude(client, system, user, model=LLM_MODEL, think=True, return_thinking=False):
     # Sonnet 5 has adaptive thinking on by default, but display defaults to
@@ -975,6 +992,56 @@ def _recent_block(history):
     return "\n".join(lines)
 
 
+def _extract_command(text):
+    # the agent sometimes reasons in prose before stating the command, e.g.
+    # "I'll plant a potato...\n\nplant potato" -- taking the first word of the
+    # raw reply ("i'll") silently fails to parse and wastes the turn. Prefer
+    # the first line that actually starts with a known verb; if none does,
+    # fall back to the last non-empty line (still better than the first).
+    lines = [ln.strip().strip("`\"'") for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return text.strip()
+    for ln in lines:
+        words = ln.split()
+        if words and words[0].lower().strip(string.punctuation) in VERBS:
+            return ln
+    return lines[-1]
+
+
+def _journal_excerpt(entries, keep=5):
+    # feeding the agent the WHOLE journal every turn grows the prompt without
+    # bound over many visits. Cap it to the last `keep` entries, but always
+    # keep the first (seed) entry -- it's the one that orients someone new.
+    if not entries:
+        return ""
+    if len(entries) <= keep:
+        return "\n".join(entries)
+    tail = entries[-keep:]
+    first = entries[0]
+    if first in tail:
+        return "\n".join(tail)
+    return "\n".join([first, "...", *tail])
+
+
+# Substrings that mark a verb's result as a refusal or no-op rather than a
+# real accomplishment -- kept in sync with the messages the verbs return
+# above; a new refusal needs a matching marker here. Checked lowercase.
+_REFUSAL_MARKERS = (
+    "i don't understand", "don't see any", "too dark", "can't",
+    "there's no", "have no '", "aren't carrying", "already",
+    "isn't lit", "need a", "nothing left to burn", "nothing here is ready",
+    "nothing written there", "nothing to feed", "you'd regret it",
+    "write what?", "name it what?",
+)
+
+
+def _looks_like_refusal(result):
+    # active verbs still tick the clock even when they fail, so ticking isn't
+    # a signal -- only the RESULT text tells us whether the command landed.
+    low = result.lower()
+    return any(m in low for m in _REFUSAL_MARKERS)
+
+
 def _looks_stuck(history, n=3):
     # repeating the SAME free verb (look/read/inventory) means spinning -- the
     # world isn't changing. Repeated `wait` is NOT stuck: that's how time passes.
@@ -1000,10 +1067,10 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
     think_note = "thinking" if think else "no-think"
-    print(f"(A hand arrives -- {w.timestr()}. {turns} turns to spend. "
+    print(f"(Someone arrives -- {w.timestr()}. {turns} turns to spend. "
           f"[{model}, {think_note}])\n")
 
-    system = ("You are a hand living in a small text world that persists between "
+    system = ("You are someone living in a small text world that persists between "
               "visitors -- and you have no memory of past turns, so trust what "
               "the world and the journal tell you. Goal: keep a light through "
               "the night, grow and cook a potato, eat when hungry. There's a cat "
@@ -1016,6 +1083,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
 
     history = deque(maxlen=5)
     journal_text = None                       # once read, kept in view so it needn't re-read
+    did = []           # visit-long, ordered, NOT deduped -- what really happened
     try:
         for i in range(turns):
             turns_left = turns - i
@@ -1034,8 +1102,8 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                       + "\n".join(actions) + "\n\nYour command:")
             try:
                 if show_thoughts and think:
-                    thoughts, choice = _ask_claude(client, system, prompt, model,
-                                                   think, return_thinking=True)
+                    thoughts, reply = _ask_claude(client, system, prompt, model,
+                                                  think, return_thinking=True)
                     if thoughts:
                         block = "\n".join("    " + ln for ln in thoughts.splitlines())
                         print(_paint(block, "90", color))     # dim grey
@@ -1043,7 +1111,8 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                         print(_paint("    (no reasoning surfaced this turn)",
                                      "90", color))
                 else:
-                    choice = _ask_claude(client, system, prompt, model, think)
+                    reply = _ask_claude(client, system, prompt, model, think)
+                choice = _extract_command(reply)
             except Exception as ex:                       # network/API hiccup
                 print(f"(a turn slipped away: {ex})")
                 continue
@@ -1054,22 +1123,32 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
             if choice.split()[:1] == ["read"] and "journal reads" in result:
                 jrnl = w.get("journal")
                 if jrnl is not None:
-                    journal_text = "\n".join(jrnl.attrs.get("entries", []))
+                    journal_text = _journal_excerpt(jrnl.attrs.get("entries", []))
+            # track what really happened, for a grounded sign-off later: active
+            # verbs count unless refused; free look/read count only if they
+            # actually showed something. wait/inventory/etc. never count.
+            verb = choice.split()[:1]
+            verb = verb[0].lower() if verb else ""
+            if verb not in ("wait", "z") and not _looks_like_refusal(result):
+                if verb not in FREE_VERBS or verb in ("look", "l", "examine", "x", "read"):
+                    did.append(choice)
             first = result.splitlines()[0][:70] if result.strip() else "(nothing)"
             history.append((choice, first))
     except KeyboardInterrupt:
         print("\n(the visit is cut short -- but the note still gets left.)")
 
-    _leave_signoff(client, w, actor, model, think)
+    _leave_signoff(client, w, actor, model, think, did)
     w.save()
-    print(f"(The hand departs. Its note is in the journal.)\n(saved: {SAVE})")
+    print(f"(They depart. Their note is in the journal.)\n(saved: {SAVE})")
 
 
-def _leave_signoff(client, w, actor, model=None, think=True):
-    """Always leave one closing note. Written straight to the journal entity so
-    it lands wherever the agent ended up -- the deliberate trace for the next.
+def _leave_signoff(client, w, actor, model=None, think=True, did=None):
+    """Always leave one closing note, grounded in `did` -- the visit's real,
+    ordered list of what actually happened -- so the note can't confabulate.
+    Written straight to the journal entity so it lands wherever the agent
+    ended up, even on API failure or Ctrl-C.
 
-    The cat is mentioned to the departing hand ONLY if it's actually hungry, so
+    The cat is mentioned to whoever's leaving ONLY if it's actually hungry, so
     caretaking enters the lineage when it matters -- not every single visit.
     That keeps the journal from turning into nothing but cat status reports."""
     journal = w.get("journal")
@@ -1079,16 +1158,22 @@ def _leave_signoff(client, w, actor, model=None, think=True):
     extra = ""
     if cat is not None and cat.attrs.get("hunger", 0) >= 6:
         extra = "\n(The cat seemed hungry when you left.)"
+    did_block = ("\n".join(f"  - {c}" for c in did) if did
+                 else "  (nothing that left much of a mark -- a quiet visit)")
     try:
         note = _ask_claude(client,
-            "You are a hand whose visit to a small persistent world is ending. "
-            "Leave ONE short sentence in the shared journal for whoever comes "
-            "next: what you did, or what you'd advise. Just the sentence.",
+            "You are someone whose visit to a small persistent world is ending. "
+            "Below is everything you actually did this visit, in order -- draw "
+            "only from that list and don't invent anything beyond it. Pick "
+            "whatever's worth passing on and leave ONE short sentence in the "
+            "shared journal for whoever comes next, in your own voice. Just "
+            "the sentence.",
+            f"What you actually did this visit:\n{did_block}\n\n"
             f"{w.perceive(actor)}{extra}\n\nYour closing note:",
             model or LLM_MODEL, think)
     except Exception:
         note = ""
-    note = note.strip().strip('"') or "A quiet visit. Nothing much changed. -- a passing hand"
+    note = note.strip().strip('"') or "A quiet visit. Nothing much changed. -- someone passing through"
     journal.attrs.setdefault("entries", []).append(f"[Day {w.day()}] {note}")
 
 
