@@ -10,15 +10,21 @@ breaking, and the recipe for adding a feature safely.
   `check_world`. Generic: it has no knowledge of any specific verb or
   behavior, only the `VERBS`/`FREE_VERBS`/`BEHAVIORS` registries (declared
   here as empty containers) that content.py populates.
-- `content.py` — Emberworld itself. The verbs, the autonomous behaviors, the
-  cat, `build_world`, and the self-documenting reference generator. Imports
+- `content.py` — Emberworld itself. The verbs, the autonomous behaviors,
+  `build_world`, and the self-documenting reference generator. Imports
   `World`/`Entity` from world.py and fills in its registries.
+- `cat.py` — the cat as its own self-contained subsystem: its constants
+  (`CAT_HUNGER_CAP`, `CAT_MEOW_THRESHOLD`), its behaviors (wander/hunger/idle),
+  its verbs (feed/pet/name), and `build_cat`. Split out of content.py once it
+  grew into a coherent slice on its own — see "Where to go next" below for why,
+  and why it split before a registration pattern did.
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
-  `load_or_build`, and the headless fuzzer. Imports both of the above.
+  `load_or_build`, and the headless fuzzer. Imports content.py and cat.py.
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
   dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
-- `test_world.py` / `test_content.py` / `test_drivers.py` — the test suite,
-  split to match, sharing a couple of helpers via `_test_helpers.py`.
+- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
+  test suite, split to match, sharing a couple of helpers via
+  `_test_helpers.py`.
 
 world.py and content.py have a real mutual dependency: content.py needs
 `World`/`Entity` to build things, and world.py's `available_actions` needs a
@@ -30,6 +36,15 @@ comment in `World.available_actions`. Keep new content-engine coupling
 flowing the same direction (content depends on world, not the reverse) and
 reach for a deferred import only at the couple of spots that genuinely need
 one both ways.
+
+content.py and cat.py have the same shape of problem, one level up: content.py
+imports `build_cat`/`CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD` from cat.py at
+module level (so `build_world` and `generate_reference` can use them), while
+cat.py's `cmd_feed` needs content.py's `_is_raw` (to prefer a raw potato over
+an already-cooked one). Importing content.py from cat.py at module level would
+close the same kind of cycle, so `cmd_feed` does the import inside the
+function body instead — same fix, same reasoning, as the world.py/content.py
+case above.
 
 ## The core model
 
@@ -203,8 +218,17 @@ from it and invent nothing beyond it.
 ## Where to go next (deferred, but planned)
 
 The mechanical file-split (engine / content / drivers, described above) is
-done. The natural next refactor is a **registration pattern** — a `@verb(...)`
-/ `@behavior(...)` decorator so a feature registers itself, and can live
-entirely in its own file (`features/fishing.py`) that the engine discovers
-without content.py knowing about it up front. Don't over-split before the
-content demands it — a second sizeable feature is the natural trigger.
+done. content.py had grown to mix several things that don't much overlap
+(generic behaviors, the cat subsystem, the rest of the verbs, `build_world`),
+so the cat — the most self-contained slice, with its own constants, behaviors,
+verbs, and gentle-guarantee comment all in one place — split out into cat.py
+first, as a plain module split with no new machinery: it still just calls
+`VERBS.update`/`BEHAVIORS.update` on import, exactly like content.py does.
+
+The bigger refactor, still ahead: a **registration pattern** — a
+`@verb(...)`/`@behavior(...)` decorator so a feature registers itself, and can
+live entirely in its own file (`features/fishing.py`) that the engine
+discovers without content.py knowing about it up front. That's worth doing
+once there are several such feature-files wanting to self-register, not for
+just one — cat.py's split didn't need it, and forcing it in for a single
+module would've been solving a problem that didn't exist yet.
