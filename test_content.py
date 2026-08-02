@@ -10,12 +10,12 @@ Run it either way:
 
 import json
 
-from world import World, Entity, SAVE_VERSION
+from world import World, Entity
 from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS,
-    LAMP_FUEL_START, LAMP_LOW_FUEL, migrate_legacy_save,
+    LAMP_FUEL_START, LAMP_LOW_FUEL,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -568,31 +568,6 @@ def test_fresh_world_starts_in_early_morning_with_light():
         f"fresh world should start in daylight, not {w.phase()}"
     result = w.act(actor, "go out")
     assert "pitch dark" not in result.lower(), "the yard should be visible on a fresh morning"
-
-
-def test_legacy_save_gains_the_lamp_and_drops_the_candle():
-    """Backward-compat: an old save predates the lamp and still has a candle.
-    It must load cleanly, gain an unlit lamp, and lose the candle -- without
-    a SAVE_VERSION bump, since the on-disk SHAPE hasn't changed."""
-    w, _ = fresh()
-    data = w.to_data()
-    data["entities"] = [e for e in data["entities"] if e["id"] != "lamp"]
-    data["entities"].append({
-        "id": "candle", "name": "candle",
-        "description": "a stub of tallow candle, burning steadily",
-        "location": "hut", "portable": True,
-        "attrs": {"lit": True, "fuel": 5}, "exits": {}, "behaviors": ["burning"],
-    })
-    assert data["version"] == SAVE_VERSION, "this test should not need a version bump"
-
-    old_world = World.from_data(data)
-    assert old_world.get("candle") is not None and old_world.get("lamp") is None
-
-    migrate_legacy_save(old_world)
-    assert old_world.get("candle") is None, "the retired candle should be dropped on load"
-    lamp = old_world.get("lamp")
-    assert lamp is not None and lamp.location == "hut" and not lamp.attrs.get("lit"), \
-        "a pre-lamp save should gain an unlit lamp in the hut"
 
 
 # ===========================================================================

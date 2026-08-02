@@ -114,10 +114,6 @@ than reinventing "which room is this in."
   feature you *haven't written yet*.
 - **Save versioning**: saves carry a `SAVE_VERSION`. Bump it when the on-disk
   shape changes; old saves are then set aside cleanly instead of mis-loading.
-  A backward-compatible content change (an old save just predates a new
-  object, like the lamp replacing the candle) doesn't need a bump at all --
-  write a small migration instead (`content.migrate_legacy_save`, called from
-  `load_or_build`) that reconciles the loaded world in place.
 - **Self-documenting reference**: `REFERENCE.md` is generated from the `VERBS`
   and `BEHAVIORS` registries. A test fails if any verb or behavior lacks a
   docstring, so docs can't fall behind the code.

@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, migrate_legacy_save, VERBS, FREE_VERBS
+from content import build_world, VERBS, FREE_VERBS
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -75,7 +75,6 @@ def load_or_build(quiet=False):
             w = World.load(SAVE)
             actor = w.get("you")
             if actor:
-                migrate_legacy_save(w)      # drop a retired candle, add the lamp if missing
                 if not quiet:
                     print(f"(You return to a world already in progress -- {w.timestr()}.)")
                 return w, actor

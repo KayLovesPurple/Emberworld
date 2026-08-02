@@ -605,27 +605,6 @@ def generate_reference():
 
 
 # ---------------------------------------------------------------------------
-# Backward-compat for saves that predate the tin lamp. The on-disk SHAPE
-# hasn't changed (still a list of entities), just what one lineage's snapshot
-# happens to contain -- so this is a content-level migration, not a
-# SAVE_VERSION bump. Called on every successful load, harmless once a save
-# already has the lamp and no candle.
-# ---------------------------------------------------------------------------
-def migrate_legacy_save(world):
-    """Drop any leftover candle (retired entirely -- there's no relighting
-    it) and add the lamp, unlit, in the hut, if this save predates it."""
-    candle = world.get("candle")
-    if candle is not None:
-        del world.entities[candle.id]
-    if world.get("lamp") is None:
-        lamp = world.add(Entity("lamp", "lamp", "", location="hut",
-                                  portable=True, attrs={"lit": False, "fuel": 0}))
-        lamp.attach("lamp_burning")
-        lamp.description = _lamp_description(lamp)
-    return world
-
-
-# ---------------------------------------------------------------------------
 # The world, assembled fresh (used only when there's no save to inherit).
 # ---------------------------------------------------------------------------
 def build_world():

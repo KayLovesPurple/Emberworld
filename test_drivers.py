@@ -53,35 +53,6 @@ def test_stale_save_file_is_set_aside_not_crashed():
         assert os.path.exists(save_path + ".bak"), "old save wasn't preserved"
 
 
-def test_load_or_build_migrates_a_pre_lamp_save_on_disk():
-    """load_or_build must apply the lamp/candle migration to a REAL save file,
-    not just when migrate_legacy_save is called directly -- otherwise an old
-    save on disk would keep loading with a candle and no lamp forever."""
-    with tempfile.TemporaryDirectory() as d:
-        save_path = os.path.join(d, "emberworld_save.json")
-        old = fresh()[0].to_data()
-        old["entities"] = [e for e in old["entities"] if e["id"] != "lamp"]
-        old["entities"].append({
-            "id": "candle", "name": "candle",
-            "description": "a stub of tallow candle, burning steadily",
-            "location": "hut", "portable": True,
-            "attrs": {"lit": True, "fuel": 5}, "exits": {}, "behaviors": ["burning"],
-        })
-        with open(save_path, "w") as f:
-            json.dump(old, f)
-
-        orig = drv.SAVE
-        drv.SAVE = save_path
-        try:
-            w, actor = drv.load_or_build(quiet=True)
-        finally:
-            drv.SAVE = orig
-        assert w.get("candle") is None, "loading didn't drop the retired candle"
-        lamp = w.get("lamp")
-        assert lamp is not None and lamp.location == "hut" and not lamp.attrs.get("lit"), \
-            "loading didn't add the missing lamp"
-
-
 def test_llm_session_log_uses_descriptive_name_and_italic_thoughts():
     """A visit gets its own Markdown record; thoughts must be visually distinct."""
     with tempfile.TemporaryDirectory() as d:
