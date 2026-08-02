@@ -41,10 +41,11 @@ content.py and cat.py have the same shape of problem, one level up: content.py
 imports `build_cat`/`CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD` from cat.py at
 module level (so `build_world` and `generate_reference` can use them), while
 cat.py's `cmd_feed` needs content.py's `_is_raw` (to prefer a raw potato over
-an already-cooked one). Importing content.py from cat.py at module level would
-close the same kind of cycle, so `cmd_feed` does the import inside the
-function body instead — same fix, same reasoning, as the world.py/content.py
-case above.
+an already-cooked one) and `_last_potato_beat` (the one-shot line fired when
+a raw potato fed to the cat happens to be the last one). Importing content.py
+from cat.py at module level would close the same kind of cycle, so `cmd_feed`
+does the import inside the function body instead — same fix, same reasoning,
+as the world.py/content.py case above.
 
 ## The core model
 

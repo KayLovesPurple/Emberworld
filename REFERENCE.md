@@ -36,6 +36,7 @@
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in
+- **patch_volunteer** -- Autonomous: if the patch stays continuously empty for
 - **bucket_state** -- Autonomous: the bucket describes itself by how much water it's holding.
 - **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
@@ -50,6 +51,7 @@
 - The cat stays content (and may do small idle things) below hunger **12**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **40** fuel -- a full night's burn, and enough to revive a spent hearth.
+- If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.
 

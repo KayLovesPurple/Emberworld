@@ -106,7 +106,7 @@ BEHAVIORS.update({"cat_wander": cat_wander, "cat_hunger": cat_hunger,
 
 def cmd_feed(world, actor, arg):
     """feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you)."""
-    from content import _is_raw          # deferred to dodge a cat<->content cycle
+    from content import _is_raw, _last_potato_beat   # deferred to dodge a cat<->content cycle
     cat = world.get("cat")
     if cat is None or cat.location != actor.location:
         return "There's no cat here to feed."
@@ -114,9 +114,11 @@ def cmd_feed(world, actor, arg):
     food = next((e for e in potatoes if _is_raw(e)), potatoes[0] if potatoes else None)
     if not food:
         return "You've nothing to feed it just now -- a potato would do."
+    was_raw = _is_raw(food)
     world.entities.pop(food.id, None)
     cat.attrs["hunger"] = 0
-    return f"The cat sets upon the {food.name}, eats every scrap, and purrs."
+    return (f"The cat sets upon the {food.name}, eats every scrap, and purrs."
+            + _last_potato_beat(world, actor, was_raw))
 
 
 def cmd_pet(world, actor, arg):

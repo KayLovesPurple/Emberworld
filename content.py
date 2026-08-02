@@ -71,6 +71,29 @@ def patch_state(world, patch):
         patch.description = f"turned soil, a potato plant leafing out, not far off ripe{watered}"
 
 
+PATCH_VOLUNTEER_TURNS = 30   # comfortably more than one grow cycle (ripe_at=8)
+                              # or a full day (24) -- a rescue, not a routine
+
+
+def patch_volunteer(world, patch):
+    """Autonomous: if the patch stays continuously empty for
+    PATCH_VOLUNTEER_TURNS turns, one volunteer potato plant sprouts on its
+    own -- deterministic, self-healing ground so a lineage can never be
+    permanently seedless. A floor, not a faucet: the counter only advances
+    while the patch is empty, and a volunteer's own arrival makes it
+    non-empty, so a second one can never queue up behind the first."""
+    if world.contents(patch.id):
+        patch.attrs["empty_turns"] = 0
+        return
+    patch.attrs["empty_turns"] = patch.attrs.get("empty_turns", 0) + 1
+    if patch.attrs["empty_turns"] >= PATCH_VOLUNTEER_TURNS:
+        _sow(world, patch)
+        patch.attrs["empty_turns"] = 0
+        world.announce("A stray shoot has come up in the turned soil — a "
+                       "potato you missed, returning on its own.",
+                       world.room_of(patch))
+
+
 def bucket_state(world, bucket):
     """Autonomous: the bucket describes itself by how much water it's holding."""
     water = bucket.attrs.get("water", 0)
@@ -136,6 +159,7 @@ def lamp_burning(world, lamp):
 
 
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
+                   "patch_volunteer": patch_volunteer,
                    "bucket_state": bucket_state, "hearth_state": hearth_state,
                    "hungering": hungering, "lamp_burning": lamp_burning})
 
@@ -148,6 +172,19 @@ def _crop_in(world, room_id):
     patch = _patch_in(world, room_id)
     plants = world.contents(patch.id) if patch else []
     return plants[0] if plants else None
+
+
+def _sow(world, patch):
+    """Create a growing potato plant in the given patch -- the shared
+    creation path for a hand's cmd_plant and the ground's own volunteer, so
+    both produce identical entities and share the same grow/ripen/harvest
+    machinery. The only difference between them is provenance (the message
+    each one earns), never the mechanics."""
+    plant = world.add(Entity(world.fresh_id("plant"), "potato plant",
+        "a just-planted potato", location=patch.id,
+        attrs={"growth": 0, "ripe_at": 8}))
+    plant.attach("growing")
+    return plant
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +221,29 @@ def _is_raw(e):
 
 def _is_cooked(e):
     return e.attrs.get("food", 0) > 0
+
+
+LAST_POTATO_BEAT = "That was the last potato — the patch lies bare behind you now."
+
+
+def _patch_has_crop(world):
+    patch = world.get("patch")
+    return patch is not None and bool(world.contents(patch.id))
+
+
+def _last_potato_beat(world, actor, consumed_was_raw):
+    """A one-shot pang, not a standing warning: fires only at the exact
+    moment a hand spends its LAST raw (plantable) potato with nothing
+    growing in the patch. Cooked food was never seed, so it never counts
+    toward "raw potatoes remaining" -- and since the trigger is "now holds
+    zero," there's no state left to re-announce on a later turn."""
+    if not consumed_was_raw:
+        return ""
+    still_have_raw = any(_is_raw(e) and "potato" in e.name
+                         for e in world.contents(actor.id))
+    if still_have_raw or _patch_has_crop(world):
+        return ""
+    return "\n" + LAST_POTATO_BEAT
 
 
 def _lamp_state_tag(lamp):
@@ -363,10 +423,7 @@ def cmd_plant(world, actor, arg):
     if world.contents(patch.id):
         return "Something's already growing here. Let it finish first."
     world.entities.pop(e.id, None)
-    plant = world.add(Entity(world.fresh_id("plant"), "potato plant",
-        "a just-planted potato", location=patch.id,
-        attrs={"growth": 0, "ripe_at": 8}))
-    plant.attach("growing")
+    _sow(world, patch)
     return "You press the potato into the soil and firm it down. Now: time."
 
 
@@ -473,7 +530,8 @@ def cmd_cook(world, actor, arg):
     e.name = "broiled potato"
     e.description = "a hot broiled potato, skin blistered and steaming"
     e.attrs["food"] = 8
-    return "You bury the potato in the embers. Soon it's blistered and steaming."
+    return ("You bury the potato in the embers. Soon it's blistered and steaming."
+            + _last_potato_beat(world, actor, consumed_was_raw=True))
 
 
 def cmd_eat(world, actor, arg):
@@ -491,11 +549,25 @@ def cmd_eat(world, actor, arg):
     return f"You eat the {e.name}. Warm, and it settles you."
 
 
+def _journal_missing_message(world):
+    """The journal is portable, so a hardcoded 'it's in the hut' refusal
+    would eventually be a confident lie. Look up wherever it actually is and
+    say that instead -- and if it's somewhere with no specific clause yet,
+    say so honestly rather than assert a specific wrong place."""
+    journal = world.get("journal")
+    loc = journal.location if journal else None
+    if loc == "hut":
+        return "You've no journal to hand. It's in the hut."
+    if loc == "yard":
+        return "You've no journal to hand. It's out in the yard."
+    return "You've no journal to hand — it's not here with you."
+
+
 def cmd_write(world, actor, arg):
     """write <note> -- add a line to the shared journal for future visitors."""
     journal = find_visible(world, actor, "journal")
     if not journal:
-        return "You've no journal to hand. It's in the hut."
+        return _journal_missing_message(world)
     if not arg:
         return "Write what? e.g.  write planted two potatoes near the fence."
     journal.attrs.setdefault("entries", []).append(f"[Day {world.day()}] {arg}")
@@ -597,6 +669,9 @@ def generate_reference():
             f"- Gathering wood yields **{WOOD_PER_GATHER}**; feeding one unit "
             f"into the hearth restores **{FUEL_PER_WOOD}** fuel -- a full "
             "night's burn, and enough to revive a spent hearth.",
+            f"- If the vegetable patch stays empty for **{PATCH_VOLUNTEER_TURNS}** "
+            "turns straight, one volunteer potato plant sprouts on its own -- a "
+            "floor against a seedless lineage, not a routine source.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "
@@ -648,6 +723,7 @@ def build_world():
     patch = w.add(Entity("patch", "vegetable patch",
         "a strip of turned soil, dark and ready", location="yard"))
     patch.attach("patch_state")
+    patch.attach("patch_volunteer")
 
     w.add(Entity("well", "well",
         "a stone well, its bucket-rope disappearing into the dark",

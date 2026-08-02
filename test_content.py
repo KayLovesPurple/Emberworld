@@ -16,6 +16,7 @@ from content import (
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
+    PATCH_VOLUNTEER_TURNS,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -571,7 +572,221 @@ def test_fresh_world_starts_in_early_morning_with_light():
 
 
 # ===========================================================================
-# 5. DOCUMENTATION -- the reference generates from code, and nothing new can
+# 5. THE POTATO ECONOMY -- self-healing ground, a last-potato beat, and an
+#    honest journal refusal. The economy stays deliberately tight (harvest
+#    still yields exactly 2, planting is still the load-bearing act); the
+#    volunteer is a floor against total sterility, not a second faucet.
+# ===========================================================================
+def _sprout_a_volunteer(w, actor):
+    """Shared setup: advance exactly PATCH_VOLUNTEER_TURNS empty ticks with
+    the actor in the yard, so one volunteer reliably sprouts. 'go out' itself
+    ticks once (empty_turns -> 1), so only T-2 more waits are needed before
+    the final, spawning wait -- avoids an off-by-one across every caller."""
+    run(w, actor, "go out")
+    for _ in range(PATCH_VOLUNTEER_TURNS - 2):
+        w.act(actor, "wait")
+    return w.act(actor, "wait")
+
+
+def test_volunteer_sprouts_after_T_empty_turns_with_one_time_message():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    for _ in range(PATCH_VOLUNTEER_TURNS - 2):
+        result = w.act(actor, "wait")
+        assert "stray shoot" not in result.lower(), "volunteer sprouted early"
+    assert _crop_in(w, "yard") is None, "patch shouldn't have anything yet"
+    result = w.act(actor, "wait")
+    assert "stray shoot" in result.lower(), f"volunteer never announced: {result!r}"
+    crop = _crop_in(w, "yard")
+    assert crop is not None and not crop.attrs.get("ready"), \
+        "the volunteer should be a fresh, unripe plant"
+
+
+def test_healthy_cadence_never_triggers_the_volunteer():
+    """Replanting well before T empty turns means the counter never gets
+    anywhere close -- the volunteer must stay invisible in a working lineage."""
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "plant potato")
+    for _ in range(20):
+        if "harvest" in w.available_actions(actor):
+            break
+        w.act(actor, "wait")
+    run(w, actor, "harvest", "plant potato")
+    for _ in range(PATCH_VOLUNTEER_TURNS * 2):
+        result = w.act(actor, "wait")
+        assert "stray shoot" not in result.lower(), \
+            "volunteer fired despite a healthy replanting cadence"
+
+
+def test_patch_empty_counter_does_not_advance_while_non_empty():
+    """No accumulation: once a plant exists, the counter must stay pinned at
+    zero no matter how long it takes to ripen -- proving a second volunteer
+    can never queue up behind the first."""
+    w, actor = fresh()
+    _sprout_a_volunteer(w, actor)
+    patch = w.get("patch")
+    for _ in range(PATCH_VOLUNTEER_TURNS * 2):
+        w.act(actor, "wait")
+        assert patch.attrs.get("empty_turns", 0) == 0, \
+            "empty-turn counter advanced while the patch is non-empty"
+    assert len(w.contents(patch.id)) == 1, \
+        "a second plant appeared without the patch ever going empty"
+
+
+def test_volunteer_ripens_and_harvests_normally():
+    """Reuses the existing grow/ripen/harvest machinery -- a volunteer is
+    mechanically identical to a planted crop, only its provenance differs."""
+    w, actor = fresh()
+    _sprout_a_volunteer(w, actor)
+    for _ in range(20):
+        if "harvest" in w.available_actions(actor):
+            break
+        w.act(actor, "wait")
+    before = len([e for e in w.contents(actor.id) if "potato" in e.name])
+    result = w.act(actor, "harvest")
+    after = len([e for e in w.contents(actor.id) if "potato" in e.name])
+    assert after - before == 2, f"volunteer harvest didn't yield 2: {result!r}"
+
+
+def test_volunteer_timing_is_deterministic_not_random():
+    def run_scenario():
+        w, actor = fresh()
+        run(w, actor, "go out")
+        ticks = 0
+        while _crop_in(w, "yard") is None:
+            w.act(actor, "wait")
+            ticks += 1
+            assert ticks < PATCH_VOLUNTEER_TURNS + 5, "volunteer never sprouted"
+        return ticks
+
+    assert run_scenario() == run_scenario(), \
+        "volunteer timing should be exactly reproducible, not randomized"
+
+
+def test_legacy_save_without_empty_counter_does_not_instantly_spawn():
+    """Backward-compat: a save predating this feature has no empty_turns
+    field on the patch at all. It must default to 0, not to something that
+    would spawn a volunteer the instant the save is loaded."""
+    w, actor = fresh()
+    run(w, actor, "go out")   # a couple of empty ticks, well under T
+    run(w, actor, "wait")
+    data = w.to_data()
+    for e in data["entities"]:
+        if e["id"] == "patch":
+            e["attrs"].pop("empty_turns", None)   # simulate a genuinely old save
+
+    w2 = World.from_data(data)
+    actor2 = w2.get("you")
+    result = w2.act(actor2, "wait")
+    assert "stray shoot" not in result.lower(), \
+        "a save missing the counter should not instantly spawn a volunteer"
+
+
+def test_cooking_the_last_raw_potato_with_a_bare_patch_appends_the_beat():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "go in", "light hearth")
+    result = w.act(actor, "cook potato")
+    assert "blistered and steaming" in result.lower(), \
+        f"cooking itself should still succeed: {result!r}"
+    assert "last potato" in result.lower() and "patch lies bare" in result.lower(), \
+        f"last-potato beat missing: {result!r}"
+
+
+def test_feeding_the_last_raw_potato_to_the_cat_with_a_bare_patch_appends_the_beat():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "go in")
+    w.get("cat").location = actor.location
+    result = w.act(actor, "feed cat")
+    assert "purrs" in result.lower()
+    assert "last potato" in result.lower() and "patch lies bare" in result.lower(), \
+        f"last-potato beat missing: {result!r}"
+
+
+def test_last_potato_beat_does_not_repeat_on_later_turns():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "go in", "light hearth")
+    w.act(actor, "cook potato")
+    for _ in range(5):
+        result = w.act(actor, "wait")
+        assert "last potato" not in result.lower(), \
+            "the one-shot beat repeated on a later turn"
+    assert "last potato" not in w.perceive(actor).lower(), \
+        "the beat leaked into the standing perception as a persistent warning"
+
+
+def test_no_beat_when_another_raw_potato_remains():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato")
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                 location=actor.id, portable=True))
+    run(w, actor, "go in", "light hearth")
+    result = w.act(actor, "cook potato")
+    assert "last potato" not in result.lower(), \
+        f"beat fired with a raw potato still in hand: {result!r}"
+
+
+def test_no_beat_when_a_crop_is_still_growing():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato")
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                 location=actor.id, portable=True))
+    run(w, actor, "plant potato")             # one raw potato goes into the ground
+    run(w, actor, "go in", "light hearth")
+    result = w.act(actor, "cook potato")      # cook the other, now-last, raw potato
+    assert "last potato" not in result.lower(), \
+        f"beat fired while a crop is still growing: {result!r}"
+
+
+def test_a_cooked_potato_in_hand_does_not_prevent_the_beat():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato")
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                 location=actor.id, portable=True))
+    run(w, actor, "go in", "light hearth", "cook potato")   # cooks one; 1 raw left
+    result = w.act(actor, "cook potato")                     # cooks the last raw one
+    assert "last potato" in result.lower(), \
+        "a cooked potato already in hand shouldn't mask spending the last raw one"
+
+
+def test_write_refusal_names_the_yard_when_the_journal_is_there():
+    w, actor = fresh()
+    w.get("journal").location = "yard"
+    result = w.act(actor, "write hello")
+    assert "yard" in result.lower(), f"refusal didn't name the yard: {result!r}"
+    assert "hut" not in result.lower(), f"refusal still claims the hut: {result!r}"
+
+
+def test_write_refusal_names_the_hut_by_default():
+    w, actor = fresh()
+    run(w, actor, "go out")   # journal stays behind in the hut
+    result = w.act(actor, "write hello")
+    assert "hut" in result.lower(), f"refusal didn't name the hut: {result!r}"
+
+
+def test_write_refusal_uses_generic_fallback_for_an_unmapped_location():
+    w, actor = fresh()
+    w.get("journal").location = "patch"   # nowhere the refusal has a specific clause for
+    result = w.act(actor, "write hello")
+    assert "not here with you" in result.lower(), f"fallback clause missing: {result!r}"
+
+
+def test_carried_journal_persists_across_a_reload_as_the_same_actor():
+    """The journal is safe by construction: nothing drops inventory on
+    departure, and the persistent 'you' entity keeps carrying it across
+    visits. This regression-tests that guarantee directly."""
+    w, actor = fresh()
+    run(w, actor, "take journal", "go out")
+    assert w.get("journal").location == actor.id, "journal should be carried"
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    actor2 = w2.get("you")
+    assert w2.get("journal").location == actor2.id, \
+        "a carried journal must still be held by the same actor after a reload"
+    result = w2.act(actor2, "write still here")
+    assert "ink dries" in result.lower()
+
+
+# ===========================================================================
+# 6. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.
 # ===========================================================================
