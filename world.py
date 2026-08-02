@@ -255,8 +255,8 @@ class World:
 
     def save(self, path=None):
         path = path or SAVE
-        with open(path, "w") as f:
-            json.dump(self.to_data(), f, indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.to_data(), f, indent=2, ensure_ascii=False)
 
     @classmethod
     def from_data(cls, data):
@@ -274,7 +274,7 @@ class World:
     @classmethod
     def load(cls, path=None):
         path = path or SAVE
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_data(data)
 

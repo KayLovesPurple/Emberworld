@@ -726,7 +726,7 @@ def build_world():
     bucket.attach("bucket_state")
 
     w.add(Entity("knife", "knife",
-        "a small iron knife, good for whittling or gutting fish",
+        "a small iron knife, good for whittling",
         location="hut", portable=True))
     w.add(Entity("potato", "potato",
         "a firm potato, a few eyes already sprouting",

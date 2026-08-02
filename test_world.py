@@ -14,6 +14,7 @@ silently come back.
 """
 
 import json
+import os
 
 from world import World, IncompatibleSaveError, check_world
 from _test_helpers import fresh, run
@@ -215,6 +216,27 @@ def test_save_load_roundtrip_is_identical():
     w2 = World.from_data(json.loads(json.dumps(data1)))   # through real JSON
     data2 = w2.to_data()
     assert data1 == data2, "world changed shape across a save/load round-trip"
+
+
+def test_save_writes_unicode_readably_not_escaped():
+    """Regression: json.dump's default ensure_ascii=True turned an em dash in
+    a journal note into a literal '\\u2014' in the on-disk save file. It still
+    round-tripped fine through load(), but the raw file was unreadable -- fix
+    it so real text stays real text on disk."""
+    import tempfile
+    w, actor = fresh()
+    journal = w.get("journal")
+    journal.attrs.setdefault("entries", []).append("a note with an em dash — right here")
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+        path = tmp.name
+    try:
+        w.save(path)
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+        assert "—" in raw, "the actual character should be on disk"
+        assert "\\u2014" not in raw, f"em dash was escaped instead of written plainly: {raw!r}"
+    finally:
+        os.remove(path)
 
 
 def test_incompatible_version_is_refused():
