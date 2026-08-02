@@ -11,10 +11,10 @@ import json
 
 from world import World, check_world
 from content import (
-    VERBS, BEHAVIORS, CAT_HUNGER_CAP, cat_wander, cat_hunger, cat_idle,
-    generate_reference, _crop_in, BUCKET_CAPACITY, bucket_state,
-    WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD, HEARTH_LOW_FUEL,
-    hearth_state,
+    VERBS, BEHAVIORS, CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, cat_wander,
+    cat_hunger, cat_idle, generate_reference, _crop_in, BUCKET_CAPACITY,
+    bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
+    HEARTH_LOW_FUEL, hearth_state,
 )
 from _test_helpers import fresh, run
 
@@ -379,7 +379,7 @@ def test_cat_meow_is_heard_only_in_its_own_room():
         def choice(self, seq): return seq[0]
     w, actor = fresh()
     cat = w.get("cat")
-    cat.attrs["hunger"] = 10
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD
     cat.location = "yard"
     w.rng = Meow()
     w.log = []
@@ -399,7 +399,7 @@ def test_hungry_cat_description_says_so():
     w, actor = fresh()
     cat = w.get("cat")
     cat.location = "hut"
-    cat.attrs["hunger"] = 6
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD
     cat_hunger(w, cat)
     assert "hungry" in cat.description.lower(), \
         f"hungry cat's description doesn't say so: {cat.description!r}"
@@ -435,7 +435,7 @@ def test_named_cat_uses_its_name_in_announcements():
     w, actor = fresh()
     cat = w.get("cat")
     cat.attrs["given_name"] = "Shadow"
-    cat.attrs["hunger"] = 10
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD
     w.rng = Meow()
     w.log = []
     cat_hunger(w, cat)
@@ -471,7 +471,7 @@ def test_hungry_cat_never_produces_an_idle_line():
         def choice(self, seq): return seq[0]
     w, actor = fresh()
     cat = w.get("cat")
-    cat.attrs["hunger"] = 10                 # hungry
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD  # hungry
     cat.location = "yard"
     w.rng = Roll()
     w.log = []
@@ -491,6 +491,62 @@ def test_named_content_cat_idle_line_uses_its_name():
     w.log = []
     cat_idle(w, cat)
     assert any("Shadow" in m for (m, _) in w.log), "idle line didn't use the cat's name"
+
+
+def test_cat_does_not_meow_until_the_new_higher_threshold():
+    """The threshold was raised (~doubled from 6) so a feeding lasts
+    meaningfully longer -- pin that a cat just under it stays silent even
+    when the meow roll is forced to succeed. cat_hunger increments hunger by
+    1 before checking the gate, so start one tick further back than the
+    boundary being tested."""
+    class Meow:                              # force the meow roll to fire
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    w.rng = Meow()
+
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD - 2
+    w.log = []
+    cat_hunger(w, cat)                       # hunger becomes THRESHOLD - 1
+    assert not any("meow" in m for (m, _) in w.log), \
+        f"cat meowed below the new threshold: {w.log}"
+
+    w.log = []
+    cat_hunger(w, cat)                       # hunger becomes THRESHOLD
+    assert any("meow" in m for (m, _) in w.log), \
+        "cat should meow once hunger reaches the threshold"
+
+
+def test_meow_threshold_description_and_idle_gate_all_agree():
+    """The three things that key off hunger -- the meow, the description's
+    hungry-text, and the idle behaviour's content-gate -- must all still
+    switch at the same point, whatever that point is. cat_hunger increments
+    hunger by 1 before using it, so start one tick further back than the
+    boundary being tested."""
+    class Roll:                              # force whichever roll is checked
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    w.rng = Roll()
+
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD - 2
+    cat_hunger(w, cat)                       # hunger becomes THRESHOLD - 1
+    assert "hungry" not in cat.description.lower(), \
+        "cat should still read content just under the threshold"
+    w.log = []
+    cat_idle(w, cat)
+    assert w.log, "a not-yet-meowing cat should still be able to do idle things"
+
+    cat_hunger(w, cat)                       # hunger becomes THRESHOLD
+    assert "hungry" in cat.description.lower(), \
+        "cat should read hungry right at the threshold, in step with the meow"
+    w.log = []
+    cat_idle(w, cat)
+    assert w.log == [], "a hungry cat must not also produce idle content lines"
 
 
 def test_cat_idle_is_purely_cosmetic():

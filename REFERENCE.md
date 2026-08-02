@@ -45,6 +45,7 @@
 - A full day is **24 ticks**; night falls late in that cycle and is pitch dark without a lit flame.
 - The candle only gives light; the **hearth** is what cooks.
 - The cat's hunger is capped at **12** and it can come to no harm -- it only ever wants feeding.
+- The cat stays content (and may do small idle things) below hunger **12**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **40** fuel -- a full night's burn, and enough to revive a spent hearth.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.

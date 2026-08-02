@@ -105,6 +105,9 @@ def hungering(world, actor):
 # and wanting food. There is no starvation, no damage, no harm state it can
 # ever reach. This is enforced here and pinned by a test. Do not add harm.
 CAT_HUNGER_CAP = 12
+CAT_MEOW_THRESHOLD = 12   # hunger level at which the cat starts complaining;
+                          # meow, hungry-description, and idle content-gate
+                          # all key off this one value so they stay in step
 
 
 def _room_is_warm(world, room_id):
@@ -121,7 +124,7 @@ def _cat_description(cat):
     # hunger used to only surface as a meow that scrolls past -- fold it into
     # the cat's own description so it's visible in the room every turn.
     name = cat.attrs.get("given_name")
-    hungry = cat.attrs.get("hunger", 0) >= 6
+    hungry = cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD
     if name:
         return (f"{name}, a small cat, pacing and hungry, watching you keenly"
                 if hungry else
@@ -166,7 +169,7 @@ def cat_hunger(world, cat):
     # capped -- the cat gets peckish, never worse.
     cat.attrs["hunger"] = min(cat.attrs.get("hunger", 0) + 1, CAT_HUNGER_CAP)
     cat.description = _cat_description(cat)
-    if cat.attrs["hunger"] >= 6 and world.rng.random() < 0.35:
+    if cat.attrs["hunger"] >= CAT_MEOW_THRESHOLD and world.rng.random() < 0.35:
         world.announce(f"{_cat_cap(cat)} winds around your ankles, "
                        f"meowing to be fed.", cat.location)
 
@@ -183,7 +186,7 @@ CAT_IDLE_LINES = (
 def cat_idle(world, cat):
     """Autonomous: a content, well-fed cat occasionally does a small idle
     cat-thing -- purely cosmetic ambient life, never while it's hungry."""
-    if cat.attrs.get("hunger", 0) >= 6:
+    if cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
         return
     if world.rng.random() < 0.12:
         line = world.rng.choice(CAT_IDLE_LINES).format(cat=_cat_cap(cat))
@@ -602,6 +605,9 @@ def generate_reference():
             "- The candle only gives light; the **hearth** is what cooks.",
             f"- The cat's hunger is capped at **{CAT_HUNGER_CAP}** and it can "
             "come to no harm -- it only ever wants feeding.",
+            f"- The cat stays content (and may do small idle things) below "
+            f"hunger **{CAT_MEOW_THRESHOLD}**; at or above it, it starts "
+            "meowing to be fed.",
             f"- A full bucket holds **{BUCKET_CAPACITY}** units of water; "
             "each unit spent doubles a crop's growth for that one tick.",
             f"- Gathering wood yields **{WOOD_PER_GATHER}**; feeding one unit "
