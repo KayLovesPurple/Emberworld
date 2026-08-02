@@ -255,6 +255,54 @@ def test_low_fuel_hearth_reads_as_needing_wood_a_well_fed_one_reads_steady():
         f"well-fed hearth still reads as needing wood: {hearth.description!r}"
 
 
+def test_hearth_description_moves_healthy_low_spent_across_a_real_burn():
+    """The full arc, driven by real ticking (not direct calls): a freshly-lit
+    hearth reads healthy, sinks to low as fuel runs down, and still reads as
+    ash once spent -- display only, doesn't touch burn timing."""
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    w.act(actor, "light hearth")
+    healthy = hearth.description.lower()
+    assert "dying" not in healthy and "ash" not in healthy, \
+        f"freshly-lit hearth doesn't read healthy: {hearth.description!r}"
+
+    while hearth.attrs["fuel"] > HEARTH_LOW_FUEL:
+        w.act(actor, "wait")
+    low = hearth.description.lower()
+    assert "dying" in low or "wants more wood" in low, \
+        f"low-fuel hearth doesn't read as needing wood: {hearth.description!r}"
+
+    while hearth.attrs["lit"]:
+        w.act(actor, "wait")
+    spent = hearth.description.lower()
+    assert "ash" in spent, f"spent hearth should still read as ash: {hearth.description!r}"
+
+
+def test_gather_and_add_wood_are_surfaced_in_available_actions():
+    """The wood loop only helps if it's discoverable: an agent reads the
+    action list, not the room prose, so the verbs must appear there when
+    legal."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    assert "gather wood" in w.available_actions(actor), \
+        "gather wood should be offered in the yard"
+
+    run(w, actor, "gather wood", "go in")
+    assert "add wood" in w.available_actions(actor), \
+        "add wood should be offered when carrying wood near the hearth"
+
+
+def test_yard_description_does_not_mention_wood():
+    """Deliberate choice: discovery comes from the action list alone, not
+    from hinting at wood in the room prose. Pin it so a future edit can't
+    silently add it without us deciding to."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    desc = w.get("yard").description.lower()
+    assert "wood" not in desc and "branch" not in desc, \
+        f"yard description hints at wood, undermining the action-list test: {desc!r}"
+
+
 def test_wood_and_hearth_fuel_survive_save_load_roundtrip():
     w, actor = fresh()
     run(w, actor, "go out", "gather wood")
