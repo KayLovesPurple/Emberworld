@@ -19,7 +19,7 @@
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
 - `read` -- read journal -- read the journal (needs light unless you're holding it).  _(free -- costs no time)_
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
-- `feed` -- feed cat -- give a carried potato to the cat if it's in the room.
+- `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
 - `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).

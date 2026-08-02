@@ -9,7 +9,7 @@ Run it either way:
 
 import json
 
-from world import World, check_world
+from world import World, check_world, Entity
 from content import (
     VERBS, BEHAVIORS, CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, cat_wander,
     cat_hunger, cat_idle, generate_reference, _crop_in, BUCKET_CAPACITY,
@@ -46,6 +46,77 @@ def test_cannot_plant_without_a_seed():
     line = w.act(actor, "plant potato")
     assert "need a raw potato" in line
     assert _crop_in(w, "yard") is None, "planted something out of nothing"
+
+
+# ===========================================================================
+# 1b. RESOLVING THE RIGHT POTATO -- 'potato' is a substring of 'broiled
+#     potato' too, so carrying both used to hand every verb the wrong one.
+#     BUG WE HIT: a hand carrying both tried to plant fourteen turns running
+#     and kept failing, because the substring match grabbed the broiled
+#     potato first every time -- while a plantable raw one sat right there.
+# ===========================================================================
+def _cook_one_potato(w, actor):
+    """Helper: get exactly one broiled potato into the actor's hands."""
+    run(w, actor, "go out", "take potato", "go in", "light hearth", "cook potato")
+    return next(e for e in w.contents(actor.id) if e.name == "broiled potato")
+
+
+def test_planting_finds_the_raw_potato_even_when_a_cooked_one_is_carried_too():
+    """The regression test for the fourteen-turn failure."""
+    w, actor = fresh()
+    broiled = _cook_one_potato(w, actor)
+    raw = w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                        location=actor.id, portable=True))
+    run(w, actor, "go out")
+    result = w.act(actor, "plant potato")
+    assert "press the potato" in result.lower(), \
+        f"planting failed with both kinds carried: {result!r}"
+    assert w.get(raw.id) is None, "the raw potato wasn't consumed by planting"
+    assert w.get(broiled.id) is not None and w.get(broiled.id).location == actor.id, \
+        "the broiled potato should be untouched, still in hand"
+
+
+def test_cooking_targets_the_raw_potato_not_an_already_cooked_one():
+    w, actor = fresh()
+    broiled = _cook_one_potato(w, actor)
+    raw = w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                        location=actor.id, portable=True))
+    result = w.act(actor, "cook potato")
+    assert "bury the potato" in result.lower(), \
+        f"cooking failed with both kinds carried: {result!r}"
+    recooked = w.get(raw.id)
+    assert recooked is not None and recooked.name == "broiled potato", \
+        "cook should have targeted the raw potato, not the already-cooked one"
+    assert w.get(broiled.id).name == "broiled potato", \
+        "the already-cooked potato shouldn't be disturbed"
+
+
+def test_eating_targets_the_cooked_potato_not_the_raw_one():
+    w, actor = fresh()
+    broiled = _cook_one_potato(w, actor)
+    raw = w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                        location=actor.id, portable=True))
+    before = actor.attrs["hunger"]
+    result = w.act(actor, "eat potato")
+    assert "settles you" in result.lower(), \
+        f"eating failed with both kinds carried: {result!r}"
+    assert w.get(broiled.id) is None, "eating should have consumed the broiled potato"
+    assert w.get(raw.id) is not None and w.get(raw.id).location == actor.id, \
+        "the raw potato should be untouched by eating"
+    assert actor.attrs["hunger"] < before, "eating didn't reduce hunger"
+
+
+def test_feeding_cat_prefers_the_raw_potato_reserving_cooked_food_for_the_player():
+    w, actor = fresh()
+    broiled = _cook_one_potato(w, actor)
+    raw = w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                        location=actor.id, portable=True))
+    w.get("cat").location = actor.location
+    result = w.act(actor, "feed cat")
+    assert "purrs" in result, f"feeding didn't land: {result!r}"
+    assert w.get(raw.id) is None, "feeding should have consumed the raw potato"
+    assert w.get(broiled.id) is not None and w.get(broiled.id).location == actor.id, \
+        "the broiled potato should be reserved for the player, not fed to the cat"
 
 
 # ===========================================================================
@@ -301,6 +372,25 @@ def test_yard_description_does_not_mention_wood():
     desc = w.get("yard").description.lower()
     assert "wood" not in desc and "branch" not in desc, \
         f"yard description hints at wood, undermining the action-list test: {desc!r}"
+
+
+def test_carried_duplicate_items_are_grouped_with_a_count():
+    """Two potatoes shouldn't read as 'potato, potato' -- group identical
+    carried items into one line with a count, the way wood already does."""
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato")
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                 location=actor.id, portable=True))
+    seen = w.perceive(actor)
+    assert "potato (2)" in seen, f"duplicate potatoes weren't grouped: {seen!r}"
+    assert "potato, potato" not in seen, f"duplicates still listed separately: {seen!r}"
+
+
+def test_carried_single_item_has_no_count_suffix():
+    w, actor = fresh()
+    run(w, actor, "take knife")
+    seen = w.perceive(actor)
+    assert "knife" in seen and "knife (1)" not in seen
 
 
 def test_gather_wood_can_turn_up_a_found_item():

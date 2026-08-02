@@ -212,27 +212,51 @@ def _crop_in(world, room_id):
 # ---------------------------------------------------------------------------
 # Verbs -- the actions. Growing the game = adding entries here.
 # ---------------------------------------------------------------------------
-def find_visible(world, actor, name):
+def find_visible(world, actor, name, prefer=None):
+    """Find the nearest thing matching `name`. When several match (e.g. a
+    raw and a broiled potato both contain "potato"), `prefer` -- a
+    predicate(entity) -> bool -- picks the one that actually satisfies the
+    caller's need. If none of the matches satisfy it, falls back to the
+    first match anyway, so the caller's own refusal message still fires
+    against a sensible target instead of silently finding nothing."""
     name = name.lower().strip()
     if not name:
         return None
-    for e in world.contents(actor.location) + world.contents(actor.id):
-        if e.id == actor.id:
-            continue
-        if name in e.name.lower() or name == e.id:
-            return e
-    return None
+    matches = [e for e in world.contents(actor.location) + world.contents(actor.id)
+               if e.id != actor.id and (name in e.name.lower() or name == e.id)]
+    if not matches:
+        return None
+    if prefer:
+        for e in matches:
+            if prefer(e):
+                return e
+    return matches[0]
 
 
 def _carrying(world, actor, e):
     return e is not None and e.location == actor.id
 
 
+def _is_raw(e):
+    return e.attrs.get("food", 0) <= 0
+
+
+def _is_cooked(e):
+    return e.attrs.get("food", 0) > 0
+
+
 def _carried_names(world, actor):
+    # identical items (two potatoes, say) group into one line with a count,
+    # in first-seen order, rather than repeating the name.
+    order, counts = [], {}
+    for e in world.contents(actor.id):
+        if e.name not in counts:
+            order.append(e.name)
+        counts[e.name] = counts.get(e.name, 0) + 1
+    names = [f"{n} ({counts[n]})" if counts[n] > 1 else n for n in order]
     # wood is stored as a plain integer attr on the actor, not an entity, so
     # it's folded in here as one line item -- everywhere carried things are
     # listed shows it, not just a place that happens to loop over entities.
-    names = [e.name for e in world.contents(actor.id)]
     wood = actor.attrs.get("wood", 0)
     if wood > 0:
         names.insert(0, f"firewood ({wood})")
@@ -352,7 +376,7 @@ def cmd_snuff(world, actor, arg):
 
 def cmd_plant(world, actor, arg):
     """plant potato -- press a raw potato into the vegetable patch to grow it."""
-    e = find_visible(world, actor, arg or "potato")
+    e = find_visible(world, actor, arg or "potato", prefer=_is_raw)
     if not e or e.location != actor.id or "potato" not in e.name \
             or e.attrs.get("food", 0) > 0:
         return "You need a raw potato in hand to plant."
@@ -460,7 +484,7 @@ def cmd_add_wood(world, actor, arg):
 
 def cmd_cook(world, actor, arg):
     """cook potato -- broil a potato at a lit cooking fire, making it edible."""
-    e = find_visible(world, actor, arg or "potato")
+    e = find_visible(world, actor, arg or "potato", prefer=_is_raw)
     if not e or "potato" not in e.name:
         return "You can only cook a potato here (for now)."
     if e.attrs.get("food", 0) > 0:
@@ -477,7 +501,7 @@ def cmd_cook(world, actor, arg):
 
 def cmd_eat(world, actor, arg):
     """eat <thing> -- eat cooked food to ease your hunger."""
-    e = find_visible(world, actor, arg)
+    e = find_visible(world, actor, arg, prefer=_is_cooked)
     if not e:
         return f"You have no '{arg}' to eat."
     food = e.attrs.get("food", 0)
@@ -515,11 +539,12 @@ def cmd_read(world, actor, arg):
 
 
 def cmd_feed(world, actor, arg):
-    """feed cat -- give a carried potato to the cat if it's in the room."""
+    """feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you)."""
     cat = world.get("cat")
     if cat is None or cat.location != actor.location:
         return "There's no cat here to feed."
-    food = next((e for e in world.contents(actor.id) if "potato" in e.name), None)
+    potatoes = [e for e in world.contents(actor.id) if "potato" in e.name]
+    food = next((e for e in potatoes if _is_raw(e)), potatoes[0] if potatoes else None)
     if not food:
         return "You've nothing to feed it just now -- a potato would do."
     world.entities.pop(food.id, None)
