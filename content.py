@@ -415,14 +415,32 @@ def cmd_water(world, actor, arg):
 WOOD_PER_GATHER = 3          # a little more than one night's worth, to stock up
 FUEL_PER_WOOD = HEARTH_FUEL_START    # one add wood restores a full night's fuel
 
+# Small, purely cosmetic finds a lucky gather can turn up alongside the wood.
+# No mechanics attached -- they're just there to reward the "worth
+# experimenting" nudge in the system prompt with something concrete to find.
+FOUND_ITEMS = (
+    ("a smooth grey stone", "a stone worn smooth and round, cool in your palm"),
+    ("a jay's feather", "a jay's feather, blue-black and sharply barred"),
+    ("a curl of birch bark", "a curl of birch bark, pale and papery"),
+    ("a knot of bleached twine", "a bit of old twine, sun-bleached and knotted"),
+    ("a sprig of dried moss", "a sprig of moss, dried to a soft green-grey"),
+)
+FOUND_ITEM_CHANCE = 0.15
+
 
 def cmd_gather(world, actor, arg):
-    """gather wood -- forage the yard's long grass and fallen branches for firewood."""
+    """gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else)."""
     if actor.location != "yard":
         return "There's nothing to forage here -- try the yard."
     actor.attrs["wood"] = actor.attrs.get("wood", 0) + WOOD_PER_GATHER
-    return (f"You push through the long grass and gather fallen branches. "
-            f"You now have {actor.attrs['wood']} wood.")
+    result = (f"You push through the long grass and gather fallen branches. "
+              f"You now have {actor.attrs['wood']} wood.")
+    if world.rng.random() < FOUND_ITEM_CHANCE:
+        name, desc = world.rng.choice(FOUND_ITEMS)
+        world.add(Entity(world.fresh_id("found"), name, desc,
+                          location=actor.id, portable=True))
+        result += f"\nSomething catches your eye in the grass: {name}."
+    return result
 
 
 def cmd_add_wood(world, actor, arg):

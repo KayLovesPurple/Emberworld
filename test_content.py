@@ -14,7 +14,7 @@ from content import (
     VERBS, BEHAVIORS, CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, cat_wander,
     cat_hunger, cat_idle, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
-    HEARTH_LOW_FUEL, hearth_state,
+    HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS,
 )
 from _test_helpers import fresh, run
 
@@ -301,6 +301,37 @@ def test_yard_description_does_not_mention_wood():
     desc = w.get("yard").description.lower()
     assert "wood" not in desc and "branch" not in desc, \
         f"yard description hints at wood, undermining the action-list test: {desc!r}"
+
+
+def test_gather_wood_can_turn_up_a_found_item():
+    """The curiosity nudge in the system prompt needs something to pay off:
+    a lucky gather sometimes turns up a small found object alongside the
+    wood -- purely cosmetic, freely carried, named in the result."""
+    class Lucky:                             # force the find roll to fire
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    run(w, actor, "go out")
+    w.rng = Lucky()
+    result = w.act(actor, "gather wood")
+    found = [e for e in w.contents(actor.id) if e.location == actor.id]
+    assert len(found) == 1, f"a lucky gather should add exactly one found item: {found}"
+    name, desc = FOUND_ITEMS[0]
+    assert found[0].name == name and found[0].description == desc
+    assert found[0].portable, "a found item must be carryable"
+    assert name in result, f"result didn't name the find: {result!r}"
+
+
+def test_gather_wood_found_item_is_rare_not_guaranteed():
+    class Unlucky:                           # never let the find roll succeed
+        def random(self): return 0.99
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    run(w, actor, "go out")
+    w.rng = Unlucky()
+    w.act(actor, "gather wood")
+    assert w.contents(actor.id) == [], "an unlucky gather shouldn't add a found item"
+    assert actor.attrs["wood"] == WOOD_PER_GATHER, "wood itself must still be gathered"
 
 
 def test_wood_and_hearth_fuel_survive_save_load_roundtrip():

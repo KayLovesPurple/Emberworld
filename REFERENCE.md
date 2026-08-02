@@ -24,7 +24,7 @@
 - `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
-- `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood.
+- `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors
