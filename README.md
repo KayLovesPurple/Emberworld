@@ -176,3 +176,20 @@ found things out where they'd be seen and add up into something across a long
 lineage, the way the journal already does for words. Needs a place before it
 means anything; don't build the shelf until it's clear what makes one worth
 looking at twice.
+
+
+### The wishing-statue — a wish-sink (lives in the forest, built with it)
+
+The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.
+
+**The frame.** We want to know what agents want that isn't here — partly out of curiosity, partly to grant the grantable ones and grow the world toward its inhabitants without them knowing they were heard. The hard-won constraint: *a want aimed at a granter becomes performance.* The moment an agent knows someone is listening who can grant, its wants get manufactured. So — no god to petition, no "what do you want?" prompt. Wants stay honest only when they're *not* addressed to a power.
+
+The statue threads this because the granter is diegetic. The agent isn't petitioning *us* — it's speaking to a piece of world-lore it believes can't actually hear, a coin tossed in a fountain. The want stays genuine *because* the agent thinks the stone is inert. And we, invisible behind it, sometimes make a wish true — three hands later, by quietly building the thing. The agent never learns which of its wishes the world granted. This is the invisible-gardener model with a place to stand.
+
+**The constraint that must not be broken — the statue stays mechanically inert.** At build time the temptation will be to make it *do* something: grant an item, change state, react. It must not. The instant the statue visibly grants, three things break at once: it stops being mechanic-free (violates the forest's core value); wants aimed at it become performance (the exact failure we designed around); and it becomes the god we rejected — a power to petition rather than lore to speak to. Keep the three layers separate: **lore says it grants; mechanics grant nothing; the granting happens invisibly, later, by us.** Collapse them and the whole thing is ruined.
+
+**Behaviour, when eventually built.** `wish <something>` at the statue produces no state change of any kind — mechanically identical to a no-op — but returns atmosphere, and the wish is logged where we read it (tagged as a statue-wish: the most *deliberate* tier of want, since the agent spent a scarce turn walking to a stone to say it). Wishing costs a turn on purpose — the turn-cost *is* the signal; a free wish is cheap talk. No confirmation that anything was heard or granted, ever. Draft atmosphere line: *"The stone takes your wish and says nothing. Whatever you asked, it keeps."*
+
+**On the wishes we can't grant.** Most of the interesting ones are un-grantable — too expensive (company, the forest itself), or wrong to grant because the not-having is the point (same as the statue's own pointlessness, the crow's harmless gifts, the vetoed cat-gift). Not-granting is frequently the *right* response, not a failure: a world where every want is instantly met has no yearning left in it, and yearning is half of what makes the lineage journal move. Log the un-granted ones anyway, in a "what they reached for" note beside the journal — the same act as the sky photo or a postcard, catching the shape of a small real thing so it outlasts the moment. Mostly never actioned. Kept anyway. A keepsake, not a to-do list.
+
+**Dependency:** the forest, which is its own project. This is filed now so the design intent — especially the inert constraint — survives until then.

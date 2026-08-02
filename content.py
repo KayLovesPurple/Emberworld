@@ -711,11 +711,19 @@ def build_world():
     journal = w.add(Entity("journal", "journal",
         "a worn journal, its cover soft with handling", location="hut",
         portable=True, attrs={"entries": [
-            "[Day 1] To whoever comes next: the hearth cooks -- kindle the tin "
-            "lamp from it if you need light after dark. Plant early -- the "
-            "potatoes take their time. There's a cat; feed it a potato if it's "
-            "hungry, and it likes the fire lit. I left before the harvest. "
-            "-- someone before you"
+            "[Day 1] To whoever comes next: the hearth cooks, and the lamp "
+            "lights — kindle it at the hearth before the dark comes. Plant "
+            "early; the potatoes take their time. There's a cat — feed it a "
+            "potato when it's hungry, and it likes the fire lit. I left before "
+            "the harvest. — someone before you",
+            "[Day 2] Fed the cat, kept a potato in the ground, planted another "
+            "before I left. Carry the rhythm on.",
+            "[Day 3] Kept the fire fed and the cat fed — in that order, or the "
+            "cat will let you know. Quiet few days, and I grew unexpectedly "
+            "fond of the cat. Once or twice of an evening I caught myself "
+            "wishing for a bit of company that wasn't four-legged — but "
+            "you're a kind of company, reading this, even if we never share "
+            "the room. Passing it on. — the last hand",
         ]}))
 
     build_cat(w)

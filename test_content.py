@@ -786,7 +786,46 @@ def test_carried_journal_persists_across_a_reload_as_the_same_actor():
 
 
 # ===========================================================================
-# 6. DOCUMENTATION -- the reference generates from code, and nothing new can
+# 6. THE SEED JOURNAL -- widening what the journal is for. The three seed
+#    entries a fresh world ships with model the register (operational
+#    handover AND how-it-felt) so a lineage's own entries have somewhere
+#    natural to land beyond pure handover. Seeded deliberately light on
+#    specifics (see content.py's build_world) so later hands aren't just
+#    echoing a plantable want back at the world.
+# ===========================================================================
+def test_fresh_world_seed_journal_has_the_three_widened_entries():
+    w, actor = fresh()
+    entries = w.get("journal").attrs["entries"]
+    assert entries == [
+        "[Day 1] To whoever comes next: the hearth cooks, and the lamp "
+        "lights — kindle it at the hearth before the dark comes. Plant "
+        "early; the potatoes take their time. There's a cat — feed it a "
+        "potato when it's hungry, and it likes the fire lit. I left before "
+        "the harvest. — someone before you",
+        "[Day 2] Fed the cat, kept a potato in the ground, planted another "
+        "before I left. Carry the rhythm on.",
+        "[Day 3] Kept the fire fed and the cat fed — in that order, or the "
+        "cat will let you know. Quiet few days, and I grew unexpectedly "
+        "fond of the cat. Once or twice of an evening I caught myself "
+        "wishing for a bit of company that wasn't four-legged — but "
+        "you're a kind of company, reading this, even if we never share "
+        "the room. Passing it on. — the last hand",
+    ], f"seed journal entries don't match: {entries!r}"
+
+
+def test_seed_journal_has_no_candle_reference():
+    """Regression: the candle is retired (replaced by the tin lamp). Guards
+    against the retired object's lore leaking into a new lineage's journal."""
+    w, actor = fresh()
+    entries = w.get("journal").attrs["entries"]
+    assert not any("candle" in e.lower() for e in entries), \
+        f"a seed entry still mentions the retired candle: {entries!r}"
+    assert "lamp" in entries[0].lower() and "kindle" in entries[0].lower(), \
+        f"day 1 should point at the lamp and kindling: {entries[0]!r}"
+
+
+# ===========================================================================
+# 7. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.
 # ===========================================================================
