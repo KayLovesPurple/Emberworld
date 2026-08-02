@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, VERBS, FREE_VERBS
+from content import build_world, VERBS, FREE_VERBS, CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
@@ -416,7 +416,7 @@ def _leave_signoff(client, w, actor, model=None, think=True, did=None):
         return
     cat = w.get("cat")
     extra = ""
-    if cat is not None and cat.attrs.get("hunger", 0) >= 6:
+    if cat is not None and cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
         extra = "\n(The cat seemed hungry when you left.)"
     did_block = ("\n".join(f"  - {c}" for c in did) if did
                  else "  (nothing that left much of a mark -- a quiet visit)")

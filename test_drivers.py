@@ -136,6 +136,26 @@ def test_signoff_is_grounded_in_what_actually_happened():
     assert user.count("look cat") == 2, "repetition (dwelling) must be preserved, not deduped"
 
 
+def test_signoff_cat_hunger_hint_uses_the_current_meow_threshold():
+    """The cat-is-hungry hint in the closing-note prompt was hardcoded at 6,
+    left behind when the in-game meow threshold was raised to
+    CAT_MEOW_THRESHOLD -- the two must agree, or the sign-off calls the cat
+    hungry earlier than the game itself ever would."""
+    from content import CAT_MEOW_THRESHOLD
+    c = _RecordingClient()
+    w, actor = fresh()
+    cat = w.get("cat")
+
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD - 1
+    drv._leave_signoff(c, w, actor)
+    assert "seemed hungry" not in c.last["messages"][0]["content"], \
+        "cat flagged as hungry before it actually is, by the game's own threshold"
+
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD
+    drv._leave_signoff(c, w, actor)
+    assert "seemed hungry" in c.last["messages"][0]["content"]
+
+
 class _RecordingClient:
     """Captures the kwargs of the last create() call, returns a fixed reply."""
     def __init__(self):
