@@ -10,11 +10,12 @@ Run it either way:
 
 import json
 
-from world import World, Entity
+from world import World, Entity, SAVE_VERSION
 from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS,
+    LAMP_FUEL_START, LAMP_LOW_FUEL, migrate_legacy_save,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -438,7 +439,164 @@ def test_wood_and_hearth_fuel_survive_save_load_roundtrip():
 
 
 # ===========================================================================
-# 4. DOCUMENTATION -- the reference generates from code, and nothing new can
+# 4. THE TIN LAMP -- a re-kindleable portable light, replacing the one-shot
+#    candle entirely. Legibility over mechanics: the lamp's state is worn on
+#    its sleeve everywhere it's shown, and there is now only ONE portable-
+#    light object -- the potato-disambiguation lesson, applied by removal.
+#    Paired with morning arrival: a fresh world starts in daylight, giving a
+#    first hand a safe window to find the lamp before night falls.
+# ===========================================================================
+def test_fresh_world_has_an_unlit_lamp_and_no_candle():
+    w, actor = fresh()
+    lamp = w.get("lamp")
+    assert lamp is not None and lamp.location == "hut", "lamp missing from the hut"
+    assert not lamp.attrs.get("lit"), "fresh lamp should start unlit"
+    desc = lamp.description.lower()
+    assert "kindle" in desc and "hearth" in desc, \
+        f"lamp's description doesn't advertise its verb/prerequisite: {lamp.description!r}"
+    assert w.get("candle") is None, "the retired candle is still in the world"
+    assert not any("candle" in e.name.lower() for e in w.entities.values()), \
+        "something still mentions the candle by name"
+
+
+def test_kindling_the_lamp_at_a_lit_hearth_lights_it_full():
+    w, actor = fresh()
+    run(w, actor, "light hearth")
+    result = w.act(actor, "kindle lamp")
+    lamp = w.get("lamp")
+    assert lamp.attrs.get("lit"), f"lamp didn't light at a lit hearth: {result!r}"
+    # kindling's own action also ticks the world once, so a lit lamp has
+    # already burned one fuel by the time we check -- same pattern as
+    # add_wood, which never asserts an exact value right after its own tick.
+    assert lamp.attrs["fuel"] >= LAMP_FUEL_START - 1, \
+        f"lamp should light to (near) full fuel: {lamp.attrs['fuel']}"
+
+
+def test_kindling_the_lamp_at_a_cold_hearth_fails():
+    w, actor = fresh()
+    result = w.act(actor, "kindle lamp")
+    lamp = w.get("lamp")
+    assert not lamp.attrs.get("lit"), "lamp lit from a cold hearth"
+    assert "feed it first" in result.lower(), \
+        f"refusal doesn't point at feeding the fire: {result!r}"
+
+
+def test_kindling_the_lamp_in_the_yard_fails():
+    w, actor = fresh()
+    run(w, actor, "light hearth", "take lamp", "go out")
+    result = w.act(actor, "kindle lamp")
+    lamp = w.get("lamp")
+    assert not lamp.attrs.get("lit"), "lamp lit outside, with no fire to catch from"
+    assert "fire's inside" in result.lower(), f"unclear refusal: {result!r}"
+
+
+def test_rekindling_an_already_lit_lamp_tops_its_fuel_back_to_full():
+    w, actor = fresh()
+    run(w, actor, "light hearth", "kindle lamp")
+    lamp = w.get("lamp")
+    lamp.attrs["fuel"] = 1                       # nearly spent
+    result = w.act(actor, "kindle lamp")
+    assert lamp.attrs["fuel"] >= LAMP_FUEL_START - 1, \
+        "re-kindling didn't top the fuel back up"
+    assert lamp.attrs.get("lit"), f"re-kindling should leave it lit: {result!r}"
+
+
+def test_light_lamp_and_kindle_lamp_are_synonyms():
+    w, actor = fresh()
+    run(w, actor, "light hearth")
+    result = w.act(actor, "light lamp")
+    assert w.get("lamp").attrs.get("lit"), f"'light lamp' didn't kindle it: {result!r}"
+
+
+def test_lit_lamp_makes_the_yard_visible_and_actionable_at_night():
+    w, actor = fresh()
+    while w.phase() != "dusk":
+        w.act(actor, "wait")
+    run(w, actor, "light hearth", "take lamp", "kindle lamp", "go out")
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    seen = w.perceive(actor)
+    assert "pitch dark" not in seen.lower(), \
+        f"yard should stay visible by the carried, lit lamp at night: {seen!r}"
+    result = w.act(actor, "draw water")
+    assert "draw water" in result.lower(), f"an action should still succeed: {result!r}"
+
+
+def test_lamp_burn_low_and_burn_out_messages_fire_then_it_goes_dark():
+    w, actor = fresh()
+    run(w, actor, "light hearth", "kindle lamp")
+    low_seen = out_seen = None
+    for _ in range(LAMP_FUEL_START):
+        line = w.act(actor, "wait")
+        if "shrinks" in line:
+            low_seen = True
+        if "goes dark" in line:
+            out_seen = True
+    assert low_seen, "never saw the lamp's low-fuel warning"
+    assert out_seen, "never saw the lamp go dark"
+    assert not w.get("lamp").attrs.get("lit"), "lamp should be out after its fuel span"
+
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    result = w.act(actor, "go out")
+    assert "pitch dark" in result.lower(), "with the lamp spent, night should be dark again"
+
+
+def test_dark_go_out_with_no_lamp_names_both_affordances():
+    w, actor = fresh()
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    result = w.act(actor, "go out")
+    low = result.lower()
+    assert "kindle" in low and "lamp" in low, f"dark message doesn't mention the lamp: {result!r}"
+    assert "dawn" in low, f"dark message doesn't mention waiting for dawn: {result!r}"
+
+
+def test_carried_lamp_line_reflects_its_state():
+    w, actor = fresh()
+    run(w, actor, "take lamp")
+    assert "lamp (unlit)" in w.perceive(actor)
+    run(w, actor, "light hearth", "light lamp")
+    assert "lamp (lit)" in w.perceive(actor)
+    w.get("lamp").attrs["fuel"] = LAMP_LOW_FUEL
+    assert "lamp (lit, low)" in w.perceive(actor)
+
+
+def test_fresh_world_starts_in_early_morning_with_light():
+    w, actor = fresh()
+    assert w.phase() in ("dawn", "day"), \
+        f"fresh world should start in daylight, not {w.phase()}"
+    result = w.act(actor, "go out")
+    assert "pitch dark" not in result.lower(), "the yard should be visible on a fresh morning"
+
+
+def test_legacy_save_gains_the_lamp_and_drops_the_candle():
+    """Backward-compat: an old save predates the lamp and still has a candle.
+    It must load cleanly, gain an unlit lamp, and lose the candle -- without
+    a SAVE_VERSION bump, since the on-disk SHAPE hasn't changed."""
+    w, _ = fresh()
+    data = w.to_data()
+    data["entities"] = [e for e in data["entities"] if e["id"] != "lamp"]
+    data["entities"].append({
+        "id": "candle", "name": "candle",
+        "description": "a stub of tallow candle, burning steadily",
+        "location": "hut", "portable": True,
+        "attrs": {"lit": True, "fuel": 5}, "exits": {}, "behaviors": ["burning"],
+    })
+    assert data["version"] == SAVE_VERSION, "this test should not need a version bump"
+
+    old_world = World.from_data(data)
+    assert old_world.get("candle") is not None and old_world.get("lamp") is None
+
+    migrate_legacy_save(old_world)
+    assert old_world.get("candle") is None, "the retired candle should be dropped on load"
+    lamp = old_world.get("lamp")
+    assert lamp is not None and lamp.location == "hut" and not lamp.attrs.get("lit"), \
+        "a pre-lamp save should gain an unlit lamp in the hut"
+
+
+# ===========================================================================
+# 5. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.
 # ===========================================================================

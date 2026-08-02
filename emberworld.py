@@ -2,8 +2,9 @@
 emberworld.py -- a small living world, now with a memory.
 
 A hut, a yard, a day that turns to night, potatoes that take their time, a
-hearth that cooks and a candle that only lights. The world runs on its own
-heartbeat: the candle burns, crops grow, night falls, whether or not you act.
+hearth that cooks and a tin lamp you kindle from it for portable light. The
+world runs on its own heartbeat: the lamp burns down, crops grow, night
+falls, whether or not you act.
 
 And it REMEMBERS. The world saves to disk between runs, and there's a journal
 you can write in. So a later visitor -- you, or another Claude reaching in over

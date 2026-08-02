@@ -1,7 +1,7 @@
 # Emberworld
 
 A small text world that keeps ticking whether or not anyone's watching — a
-candle burns down, a potato grows, night falls, a cat wanders and gets hungry.
+hearth needs feeding, a potato grows, night falls, a cat wanders and gets hungry.
 You can play it yourself, or let a Claude reach in over the API and live in it
 for a while. Because the world saves to disk, visits form a lineage: someone
 plants a potato and leaves a note; someone else — with no memory of the first —
@@ -13,13 +13,15 @@ reads that note and harvests the crop.
   dependencies to play.
 - `world.py` — the engine: Entity/World, the tick loop, persistence, the
   invariant checker.
-- `content.py` — Emberworld itself: the verbs, the autonomous behaviors, the
-  cat, and the world as assembled fresh.
+- `content.py` — Emberworld itself: the verbs, the autonomous behaviors, and
+  the world as assembled fresh.
+- `cat.py` — the cat as its own self-contained subsystem: its constants,
+  behaviors, verbs, and how it's built into a fresh world.
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
   the persistence-loading glue, and the headless fuzzer.
-- `test_world.py` / `test_content.py` / `test_drivers.py` — the safety net,
-  split to match. Each runs with or without pytest; `_test_helpers.py` holds
-  the handful of things they share.
+- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
+  safety net, split to match. Each runs with or without pytest;
+  `_test_helpers.py` holds the handful of things they share.
 - `REFERENCE.md` — every verb, behavior, and rule. **Generated from the code**
   (`python3 emberworld.py --reference`), so it's always current.
 - `ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
@@ -60,18 +62,20 @@ local transcripts are ignored by Git.
 ## The rules, in brief
 
 Type `help` in-game for the verb list, or see `REFERENCE.md` for everything.
-The essentials: the candle only gives **light**; the **hearth** is what cooks.
-Night is pitch dark without a lit flame — in the dark you can only examine what
-you're holding. Potatoes must be planted, grown, harvested, and cooked before
-they'll feed you. There's a cat: it wanders, likes the fire lit, and can be fed
-a potato or petted. **The cat can never come to harm** — that's guaranteed in
-the code and pinned by a test.
+The essentials: the **hearth** is what cooks; the tin **lamp** is your only
+portable light, kindled (or re-kindled, to top it back up) from a lit hearth.
+Night is pitch dark without the lamp burning — in the dark you can only
+examine what you're holding. A fresh world starts at dawn, so there's a full
+day to find the lamp before the first night falls. Potatoes must be planted,
+grown, harvested, and cooked before they'll feed you. There's a cat: it
+wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
+never come to harm** — that's guaranteed in the code and pinned by a test.
 
 ## Testing
 
 ```bash
-python3 test_world.py && python3 test_content.py && python3 test_drivers.py   # built-in runner
-python3 -m pytest -q                                                          # if you have pytest
+python3 test_world.py && python3 test_content.py && python3 test_cat.py && python3 test_drivers.py   # built-in runner
+python3 -m pytest -q                                                                                 # if you have pytest
 ```
 
 Run the tests before any change. Green means the world still holds together;
@@ -90,18 +94,7 @@ A running list of intended features, roughly in dependency order. Each depends
 on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
-1. **Firewood** *(next).* Forage wood in the yard; `add wood` refuels the hearth
-   and can revive a spent one. Fixes the world's built-in slow death — right now
-   fire is a countdown with no reset, and a real hand once inherited a cold
-   hearth with no recourse. The candle stays a finite one-shot on purpose.
-
-2. **A refillable lamp** *(after wood).* Sustainable portable light, kindled from
-   the lit hearth — the real answer to carrying light into the dark yard. This is
-   also where "relight the candle from the fire" belongs (a candle with fuel
-   left can be lit from the hearth; a spent one stays spent — already enforced by
-   the fuel guard, no new rule needed). Depends on fire being reliable first.
-
-3. **The forest** *(a real project, its own design pass).* A new place to travel
+1. **The forest** *(a real project, its own design pass).* A new place to travel
    to — the world getting bigger, not just deeper. It earns its existence by
    carrying three things at once: wood-gathering *relocates* here (the yard goes
    back to being just the yard), the mysterious statue lives here, and the herb
@@ -109,7 +102,7 @@ commitment.
    getting lost in the dark — and birds for the cat to chirp at (a line already
    waiting in the cat's idle-action list).
 
-4. **Tea** *(once fire is reliable and the forest gives you something to brew).*
+2. **Tea** *(once fire is reliable and the forest gives you something to brew).*
    The first thing *made from multiple systems at once*: water (well) + fire
    (hearth) + a foraged herb (forest), boiled into a cup. A little recipe rather
    than a single-verb loop — the cosiest possible use of a turn, and a

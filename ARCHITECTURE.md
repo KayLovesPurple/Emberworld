@@ -48,7 +48,7 @@ case above.
 
 ## The core model
 
-Everything in the world — rooms, the candle, the cat, you — is one type:
+Everything in the world — rooms, the lamp, the cat, you — is one type:
 `Entity`. An entity has an `id`, `name`, `description`, a `location` (the id of
 whatever contains it: a room, the actor's hands, the patch), optional `exits`
 (rooms only), a free-form `attrs` dict (fuel, hunger, growth, journal entries…),
@@ -56,7 +56,7 @@ and a list of `behaviors`.
 
 `World` holds all entities and runs the **tick loop** — the heartbeat. Each tick
 advances the clock and runs every entity's behaviors once. This is why the world
-is alive: the candle burns, the crop grows, the cat wanders, all without the
+is alive: the lamp burns down, the crop grows, the cat wanders, all without the
 player doing anything.
 
 ## The shared surface (the important idea)
@@ -99,7 +99,7 @@ inventory); everything else ticks the world once.
 
 Event scoping: `world.announce(msg, room_id)` is heard only in that room;
 `world.room_of(entity)` resolves an entity's containing room by walking up the
-`location` chain (so a carried candle is still "in" your room). Use these rather
+`location` chain (so a carried lamp is still "in" your room). Use these rather
 than reinventing "which room is this in."
 
 ## What keeps it from breaking
@@ -114,6 +114,10 @@ than reinventing "which room is this in."
   feature you *haven't written yet*.
 - **Save versioning**: saves carry a `SAVE_VERSION`. Bump it when the on-disk
   shape changes; old saves are then set aside cleanly instead of mis-loading.
+  A backward-compatible content change (an old save just predates a new
+  object, like the lamp replacing the candle) doesn't need a bump at all --
+  write a small migration instead (`content.migrate_legacy_save`, called from
+  `load_or_build`) that reconciles the loaded world in place.
 - **Self-documenting reference**: `REFERENCE.md` is generated from the `VERBS`
   and `BEHAVIORS` registries. A test fails if any verb or behavior lacks a
   docstring, so docs can't fall behind the code.

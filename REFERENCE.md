@@ -13,7 +13,7 @@
 - `drop` -- drop <thing> -- set down something you're carrying.
 - `inventory` / `i` -- inventory -- list what you're carrying and how hungry you feel.  _(free -- costs no time)_
 - `wait` / `z` -- wait -- let one tick pass while you do nothing.
-- `light` -- light <thing> -- set a fuel source burning (the candle lights; the hearth cooks).
+- `light` / `kindle` -- light <thing> -- set a fuel source burning (the hearth cooks); light lamp / kindle lamp lights the tin lamp from a lit hearth.
 - `snuff` -- snuff <thing> -- put out a lit flame.
 - `plant` -- plant potato -- press a raw potato into the vegetable patch to grow it.
 - `harvest` -- harvest -- lift a ripened crop from the patch for its potatoes.
@@ -33,17 +33,19 @@
 - **cat_wander** -- Autonomous: the cat drifts between rooms, drawn toward a lit hearth.
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
 - **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle
-- **burning** -- Autonomous: a lit fuel source (candle, hearth) burns down and goes out.
+- **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in
 - **bucket_state** -- Autonomous: the bucket describes itself by how much water it's holding.
 - **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
+- **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it
 
 ## World rules (from the code's own constants)
 
-- A full day is **24 ticks**; night falls late in that cycle and is pitch dark without a lit flame.
-- The candle only gives light; the **hearth** is what cooks.
+- A full day is **24 ticks**; night falls late in that cycle and is pitch dark without a lit flame. A fresh world starts at dawn, giving a full day's light before the first night falls.
+- The tin lamp is the only portable light, kindled from a lit hearth; the **hearth** is what cooks.
+- The lamp holds **16** fuel once kindled and warns when it drops to **4**; it can be re-kindled at any lit hearth, which tops it back to full.
 - The cat's hunger is capped at **12** and it can come to no harm -- it only ever wants feeding.
 - The cat stays content (and may do small idle things) below hunger **12**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.

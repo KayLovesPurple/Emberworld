@@ -6,7 +6,7 @@ Run it either way:
     python3 -m pytest test_world.py -v      # if you have pytest
     python3 test_world.py                    # if you don't (built-in runner)
 
-Many of these drive real content (candle, potato, patch) through
+Many of these drive real content (the lamp, potato, patch) through
 world.act()/perceive(), because that's how the engine's own guarantees --
 event scoping, tick ordering, darkness, invariants, persistence -- actually
 get exercised. The first few pin real bugs we hit, so they can never
@@ -17,6 +17,7 @@ import json
 import os
 
 from world import World, IncompatibleSaveError, check_world
+from content import LAMP_FUEL_START
 from _test_helpers import fresh, run
 
 
@@ -24,33 +25,35 @@ from _test_helpers import fresh, run
 # 1. SCENARIO TESTS -- engine guarantees (event scoping, tick order, timing,
 #    darkness), pinned via regressions for bugs we actually hit.
 # ===========================================================================
-def test_regression_candle_is_heard_while_carried():
-    """BUG WE HIT: events were scoped to an entity's immediate container, so a
-    carried candle (now 'inside you') fell silent. You must still hear it."""
+def test_regression_lamp_is_heard_while_carried():
+    """BUG WE HIT (candle-era): events were scoped to an entity's immediate
+    container, so a carried light source (now 'inside you') fell silent. The
+    tin lamp inherits the same guarantee -- you must still hear it burn low
+    and go dark while you're holding it."""
     w, actor = fresh()
-    run(w, actor, "take candle")
-    heard_gutter = heard_out = False
-    for _ in range(14):
+    run(w, actor, "light hearth", "take lamp", "kindle lamp")
+    heard_low = heard_out = False
+    for _ in range(LAMP_FUEL_START):
         line = w.act(actor, "wait")
-        if "burns low" in line:
-            heard_gutter = True
-        if "goes out" in line:
+        if "shrinks" in line:
+            heard_low = True
+        if "goes dark" in line:
             heard_out = True
-    assert heard_gutter, "never heard the carried candle gutter"
-    assert heard_out, "never heard the carried candle go out"
+    assert heard_low, "never heard the carried lamp's flame shrink"
+    assert heard_out, "never heard the carried lamp go dark"
 
 
-def test_candle_burns_out_offscreen():
-    """A living world changes when you're not watching. Leave the candle in the
-    hut, go to the yard: you should NOT hear it, but it should still be spent
-    when you return."""
+def test_lamp_burns_out_offscreen():
+    """A living world changes when you're not watching. Kindle the lamp, leave
+    it behind in the hut, go to the yard: you should NOT hear it, but it should
+    still be spent when you return."""
     w, actor = fresh()
-    run(w, actor, "go out")
-    lines = [w.act(actor, "wait") for _ in range(14)]
-    assert not any("goes out" in ln for ln in lines), \
-        "heard the candle from another room -- scoping is too loose"
+    run(w, actor, "light hearth", "light lamp", "go out")
+    lines = [w.act(actor, "wait") for _ in range(LAMP_FUEL_START)]
+    assert not any("goes dark" in ln for ln in lines), \
+        "heard the lamp from another room -- scoping is too loose"
     run(w, actor, "go in")
-    assert not w.get("candle").attrs["lit"], "candle should have burned out"
+    assert not w.get("lamp").attrs["lit"], "lamp should have burned out"
 
 
 def test_regression_patch_reflects_its_crop_in_sync():
@@ -101,8 +104,7 @@ def test_time_only_passes_on_real_actions():
 
 
 def _make_it_dark(w, actor):
-    """Snuff every light and advance to night, so the actor's room is dark."""
-    run(w, actor, "snuff candle")
+    """Advance to night with nothing lit, so the actor's room is dark."""
     for _ in range(40):
         if w.is_dark(actor.location):
             return
@@ -141,8 +143,8 @@ def test_look_shows_what_youre_carrying():
     items must be part of the standing room view, not hidden behind a
     separate 'inventory' command the agent has to choose to run."""
     w, actor = fresh()
-    run(w, actor, "take candle")
-    assert "candle" in w.perceive(actor), "carried candle missing from perception"
+    run(w, actor, "take lamp")
+    assert "lamp" in w.perceive(actor), "carried lamp missing from perception"
 
 
 def test_look_says_hands_are_empty_when_carrying_nothing():
@@ -181,9 +183,10 @@ def test_fresh_world_is_well_formed():
 def test_invariants_survive_a_scripted_session():
     w, actor = fresh()
     script = ["go out", "take potato", "plant potato", "go in",
-              "take candle", "snuff candle", "wait", "wait", "go out",
+              "light hearth", "take lamp", "light lamp", "snuff lamp",
+              "wait", "wait", "go out",
               "wait", "wait", "wait", "wait", "wait", "wait", "wait",
-              "harvest", "go in", "light hearth", "cook potato"]
+              "harvest", "go in", "cook potato"]
     for cmd in script:
         w.act(actor, cmd)
         assert check_world(w) == [], f"invariant broke after '{cmd}'"
@@ -193,12 +196,12 @@ def test_checker_actually_catches_corruption():
     """A checker that never fires is worthless. Prove it screams when we break
     the world on purpose."""
     w, _ = fresh()
-    w.get("candle").location = "nowhere-real"
+    w.get("lamp").location = "nowhere-real"
     issues = check_world(w)
     assert any("doesn't exist" in i for i in issues)
 
     w2, _ = fresh()
-    w2.get("candle").attrs["fuel"] = -5
+    w2.get("lamp").attrs["fuel"] = -5
     assert any("negative" in i for i in check_world(w2))
 
     w3, _ = fresh()

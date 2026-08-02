@@ -17,7 +17,7 @@ from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat
 # Behaviors -- the autonomous bits. This is where a "living world" lives.
 # ---------------------------------------------------------------------------
 def burning(world, e):
-    """Autonomous: a lit fuel source (candle, hearth) burns down and goes out."""
+    """Autonomous: a lit fuel source (the hearth) burns down and goes out."""
     if not e.attrs.get("lit"):
         return
     e.attrs["fuel"] -= 1
@@ -102,9 +102,42 @@ def hungering(world, actor):
     actor.attrs["hunger"] = min(actor.attrs.get("hunger", 0) + 1, 20)
 
 
+LAMP_FUEL_START = 16       # comfortably outlasts one night (5 ticks), with margin
+LAMP_LOW_FUEL = 4          # warns with enough runway left to reach the hearth
+
+
+def _lamp_description(lamp):
+    """The lamp's description in full -- the sole source of truth for its
+    three states, used both by verbs (on kindling/snuffing) and by its own
+    tick behavior, so the text never drifts out of sync with its state."""
+    if not lamp.attrs.get("lit"):
+        return "a tin lamp, cold and dark — kindle it at the hearth"
+    if lamp.attrs.get("fuel", 0) <= LAMP_LOW_FUEL:
+        return "a tin lamp, its flame guttering low"
+    return "a tin lamp, its flame steady and bright"
+
+
+def lamp_burning(world, lamp):
+    """Autonomous: a lit tin lamp burns down one fuel per tick, wherever it
+    is -- carried or set down -- warning inline as it runs low and again when
+    it finally goes dark."""
+    if not lamp.attrs.get("lit"):
+        return
+    lamp.attrs["fuel"] -= 1
+    fuel = lamp.attrs["fuel"]
+    if fuel == LAMP_LOW_FUEL:
+        world.announce("The lamp's flame shrinks — not long left in it.",
+                       world.room_of(lamp))
+    if fuel <= 0:
+        lamp.attrs["lit"] = False
+        world.announce("The lamp gutters, sputters, and goes dark.",
+                       world.room_of(lamp))
+    lamp.description = _lamp_description(lamp)
+
+
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
                    "bucket_state": bucket_state, "hearth_state": hearth_state,
-                   "hungering": hungering})
+                   "hungering": hungering, "lamp_burning": lamp_burning})
 
 
 def _patch_in(world, room_id):
@@ -153,6 +186,14 @@ def _is_cooked(e):
     return e.attrs.get("food", 0) > 0
 
 
+def _lamp_state_tag(lamp):
+    if not lamp.attrs.get("lit"):
+        return "unlit"
+    if lamp.attrs.get("fuel", 0) <= LAMP_LOW_FUEL:
+        return "lit, low"
+    return "lit"
+
+
 def _carried_names(world, actor):
     # identical items (two potatoes, say) group into one line with a count,
     # in first-seen order, rather than repeating the name.
@@ -162,6 +203,12 @@ def _carried_names(world, actor):
             order.append(e.name)
         counts[e.name] = counts.get(e.name, 0) + 1
     names = [f"{n} ({counts[n]})" if counts[n] > 1 else n for n in order]
+    # the lamp's state matters everywhere it's shown, even in this terse
+    # summary line -- not just in its full description when looked at directly.
+    lamp = next((e for e in world.contents(actor.id) if e.id == "lamp"), None)
+    if lamp is not None:
+        idx = order.index(lamp.name)
+        names[idx] = f"{lamp.name} ({_lamp_state_tag(lamp)})"
     # wood is stored as a plain integer attr on the actor, not an entity, so
     # it's folded in here as one line item -- everywhere carried things are
     # listed shows it, not just a place that happens to loop over entities.
@@ -195,8 +242,9 @@ def cmd_look(world, actor, arg):
     stamp = world.timestr()
     if world.is_dark(room.id):
         return (f"[{stamp}] Pitch dark. You can make out nothing without a "
-                f"light. Somewhere out there the world goes on regardless.\n\n"
-                f"{_carried_line(world, actor)}")
+                f"light — a lamp kindled at the hearth would do, or you could "
+                f"wait for dawn. Somewhere out there the world goes on "
+                f"regardless.\n\n{_carried_line(world, actor)}")
     lines = [f"[{stamp}]  {room.name.upper()}", room.description]
     here = [e for e in world.contents(room.id) if e.id != actor.id]
     if here:
@@ -256,9 +304,29 @@ def cmd_wait(world, actor, arg):
     return "You wait. Time passes."
 
 
+def _kindle_lamp(world, actor, lamp):
+    """The lamp's own kindling logic: needs a lit hearth to catch from, tops
+    an already-lit lamp back to full rather than refusing (a deliberate way
+    to top up before a night)."""
+    hearth = find_visible(world, actor, "hearth")
+    if not hearth:
+        return "Nothing out here to kindle from. The fire's inside."
+    if not hearth.attrs.get("lit"):
+        return "The hearth is dark — there's no fire to catch. Feed it first."
+    already_lit = lamp.attrs.get("lit", False)
+    lamp.attrs["lit"] = True
+    lamp.attrs["fuel"] = LAMP_FUEL_START
+    lamp.description = _lamp_description(lamp)
+    if already_lit:
+        return "You dip the wick to the embers again; the flame steadies to full."
+    return "You tip the wick to the embers until it catches. The lamp wakes, warm and yellow."
+
+
 def cmd_light(world, actor, arg):
-    """light <thing> -- set a fuel source burning (the candle lights; the hearth cooks)."""
+    """light <thing> -- set a fuel source burning (the hearth cooks); light lamp / kindle lamp lights the tin lamp from a lit hearth."""
     e = find_visible(world, actor, arg)
+    if e is not None and e.id == "lamp":
+        return _kindle_lamp(world, actor, e)
     if not e or "lit" not in e.attrs:
         return "You can't light that."
     if e.attrs["lit"]:
@@ -278,7 +346,8 @@ def cmd_snuff(world, actor, arg):
     if not e.attrs["lit"]:
         return f"The {e.name} isn't lit."
     e.attrs["lit"] = False
-    e.description = e.attrs.get("unlit_desc", f"the {e.name}, unlit")
+    e.description = _lamp_description(e) if e.id == "lamp" \
+        else e.attrs.get("unlit_desc", f"the {e.name}, unlit")
     return f"You pinch out the {e.name}."
 
 
@@ -459,7 +528,7 @@ VERBS.update({
     "drop": cmd_drop,
     "inventory": cmd_inventory, "i": cmd_inventory,
     "wait": cmd_wait, "z": cmd_wait,
-    "light": cmd_light, "snuff": cmd_snuff,
+    "light": cmd_light, "kindle": cmd_light, "snuff": cmd_snuff,
     "plant": cmd_plant, "harvest": cmd_harvest,
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
@@ -511,8 +580,13 @@ def generate_reference():
 
     out += ["", "## World rules (from the code's own constants)", "",
             f"- A full day is **{DAY_LENGTH} ticks**; night falls late in that "
-            "cycle and is pitch dark without a lit flame.",
-            "- The candle only gives light; the **hearth** is what cooks.",
+            "cycle and is pitch dark without a lit flame. A fresh world starts "
+            "at dawn, giving a full day's light before the first night falls.",
+            "- The tin lamp is the only portable light, kindled from a lit "
+            "hearth; the **hearth** is what cooks.",
+            f"- The lamp holds **{LAMP_FUEL_START}** fuel once kindled and "
+            f"warns when it drops to **{LAMP_LOW_FUEL}**; it can be re-kindled "
+            "at any lit hearth, which tops it back to full.",
             f"- The cat's hunger is capped at **{CAT_HUNGER_CAP}** and it can "
             "come to no harm -- it only ever wants feeding.",
             f"- The cat stays content (and may do small idle things) below "
@@ -531,6 +605,27 @@ def generate_reference():
 
 
 # ---------------------------------------------------------------------------
+# Backward-compat for saves that predate the tin lamp. The on-disk SHAPE
+# hasn't changed (still a list of entities), just what one lineage's snapshot
+# happens to contain -- so this is a content-level migration, not a
+# SAVE_VERSION bump. Called on every successful load, harmless once a save
+# already has the lamp and no candle.
+# ---------------------------------------------------------------------------
+def migrate_legacy_save(world):
+    """Drop any leftover candle (retired entirely -- there's no relighting
+    it) and add the lamp, unlit, in the hut, if this save predates it."""
+    candle = world.get("candle")
+    if candle is not None:
+        del world.entities[candle.id]
+    if world.get("lamp") is None:
+        lamp = world.add(Entity("lamp", "lamp", "", location="hut",
+                                  portable=True, attrs={"lit": False, "fuel": 0}))
+        lamp.attach("lamp_burning")
+        lamp.description = _lamp_description(lamp)
+    return world
+
+
+# ---------------------------------------------------------------------------
 # The world, assembled fresh (used only when there's no save to inherit).
 # ---------------------------------------------------------------------------
 def build_world():
@@ -544,14 +639,10 @@ def build_world():
         "along the fence; the dark shape of a well stands near the gate.",
         exits={"in": "hut"}))
 
-    candle = w.add(Entity("candle", "candle",
-        "a stub of tallow candle, burning steadily", location="hut",
-        portable=True, attrs={"lit": True, "fuel": 12,
-            "lit_desc": "a stub of tallow candle, burning steadily",
-            "unlit_desc": "an unlit stub of tallow candle",
-            "spent_desc": "a spent candle, a curl of smoke off the black wick",
-            "out_msg": "The candle sputters and goes out."}))
-    candle.attach("burning")
+    lamp = w.add(Entity("lamp", "lamp", "", location="hut",
+        portable=True, attrs={"lit": False, "fuel": 0}))
+    lamp.attach("lamp_burning")
+    lamp.description = _lamp_description(lamp)
 
     hearth = w.add(Entity("hearth", "hearth",
         "a cold stone hearth, ash and a few charred sticks", location="hut",
@@ -566,10 +657,11 @@ def build_world():
     journal = w.add(Entity("journal", "journal",
         "a worn journal, its cover soft with handling", location="hut",
         portable=True, attrs={"entries": [
-            "[Day 1] To whoever comes next: the hearth cooks, the candle only "
-            "lights. Plant early -- the potatoes take their time. There's a cat; "
-            "feed it a potato if it's hungry, and it likes the fire lit. I left "
-            "before the harvest. -- someone before you"
+            "[Day 1] To whoever comes next: the hearth cooks -- kindle the tin "
+            "lamp from it if you need light after dark. Plant early -- the "
+            "potatoes take their time. There's a cat; feed it a potato if it's "
+            "hungry, and it likes the fire lit. I left before the harvest. "
+            "-- someone before you"
         ]}))
 
     build_cat(w)

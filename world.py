@@ -87,7 +87,7 @@ class Entity:
 class World:
     def __init__(self):
         self.entities = {}
-        self.time = 14                   # start at dusk; night comes soon
+        self.time = 0                    # start at dawn; a full day of light to get oriented first
         self._seq = 0
         self.log = []                    # (message, room_id_or_None) this tick
         self.strict = False              # if True, check invariants every tick
@@ -202,6 +202,11 @@ class World:
         for e in here + carried:
             if "lit" in e.attrs:
                 acts.append(("snuff " if e.attrs["lit"] else "light ") + e.name)
+                if e.id == "lamp" and e.attrs["lit"]:
+                    # topping up an already-lit lamp before a night is a
+                    # deliberate feature -- it must stay a listed option, not
+                    # just something reachable by an unlisted command.
+                    acts.append(f"light {e.name}")
             if e.attrs.get("food", 0) > 0:
                 acts.append(f"eat {e.name}")
         # contextual crafting verbs
