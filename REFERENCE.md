@@ -28,6 +28,7 @@
 - `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf.
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
+- `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors
@@ -50,12 +51,12 @@
 
 - A full day is **24 ticks**; night falls late in that cycle and is pitch dark without a lit flame. A fresh world starts at dawn, giving a full day's light before the first night falls.
 - The tin lamp is the only portable light, kindled from a lit hearth; the **hearth** is what cooks.
-- The lamp holds **16** fuel once kindled and warns when it drops to **4**; it can be re-kindled at any lit hearth, which tops it back to full.
-- The cat's hunger is capped at **12** and it can come to no harm -- it only ever wants feeding.
-- The cat stays content (and may do small idle things) below hunger **12**; at or above it, it starts meowing to be fed.
+- The lamp holds **32** fuel once kindled and warns when it drops to **8**; it can be re-kindled at any lit hearth, which tops it back to full.
+- The cat's hunger is capped at **24** and it can come to no harm -- it only ever wants feeding.
+- The cat stays content (and may do small idle things) below hunger **24**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
-- Gathering wood yields **3**; feeding one unit into the hearth restores **40** fuel -- a full night's burn, and enough to revive a spent hearth.
-- A found curio turns up **15%** of the time on a lucky gather, but **50%** of the time on any turn spent at the forest's edge -- the reliable source, not the incidental bonus.
+- Gathering wood yields **3**; feeding one unit into the hearth restores **60** fuel -- a full night's burn, and enough to revive a spent hearth.
+- A found curio turns up **15%** of the time on a lucky gather, and **20%** of the time on any turn spent at the forest's edge -- a somewhat better bet, never a guarantee either way.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.

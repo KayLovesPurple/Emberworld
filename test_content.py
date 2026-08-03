@@ -15,7 +15,7 @@ from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
-    FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE,
+    FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
 )
@@ -1219,9 +1219,28 @@ def test_forest_edge_find_is_not_guaranteed_every_turn():
     assert w.contents(actor.id) == [], "an unlucky turn shouldn't add a curio"
 
 
-def test_forest_edge_find_chance_is_more_generous_than_the_yards():
-    """Pins the design rule directly: the forest is the reliable source now,
-    the yard's incidental drop is the garnish."""
+def test_forest_edge_entries_do_not_always_yield_a_curio():
+    """Pacing rebalance regression guard: the old FOREST_FIND_CHANCE (0.5)
+    felt near-guaranteed per visit and flooded packs with curios. With real
+    (unseeded) randomness, repeatedly leaving and re-entering the forest
+    should sometimes come up empty -- a find is a delight, not a faucet."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    misses = 0
+    for _ in range(30):
+        before = len([e for e in w.contents(actor.id) if e.attrs.get("curio")])
+        run(w, actor, "go forest", "go yard")
+        after = len([e for e in w.contents(actor.id) if e.attrs.get("curio")])
+        if after == before:
+            misses += 1
+    assert misses > 0, "30 forest entries all found a curio -- finds aren't rare enough"
+
+
+def test_forest_edge_find_chance_is_still_a_somewhat_better_bet_than_the_yards():
+    """Pins the design rule directly: the forest's edge stays a slightly
+    better bet than the yard's incidental drop, even though the pacing
+    rebalance made both genuinely rare rather than the forest being a
+    reliable per-visit faucet."""
     assert FOREST_FIND_CHANCE > FOUND_ITEM_CHANCE
 
 
@@ -1262,6 +1281,68 @@ def test_forest_edge_and_a_found_curio_survive_save_load_roundtrip():
     assert actor2.location == "forest_edge"
     carried2 = next(e for e in w2.contents(actor2.id) if e.attrs.get("curio"))
     assert carried2.name == found.name
+
+
+# ===========================================================================
+# LISTEN -- the forest's-edge calm affordance. Pacing rebalance change 3: a
+# chosen, unpressured turn that changes nothing, the counterpart to freer
+# maintenance cadence and rarer finds (changes 1 and 2) -- the thing that
+# catches the quiet turns those changes open up.
+# ===========================================================================
+def test_listen_is_offered_and_cued_at_the_forest_edge():
+    """Legibility: a hand shouldn't have to guess the verb exists."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    result = run(w, actor, "go out", "go forest")
+    assert "listen" in w.available_actions(actor)
+    assert "listen" in result.lower(), f"no cue in the room text: {result!r}"
+
+
+def test_listen_is_not_available_outside_the_forest_edge():
+    w, actor = fresh()
+    result = w.act(actor, "listen")
+    assert "forest" in result.lower()
+    assert "listen" not in w.available_actions(actor)
+
+
+def test_listen_touches_no_world_state():
+    """The constraint that must never break: listen grants nothing, ever --
+    no curio, no state, no buff, no accumulation. Calling the handler
+    directly (not through world.act) isolates that from the ambient ticking
+    every non-free verb also triggers (fire burning, hunger rising, a forest
+    find roll) -- the same reasoning as the give/place invariant test."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    before = w.to_data()
+    cmd_listen(w, actor, "")
+    after = w.to_data()
+    assert before == after, "listen must not change anything, ever"
+
+
+def test_listen_costs_a_turn_through_the_normal_dispatch():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    t0 = w.time
+    w.act(actor, "listen")
+    assert w.time == t0 + 1, "listen should cost exactly one turn, like any other real action"
+
+
+def test_listen_returns_varied_lines_not_always_the_same_one():
+    class Cycle:                             # walk the line pool in order
+        def __init__(self):
+            self.i = 0
+        def choice(self, seq):
+            v = seq[self.i % len(seq)]
+            self.i += 1
+            return v
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = Cycle()
+    seen = {cmd_listen(w, actor, "") for _ in range(len(LISTEN_LINES))}
+    assert seen == set(LISTEN_LINES), "listen should draw from its full line pool"
 
 
 # ---------------------------------------------------------------------------

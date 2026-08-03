@@ -103,7 +103,9 @@ def bucket_state(world, bucket):
         bucket.description = f"a wooden bucket, holding water ({water})"
 
 
-HEARTH_FUEL_START = 40      # the hearth's starting fuel, in build_world
+HEARTH_FUEL_START = 60      # the hearth's starting fuel, in build_world -- raised
+                            # (was 40) in the pacing rebalance so wood-adding is
+                            # occasional, not a recurring beat every visit
 HEARTH_LOW_FUEL = HEARTH_FUEL_START // 4    # below this, it reads as dying
 
 
@@ -125,8 +127,10 @@ def hungering(world, actor):
     actor.attrs["hunger"] = min(actor.attrs.get("hunger", 0) + 1, 20)
 
 
-LAMP_FUEL_START = 16       # comfortably outlasts one night (5 ticks), with margin
-LAMP_LOW_FUEL = 4          # warns with enough runway left to reach the hearth
+LAMP_FUEL_START = 32       # doubled in the pacing rebalance -- one kindling now
+                           # comfortably covers a full typical visit, not just
+                           # one night, so re-kindling stops being a recurring beat
+LAMP_LOW_FUEL = 8          # warns with enough runway left to reach the hearth
 
 
 def _lamp_description(lamp):
@@ -158,17 +162,21 @@ def lamp_burning(world, lamp):
     lamp.description = _lamp_description(lamp)
 
 
-FOREST_FIND_CHANCE = 0.5    # far more generous than the yard's incidental
-                            # FOUND_ITEM_CHANCE -- the forest's edge is the
-                            # reliable source now, not a rare bonus off a chore
+FOREST_FIND_CHANCE = 0.2    # pacing rebalance: was 0.5, which felt near-
+                            # guaranteed per visit and flooded packs with
+                            # curios (see ARCHITECTURE.md's "Pacing
+                            # rebalance"). Still a somewhat better bet than
+                            # the yard's incidental FOUND_ITEM_CHANCE, but a
+                            # find is a delight now, never a guarantee.
 
 
 def forest_finds(world, room):
     """Autonomous: while a hand lingers at the forest's edge (arriving, or
-    spending any later turn there), each turn has a good chance of turning
+    spending any later turn there), each turn has a modest chance of turning
     up a curio underfoot -- the same find table `gather wood` draws from,
-    just fired far more often, since a visit here is meant to reliably pay
-    off rather than leave you waiting on a rare roll."""
+    just a little more often, since a visit here is the dedicated place to
+    look. Deliberately rare, not a guaranteed per-visit faucet: a find should
+    stay a delight, not fill out a pack on autopilot."""
     actor = world.get("you")
     if actor is None or actor.location != room.id:
         return
@@ -751,6 +759,36 @@ def cmd_read(world, actor, arg):
     return "The journal reads:\n" + "\n".join(f"  {ln}" for ln in entries)
 
 
+
+# The forest's-edge calm affordance -- pacing rebalance, change 3. THE
+# CONSTRAINT THAT MUST NEVER BREAK: listen grants nothing, ever. No reward,
+# no rested-state, no find-chance bump, no progress, no accumulation of any
+# kind. The instant it grants anything it becomes a chore done for payoff and
+# collapses back into the acquisition loop this whole rebalance fights --
+# see the calm-axis invariant in README.md. It lives on the tea-and-petting
+# side of that invariant: freely chosen, unpressured, mark-free. A varied
+# line pool (not one fixed line) is what lets it survive repeat use --
+# see test_listen_returns_varied_lines_not_always_the_same_one.
+LISTEN_LINES = (
+    "Somewhere in the high branches, a bird you can't see runs through its "
+    "small song and falls quiet.",
+    "Wind moves through the tops of the trees, a long slow breath, and settles.",
+    "The quiet here has a texture to it -- the yard's sounds gone, nothing "
+    "yet in their place.",
+    "A wood-pigeon calls once, far off, and doesn't call again.",
+    "Light comes down through the leaves in shifting coins. You watch them move.",
+    "From the black between the trunks, a cold breath of air -- the deep "
+    "forest, breathing out. Not yet.",
+)
+
+
+def cmd_listen(world, actor, arg):
+    """listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge)."""
+    if actor.location != "forest_edge":
+        return "There's nothing in particular to listen for here. Try the forest's edge."
+    return world.rng.choice(LISTEN_LINES)
+
+
 def cmd_save(world, actor, arg):
     """save -- write the world to disk (also happens automatically on quit)."""
     world.save()
@@ -769,7 +807,7 @@ VERBS.update({
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
-    "gather": cmd_gather, "give": cmd_give,
+    "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
@@ -834,9 +872,9 @@ def generate_reference():
             f"into the hearth restores **{FUEL_PER_WOOD}** fuel -- a full "
             "night's burn, and enough to revive a spent hearth.",
             f"- A found curio turns up **{FOUND_ITEM_CHANCE:.0%}** of the time "
-            f"on a lucky gather, but **{FOREST_FIND_CHANCE:.0%}** of the time "
-            "on any turn spent at the forest's edge -- the reliable source, "
-            "not the incidental bonus.",
+            f"on a lucky gather, and **{FOREST_FIND_CHANCE:.0%}** of the time "
+            "on any turn spent at the forest's edge -- a somewhat better bet, "
+            "never a guarantee either way.",
             f"- If the vegetable patch stays empty for **{PATCH_VOLUNTEER_TURNS}** "
             "turns straight, one volunteer potato plant sprouts on its own -- a "
             "floor against a seedless lineage, not a routine source.",
@@ -896,7 +934,8 @@ def build_world():
         "The yard's small sounds fade out behind you. Trees close ranks "
         "along the path here, though it opens into a narrow clearing before "
         "the real dark begins -- the gaps between the trunks run down into "
-        "a black you don't go into. Not yet.",
+        "a black you don't go into. Not yet. It's worth stopping a moment, "
+        "just to listen.",
         exits={"yard": "yard"}))
     forest_edge.attach("forest_finds")
 

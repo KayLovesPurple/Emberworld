@@ -11,8 +11,10 @@ ever reach. This is enforced here and pinned by a test. Do not add harm.
 
 from world import Entity, VERBS, BEHAVIORS
 
-CAT_HUNGER_CAP = 12
-CAT_MEOW_THRESHOLD = 12   # hunger level at which the cat starts complaining;
+CAT_HUNGER_CAP = 24       # doubled in the pacing rebalance -- loosened first,
+                          # since it was the loudest, most legible turn-eater
+                          # (see ARCHITECTURE.md's "Pacing rebalance" section)
+CAT_MEOW_THRESHOLD = 24   # hunger level at which the cat starts complaining;
                           # meow, hungry-description, and idle content-gate
                           # all key off this one value so they stay in step
 

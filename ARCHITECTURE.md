@@ -157,12 +157,14 @@ and to fix a real spawn-starvation complaint: waiting on `gather wood`'s rare
   that discovery shouldn't ride on a hand guessing the right word. Instead,
   any tick where the actor's `location` is the room (arriving via `go
   forest`, or any later `wait`/action while still there) rolls
-  `FOREST_FIND_CHANCE` — deliberately far more generous than the yard's
-  `FOUND_ITEM_CHANCE` (see the `World rules` bullet the reference
-  generates from both constants together) — against the *same* `FOUND_ITEMS`
-  table `gather wood` draws from. No forked curio type, no new rules: a
-  forest-found curio is the identical entity, so `give`/`place` treat it
-  exactly like a yard-found one.
+  `FOREST_FIND_CHANCE` against the *same* `FOUND_ITEMS` table `gather wood`
+  draws from. No forked curio type, no new rules: a forest-found curio is
+  the identical entity, so `give`/`place` treat it exactly like a
+  yard-found one. `FOREST_FIND_CHANCE` started at 0.5 (deliberately far
+  more generous than the yard, to fix the spawn-starvation complaint) but
+  was pulled back down to 0.2 in the pacing rebalance below, once it turned
+  out "far more generous" had overshot into "guaranteed per visit" — see
+  that section for why.
 - **The dark ahead is description-only.** `forest_edge.exits == {"yard":
   "yard"}` — no second room, no going deeper, on purpose. That headroom is
   reserved for the real forest build (the statue, the tea herb,
@@ -177,6 +179,53 @@ and to fix a real spawn-starvation complaint: waiting on `gather wood`'s rare
   than teach the cat subsystem a third room, `cat_wander` now filters its
   candidate exits down to `{"in", "out"}` — the cat's world stays the hut
   and the yard exactly as before; the forest is a hand-only place for now.
+
+## Pacing rebalance — looser chores, rarer finds, and `listen`
+
+Three changes that ship together on purpose, from real playtest transcripts
+(a 20-turn hand spending ~16 turns on upkeep, placing zero of five carried
+curios because no spare turn ever came; a forest that handed out a curio on
+every single visit). Loosening the maintenance loop and making finds rarer
+both *free up* turns — alone, that's just more quiet turns with nothing to
+fill them. `listen` is what catches that freed space. Don't ship the first
+two without the third.
+
+- **Looser maintenance cadence.** `CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD`
+  doubled (12 → 24, in cat.py) — loosened first, since a hungry cat is the
+  loudest, most legible turn-eater (it's both described as pacing/hungry
+  *and* meows at you) and always wins the turn-contest against something
+  quieter like placing a curio. `LAMP_FUEL_START` doubled (16 → 32) so one
+  kindling covers a fuller visit instead of forcing repeat re-kindles.
+  `HEARTH_FUEL_START` raised (40 → 60, which also raises `FUEL_PER_WOOD`
+  and `HEARTH_LOW_FUEL` automatically since both derive from it) so
+  wood-adding is occasional rather than a recurring beat. Crop growth
+  (`ripe_at`, `PATCH_VOLUNTEER_TURNS`) deliberately untouched — lowest
+  priority per the rebalance spec, and the plant→harvest→plant rhythm is
+  the one grandfathered forced loop worth keeping intact.
+- **Rarer forest finds.** `FOREST_FIND_CHANCE` cut from 0.5 to 0.2 — still
+  a somewhat better bet than the yard's `FOUND_ITEM_CHANCE` (0.15), so the
+  forest stays the place to go looking, but no longer near-guaranteed per
+  visit. A guaranteed faucet made every find worthless and flooded packs;
+  see `test_forest_edge_entries_do_not_always_yield_a_curio` for the
+  regression guard (repeated real-rng entries must sometimes come up empty).
+- **`listen`, the forest's calm affordance.** A verb, gated to
+  `forest_edge`, that costs a turn (it's not in `FREE_VERBS` — the
+  turn-cost is what makes it a genuine choice, not a freebie) and returns
+  one random line from `LISTEN_LINES`. **The constraint that must never
+  break: `listen` grants nothing, ever** — no curio, no state, no buff, no
+  accumulation of any kind. The instant it grants something it becomes a
+  chore done for payoff and collapses back into the acquisition loop this
+  whole rebalance fights. It sits on the tea-and-petting side of the
+  calm-axis invariant (see README): freely chosen, unpressured, mark-free —
+  the forest's `pet cat`. `test_listen_touches_no_world_state` pins this by
+  calling `cmd_listen` directly rather than through `world.act`, the same
+  reasoning as the give/place invariant test: going through the dispatcher
+  ticks the world and lets unrelated autonomy (and even a `forest_finds`
+  roll on the same tick) muddy what the handler itself did or didn't touch.
+  The line pool is what lets it survive repeat use — a single fixed line
+  goes dead on the second visit — and it's a real precedent for the
+  someday statue's `wish` verb, which is shaped identically (a no-op that
+  costs a turn and returns atmosphere).
 
 ## What keeps it from breaking
 

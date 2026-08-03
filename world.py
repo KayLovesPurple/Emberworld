@@ -195,6 +195,8 @@ class World:
             acts.append("water crop")
         if room.id == "yard":
             acts.append("gather wood")
+        if room.id == "forest_edge":
+            acts.append("listen")
         if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
             acts.append("add wood")
         for e in carried:

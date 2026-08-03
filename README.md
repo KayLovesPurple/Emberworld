@@ -81,11 +81,13 @@ Draw water from the well into the bucket, then water a planted crop to speed
 its growth. Gather fallen wood in the yard and add it to the hearth to keep the
 fire going, and once in a while turn up a small found curio—a pinecone, a
 smooth stone, or some other odd little thing—alongside it. A path off the
-yard leads to the forest's edge, where lingering a turn or two reliably turns
-up a curio of its own — the same find, just a place you can go looking for
-one instead of waiting on a rare roll. A curio can be carried, given to the
-cat (some it plays with, some it ignores, but either way it leaves its
-mark), or set on the hut's shelf for whoever comes next.
+yard leads to the forest's edge, where lingering sometimes turns up a curio
+of its own — the same find, rarer than a guarantee but a somewhat better bet
+than the yard's incidental luck. A curio can be carried, given to the cat
+(some it plays with, some it ignores, but either way it leaves its mark), or
+set on the hut's shelf for whoever comes next. The forest's edge also has
+its own `listen`: a chosen, unpressured turn that just returns a bit of
+atmosphere and changes nothing — no reward, ever, on purpose.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -115,11 +117,13 @@ on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
 1. **The forest** *(a real project, its own design pass).* A v1 doorway already
-   exists — `the forest's edge`, off the yard, where lingering a turn or two
-   reliably turns up a curio (the same find table `gather wood` draws from,
-   just far more generous). Named "edge" rather than "forest" deliberately, so
-   the full build can grow into it without a rename. The rest is still ahead:
-   wood-gathering *relocating* here (the yard goes back to being just the
+   exists — `the forest's edge`, off the yard, where lingering occasionally
+   turns up a curio (the same find table `gather wood` draws from, just a
+   somewhat better bet — rare on purpose, a delight rather than a per-visit
+   faucet) and `listen` offers a calm, unpressured turn that changes nothing.
+   Named "edge" rather than "forest" deliberately, so the full build can grow
+   into it without a rename. The rest is still ahead: wood-gathering
+   *relocating* here (the yard goes back to being just the
    yard), the mysterious statue, and the herb you steep for tea. Room to grow
    later into weather, foraging, getting lost in the dark past the treeline —
    and birds for the cat to chirp at (a line already waiting in the cat's
@@ -218,7 +222,7 @@ After any act with a found or made thing, ask: **is the world reset to where it 
 That's the rule of thumb, and it catches most cases. Where it's unclear, the deeper test underneath it is chosen or forced: a forced maintenance loop — effort spent under pressure (hunger, decay) whose only reward is the absence of a bad outcome — is the grim thing. A freely chosen act, done for the pleasure of the turn itself, is the calm axis, whether or not it leaves a mark.
 
 - BANNED: anything that feeds a forced maintenance loop — a thing whose purpose is to hold off decay or scale the tending of it. A found flint that lights the fire is banned not because it "does something" but because lighting is forced maintenance; it just makes you better at the treadmill.
-- WELCOME: anything freely chosen that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea) — both are the calm axis, because choice, not permanence, is what distinguishes them.
+- WELCOME: anything freely chosen that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea, `listen`ing at the forest's edge) — both are the calm axis, because choice, not permanence, is what distinguishes them.
 - The potato and the hearth are the grandfathered forced loops. Do not add more.
 
 The test is not "does it accomplish anything?" (that would ban clay, which we want), nor even "does it reset?" (that would ban tea and petting, which we also want) — it is whether the act is freely chosen or forced.
