@@ -449,6 +449,37 @@ def test_shelf_displays_a_found_item_and_lets_a_later_hand_retrieve_it():
     assert stone.location == actor.id and "you take" in result.lower()
 
 
+def test_taking_a_found_curio_does_not_double_the_article():
+    """FOUND_ITEMS bakes its own article into the name (so the discovery and
+    carried-item lines read naturally), but a verb response that prepends its
+    own 'the' must strip it first, or it reads 'the a smooth grey stone'."""
+    w, actor = fresh()
+    name, desc = FOUND_ITEMS[0]           # "a smooth grey stone"
+    w.add(Entity(w.fresh_id("found"), name, desc,
+                 location="yard", portable=True, attrs={"curio": True}))
+    run(w, actor, "go out")
+    result = w.act(actor, f"take {name}").splitlines()[0]
+    assert result == "You take the smooth grey stone.", f"double article: {result!r}"
+
+
+def test_dropping_a_found_curio_does_not_double_the_article():
+    w, actor = fresh()
+    name, desc = FOUND_ITEMS[0]
+    w.add(Entity(w.fresh_id("found"), name, desc,
+                 location=actor.id, portable=True, attrs={"curio": True}))
+    result = w.act(actor, f"drop {name}").splitlines()[0]
+    assert result == "You set down the smooth grey stone.", f"double article: {result!r}"
+
+
+def test_placing_a_found_curio_on_the_shelf_does_not_double_the_article():
+    w, actor = fresh()
+    name, desc = FOUND_ITEMS[0]
+    w.add(Entity(w.fresh_id("found"), name, desc,
+                 location=actor.id, portable=True, attrs={"curio": True}))
+    result = w.act(actor, f"place {name} on shelf").splitlines()[0]
+    assert result == "You set the smooth grey stone on the shelf.", f"double article: {result!r}"
+
+
 def test_actions_lists_the_current_options_without_passing_time():
     w, actor = fresh()
     w.get("knife").location = actor.id

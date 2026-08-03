@@ -328,17 +328,28 @@ def cmd_go(world, actor, arg):
     return cmd_look(world, actor, "")
 
 
+def _the(name):
+    """'the ' + name, minus a leading indefinite article. Found curios bake
+    one into their name (so the discovery and carried-item lines read
+    naturally as-is), but a message that prepends its own 'the' would
+    otherwise double up into 'the a smooth grey stone'."""
+    for article in ("a ", "an "):
+        if name.lower().startswith(article):
+            return "the " + name[len(article):]
+    return "the " + name
+
+
 def cmd_take(world, actor, arg):
     """take <thing> -- pick up a portable object."""
     e = find_visible(world, actor, arg)
     if not e:
         return f"There's no '{arg}' here to take."
     if e.location == actor.id:
-        return f"You're already carrying the {e.name}."
+        return f"You're already carrying {_the(e.name)}."
     if not e.portable:
         return f"The {e.name} won't budge."
     e.location = actor.id
-    return f"You take the {e.name}."
+    return f"You take {_the(e.name)}."
 
 
 def cmd_drop(world, actor, arg):
@@ -347,7 +358,7 @@ def cmd_drop(world, actor, arg):
     if not e or e.location != actor.id:
         return f"You aren't carrying any '{arg}'."
     e.location = actor.location
-    return f"You set down the {e.name}."
+    return f"You set down {_the(e.name)}."
 
 
 def _shelf_description(world, shelf):
@@ -373,7 +384,7 @@ def cmd_place(world, actor, arg):
         return f"You aren't carrying any '{arg}'."
     e.location = shelf.id
     shelf.description = _shelf_description(world, shelf)
-    return f"You set the {e.name} on the shelf."
+    return f"You set {_the(e.name)} on the shelf."
 
 
 def cmd_inventory(world, actor, arg):
