@@ -348,7 +348,14 @@ def cmd_take(world, actor, arg):
         return f"You're already carrying {_the(e.name)}."
     if not e.portable:
         return f"The {e.name} won't budge."
+    surface = world.get(e.location)
     e.location = actor.id
+    if surface is not None and surface.attrs.get("display_surface"):
+        # cmd_place recomputes this on the way onto the shelf; taking
+        # something back off it needs the same refresh, or the shelf goes
+        # on describing itself as still holding what's already been carried
+        # away.
+        surface.description = _shelf_description(world, surface)
     return f"You take {_the(e.name)}."
 
 
@@ -856,18 +863,11 @@ def build_world():
     journal = w.add(Entity("journal", "journal",
         "a worn journal, its cover soft with handling", location="hut",
         portable=True, attrs={"entries": [
-            "[a while ago] To whoever comes next: the hearth cooks, and the lamp "
+            "[Day 1, Wren] To whoever comes next: the hearth cooks, and the lamp "
             "lights — kindle it at the hearth before the dark comes. Plant "
             "early; the potatoes take their time. There's a cat: feed it a "
-            "potato when it's hungry, and it likes the fire lit.",
-            "[some days later] Fed the cat, kept a potato in the ground, "
-            "planted another before I left. Carry the rhythm on.",
-            "[Day 1, Wren] Kept the fire fed and the cat fed — in that order, "
-            "or the cat will let you know. Quiet few days, and I grew "
-            "unexpectedly fond of the cat. Once or twice of an evening I "
-            "caught myself wishing for a bit of company that wasn't "
-            "four-legged; but you're a kind of company, reading this, even "
-            "if we never share the room. I left before the harvest.",
+            "potato when it's hungry, and it likes the fire lit. I left before "
+            "the harvest.",
         ]}))
 
     ensure_shelf(w)

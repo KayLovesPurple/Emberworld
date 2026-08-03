@@ -132,27 +132,48 @@ def test_existing_found_item_is_backfilled_with_its_cat_reaction_on_load():
         assert loaded.get("found_2").attrs.get("cat_reaction") == "ignores"
 
 
-def test_llm_session_log_uses_descriptive_name_and_italic_thoughts():
-    """A visit gets its own Markdown record; thoughts must be visually distinct."""
+def test_llm_session_log_is_named_for_the_hand_and_logs_the_model_in_its_header():
+    """A visit gets its own Markdown record, named for the hand rather than
+    the model -- with several hands visiting over time, the filename is how
+    a person tells visits apart at a glance. The model is still recorded,
+    just inside the header instead of the filename. Thoughts must stay
+    visually distinct."""
     with tempfile.TemporaryDirectory() as d:
         original = drv.SESSIONS_DIR
         drv.SESSIONS_DIR = d
         try:
-            path, log = drv._start_session_log("Claude Sonnet 5", 10, 30,
+            path, log = drv._start_session_log("Wren", "claude-sonnet-5", 10, 30,
                                                datetime(2026, 7, 31, 14, 30, 52))
             drv._log_turn(log, 1, "I should wait.", "wait", "Time passes.")
             log.close()
             duplicate, duplicate_log = drv._start_session_log(
-                "Claude Sonnet 5", 10, 30, datetime(2026, 7, 31, 14, 30, 52))
+                "Wren", "claude-sonnet-5", 10, 30, datetime(2026, 7, 31, 14, 30, 52))
             duplicate_log.close()
         finally:
             drv.SESSIONS_DIR = original
-        assert os.path.basename(path) == "20260731-143052_claude-sonnet-5_day-10_30-turns.md"
-        assert os.path.basename(duplicate) == "20260731-143052_claude-sonnet-5_day-10_30-turns-2.md"
+        assert os.path.basename(path) == "20260731-143052_wren_day-10_30-turns.md"
+        assert os.path.basename(duplicate) == "20260731-143052_wren_day-10_30-turns-2.md"
         with open(path, encoding="utf-8") as f:
             transcript = f.read()
+        assert transcript.startswith("# Wren session\n"), "the chosen name should head the file"
+        assert "- Model: claude-sonnet-5" in transcript, "the model must still be logged"
         assert "> *I should wait.*" in transcript
         assert "**Command:** `wait`" in transcript
+
+
+def test_llm_session_log_filename_falls_back_to_someone_when_unnamed():
+    """llm_agent passes "Someone" as the display name when a hand declines to
+    name itself -- the filename should still degrade gracefully, not crash."""
+    with tempfile.TemporaryDirectory() as d:
+        original = drv.SESSIONS_DIR
+        drv.SESSIONS_DIR = d
+        try:
+            path, log = drv._start_session_log("Someone", "claude-sonnet-5", 3, 20,
+                                               datetime(2026, 8, 1, 9, 0, 0))
+            log.close()
+        finally:
+            drv.SESSIONS_DIR = original
+        assert os.path.basename(path) == "20260801-090000_someone_day-3_20-turns.md"
 
 
 # ===========================================================================

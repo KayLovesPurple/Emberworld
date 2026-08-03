@@ -25,22 +25,25 @@ LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
 
 
-def _session_filename(agent_name, start_day, turns, started_at=None):
-    """Return a portable, descriptive filename for one LLM visit."""
+def _session_filename(display_name, start_day, turns, started_at=None):
+    """Return a portable, descriptive filename for one LLM visit, named for
+    the hand rather than the model -- with several hands visiting over time,
+    the filename is how a person tells visits apart at a glance. The model
+    is still recorded, just inside the header (see _start_session_log)."""
     safe_name = "".join(c if c.isalnum() or c in "-_" else "-"
-                        for c in agent_name.lower()).strip("-") or "agent"
+                        for c in display_name.lower()).strip("-") or "agent"
     started_at = started_at or datetime.now()
     return (f"{started_at:%Y%m%d-%H%M%S}_{safe_name}_day-{start_day}_"
             f"{turns}-turns.md")
 
 
-def _start_session_log(agent_name, start_day, turns, started_at=None):
+def _start_session_log(display_name, model, start_day, turns, started_at=None):
     """Create a per-visit Markdown transcript and return its open file handle."""
     started_at = started_at or datetime.now()
     os.makedirs(SESSIONS_DIR, exist_ok=True)
-    filename = _session_filename(agent_name, start_day, turns, started_at)
+    filename = _session_filename(display_name, start_day, turns, started_at)
     path = os.path.join(SESSIONS_DIR, filename)
-    # A visitor can return with the same model, day, and turn budget. Keep the
+    # A visitor can return with the same name, day, and turn budget. Keep the
     # requested filename for the first visit, then add a small suffix instead
     # of overwriting an earlier transcript.
     stem, extension = os.path.splitext(path)
@@ -49,7 +52,8 @@ def _start_session_log(agent_name, start_day, turns, started_at=None):
         path = f"{stem}-{suffix}{extension}"
         suffix += 1
     log = open(path, "x", encoding="utf-8")
-    log.write(f"# {agent_name} session\n\n"
+    log.write(f"# {display_name} session\n\n"
+              f"- Model: {model}\n"
               f"- Started: {started_at.isoformat(timespec='seconds')}\n"
               f"- World day at arrival: {start_day}\n"
               f"- Turn budget: {turns}\n\n")
@@ -460,13 +464,13 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     from anthropic import Anthropic          # lazy import: file runs without it
     client = Anthropic()
     w, actor = load_or_build(quiet=True)
-    session_path, session_log = _start_session_log(model, w.day(), turns)
     color = color and sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
     think_note = "thinking" if think else "no-think"
     w.hand_name = _ask_for_name(client, model, think, w.rng)   # optional; None if declined/unusable
     who = w.hand_name or "Someone"
+    session_path, session_log = _start_session_log(who, model, w.day(), turns)
     print(f"({who} arrives -- {w.timestr()}. {turns} turns to spend. "
           f"[{model}, {think_note}])\n")
 

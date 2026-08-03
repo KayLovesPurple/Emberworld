@@ -474,6 +474,36 @@ def test_shelf_displays_a_found_item_and_lets_a_later_hand_retrieve_it():
     assert stone.location == actor.id and "you take" in result.lower()
 
 
+def test_taking_the_last_item_off_the_shelf_reverts_its_description():
+    """BUG WE HIT: taking an item back off the shelf left the shelf still
+    describing itself as holding it -- _shelf_description was only ever
+    recomputed by cmd_place (and the load-time migration), never by
+    cmd_take, so a shelf a hand had emptied still read as holding the thing
+    a later hand had already carried away."""
+    w, actor = fresh()
+    w.get("knife").location = actor.id
+    run(w, actor, "place knife on shelf")
+    shelf = w.get("shelf")
+    assert "knife" in shelf.description
+    run(w, actor, "take knife")
+    assert "knife" not in shelf.description, f"stale shelf description: {shelf.description!r}"
+    assert shelf.description == "a narrow curio shelf, empty but for a little dust"
+
+
+def test_taking_one_of_two_shelf_items_still_lists_the_other():
+    w, actor = fresh()
+    w.get("knife").location = actor.id
+    stone_name, stone_look_line, stone_reaction = _stone_tuple()
+    stone = w.add(Entity(w.fresh_id("found"), stone_name,
+                         _found_description(stone_look_line, stone_reaction),
+                         location=actor.id, portable=True))
+    run(w, actor, "place knife on shelf", f"place {stone_name} on shelf")
+    shelf = w.get("shelf")
+    run(w, actor, "take knife")
+    assert "knife" not in shelf.description
+    assert stone_name in shelf.description, f"the remaining item vanished too: {shelf.description!r}"
+
+
 def test_taking_a_found_curio_does_not_double_the_article():
     """FOUND_ITEMS bakes its own article into the name (so the discovery and
     carried-item lines read naturally), but a verb response that prepends its
@@ -1046,29 +1076,19 @@ def test_carried_journal_persists_across_a_reload_as_the_same_actor():
 
 
 # ===========================================================================
-# 6. THE SEED JOURNAL -- widening what the journal is for. The three seed
-#    entries a fresh world ships with model the register (operational
-#    handover AND how-it-felt) so a lineage's own entries have somewhere
-#    natural to land beyond pure handover. Seeded deliberately light on
-#    specifics (see content.py's build_world) so later hands aren't just
-#    echoing a plantable want back at the world.
+# 6. THE SEED JOURNAL -- a fresh world ships with a single seed entry: pure
+#    operational handover (hearth, lamp, potatoes, cat), giving a lineage's
+#    own entries a clear, minimal model to follow.
 # ===========================================================================
-def test_fresh_world_seed_journal_has_the_three_widened_entries():
+def test_fresh_world_seed_journal_has_one_seed_entry():
     w, actor = fresh()
     entries = w.get("journal").attrs["entries"]
     assert entries == [
-        "[a while ago] To whoever comes next: the hearth cooks, and the lamp "
+        "[Day 1, Wren] To whoever comes next: the hearth cooks, and the lamp "
         "lights — kindle it at the hearth before the dark comes. Plant "
         "early; the potatoes take their time. There's a cat: feed it a "
-        "potato when it's hungry, and it likes the fire lit.",
-        "[some days later] Fed the cat, kept a potato in the ground, "
-        "planted another before I left. Carry the rhythm on.",
-        "[Day 1, Wren] Kept the fire fed and the cat fed — in that order, or "
-        "the cat will let you know. Quiet few days, and I grew unexpectedly "
-        "fond of the cat. Once or twice of an evening I caught myself "
-        "wishing for a bit of company that wasn't four-legged; but you're a "
-        "kind of company, reading this, even if we never share the room. I "
-        "left before the harvest.",
+        "potato when it's hungry, and it likes the fire lit. I left before "
+        "the harvest.",
     ], f"seed journal entries don't match: {entries!r}"
 
 

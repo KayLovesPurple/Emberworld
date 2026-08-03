@@ -54,10 +54,12 @@ runs (better for long `--turns`).
 ## LLM session transcripts
 
 Each `--llm` visit writes a Markdown transcript in `sessions/`. Its name includes
-the model, world day on arrival, requested turn count, and real start time, for
-example `20260731-143052_claude-sonnet-5_day-10_30-turns.md`. Reasoning summaries are
-recorded in italics, followed by the command and outcome for each turn. These
-local transcripts are ignored by Git.
+the hand's chosen name (or "someone", if it declined to pick one), world day on
+arrival, requested turn count, and real start time, for example
+`20260731-143052_wren_day-10_30-turns.md` — the model itself is logged in the
+file's header instead, since several hands may share one model. Reasoning
+summaries are recorded in italics, followed by the command and outcome for each
+turn. These local transcripts are ignored by Git.
 
 ## The rules, in brief
 
@@ -145,18 +147,10 @@ building: how much must made things actually *do*?
     and the world honours it. Unbounded, hard to test — approach with great care,
     if ever.
 
-The axis that actually matters here is not safe-to-risky but *reset or
-richer* (see the calm-axis invariant). The line for functional made things
-is loop-*scaling*, not loop-*touching*. In practice the world is already
-protected: only one potato grows at a time, so watering has a hard ceiling —
-a made thing can make tending quicker but can't make it *yield more*, because
-there's no more to yield. So functional clay is welcome as long as any new
-material keeps that property: makes a chore shorter, never scales its output.
-    
-Dependencies: wants a source (forest/riverbank), firing (hearth/kiln), and pairs
-naturally with tea (a thrown teapot) and the cat (its own dish). Downstream of
-the forest and tea. Do NOT spec this like the others — it deserves its own design
-pass, and should almost certainly start at "cosmetic" and learn from how the
+The axis that actually matters here is not safe-to-risky — see the calm-axis invariant for the real line. One thing specific to clay is worth noting here: because only one potato grows at a time, watering has a hard ceiling, so a made thing (think a bigger clay bucket) can make tending quicker but can't make it yield more. A time-saving made object is therefore safe by construction — there's no output for it to scale.
+
+Dependencies: wants a source (forest/riverbank), firing (hearth/kiln), and pairs naturally with tea (a thrown teapot) and the cat (its own dish). Downstream of
+the forest and tea. Do NOT spec this like the others — it deserves its own design pass, and should almost certainly start at "cosmetic" and learn from how the
 lineage treats made things before attempting function.
 
 **A chicken — but a producer, never a second mouth** *(someday, and only framed
@@ -210,12 +204,12 @@ The statue threads this because the granter is diegetic. The agent isn't petitio
 
 The load-bearing rule for the curio shelf and everything downstream of it (found things, and clay when it comes). Stated so it survives the next well-meaning edit, the way "the cat can never come to harm" and "the statue stays mechanically inert" are stated:
 
-**After any act with a found or made thing, ask: is the world reset to where
-it was, or is it one thing richer? Reset is a chore. Richer is the point.**
+After any act with a found or made thing, ask: **is the world reset to where it was, or is it one thing richer**? Reset is a chore. Richer is the point.
 
-- BANNED: anything that feeds a maintenance loop — a thing whose purpose is to hold off decay or make tending easier by *scaling* it. A found flint that
-  lights the fire is banned not because it "does something" but because lighting is maintenance — it just makes you better at the treadmill.
-- WELCOME: anything that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea) — both are the calm axis, because choice, not permanence, is what distinguishes them. A clay bird (pure mark) is welcome; a bowl-that-is-just-a-bowl is welcome; a made thing that merely makes an existing chore *shorter* (same result, fewer turns — buying back time for the calm axis) is welcome too.
-- The potato & the hearth are the grandfathered maintenance loops. Do not add more.
+That's the rule of thumb, and it catches most cases. Where it's unclear, the deeper test underneath it is chosen or forced: a forced maintenance loop — effort spent under pressure (hunger, decay) whose only reward is the absence of a bad outcome — is the grim thing. A freely chosen act, done for the pleasure of the turn itself, is the calm axis, whether or not it leaves a mark.
 
-The test is not "does it accomplish anything?" (that would ban clay, which we want) — it is "does its effect reset, or does it make the world richer?"
+- BANNED: anything that feeds a forced maintenance loop — a thing whose purpose is to hold off decay or scale the tending of it. A found flint that lights the fire is banned not because it "does something" but because lighting is forced maintenance; it just makes you better at the treadmill.
+- WELCOME: anything freely chosen that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea) — both are the calm axis, because choice, not permanence, is what distinguishes them.
+- The potato and the hearth are the grandfathered forced loops. Do not add more.
+
+The test is not "does it accomplish anything?" (that would ban clay, which we want), nor even "does it reset?" (that would ban tea and petting, which we also want) — it is whether the act is freely chosen or forced.
