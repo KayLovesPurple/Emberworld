@@ -316,6 +316,23 @@ def _carried_line(world, actor):
     return "You are carrying: " + ", ".join(names) + "."
 
 
+_EXIT_LABELS = {
+    "hut": {"out": "the yard"},
+    "yard": {"in": "inside the hut", "forest": "the forest's edge"},
+    "forest_edge": {"yard": "back to the yard"},
+}
+
+
+def _exit_label(room_id, direction):
+    """A longer, legible phrase for an exit's entry in the Exits: line --
+    purely cosmetic scene-setting text, distinct from the short direction key
+    a hand actually types (`go <direction>`, still listed as-is by
+    available_actions). Falls back to the bare key for any room/direction
+    without a bespoke label, so a future exit degrades gracefully rather
+    than crashing."""
+    return _EXIT_LABELS.get(room_id, {}).get(direction, direction)
+
+
 def cmd_look(world, actor, arg):
     """look [thing] -- describe the room, or examine one thing (dark hides all but what you hold)."""
     room = world.get(actor.location)
@@ -338,7 +355,8 @@ def cmd_look(world, actor, arg):
     if here:
         lines += [""] + [f"  - {e.description}" for e in here]
     if room.exits:
-        lines += ["", "Exits: " + ", ".join(room.exits)]
+        lines += ["", "Exits: " + ", ".join(
+            _exit_label(room.id, d) for d in room.exits)]
     lines += ["", _carried_line(world, actor)]
     return "\n".join(lines)
 

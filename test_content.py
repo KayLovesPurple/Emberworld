@@ -1177,6 +1177,26 @@ def test_going_to_the_forest_edge_arrives_and_offers_the_way_back():
     assert "go yard" in w.available_actions(actor)
 
 
+def test_exits_line_uses_longer_descriptive_labels_not_bare_direction_words():
+    """The Exits: line is scene-setting prose, not the literal command list --
+    that's `actions`/available_actions, which still shows the short 'go in'/
+    'go forest' commands untouched. So the label here can read as a longer,
+    more legible phrase without costing a hand anything it could type."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    hut_seen = w.perceive(actor)
+    assert "Exits: the yard" in hut_seen, f"hut exits: {hut_seen!r}"
+
+    yard_seen = run(w, actor, "go out")
+    assert "Exits: inside the hut, the forest's edge" in yard_seen, f"yard exits: {yard_seen!r}"
+
+    forest_seen = w.act(actor, "go forest")
+    assert "Exits: back to the yard" in forest_seen, f"forest exits: {forest_seen!r}"
+
+    # the short forms a hand actually types are untouched
+    assert "go yard" in w.available_actions(actor)
+
+
 def test_lingering_at_the_forest_edge_can_turn_up_a_curio():
     w, actor = fresh()
     w.rng = _Unlucky()
