@@ -11,6 +11,7 @@ The LLM sign-off tests use fake Anthropic clients -- no network, no key needed.
 
 import json
 import os
+import random
 import tempfile
 from datetime import datetime
 
@@ -390,6 +391,45 @@ def test_ask_for_name_falls_back_to_none_when_the_api_fails():
             raise RuntimeError("no network")
 
     assert drv._ask_for_name(Boom(), drv.LLM_MODEL, think=False) is None
+
+
+def test_naming_prompt_varies_its_examples_across_calls():
+    """BUG WE HIT: every run picked the name 'Wren' -- because the old
+    prompt listed it as a literal, single, always-the-same example, and a
+    low-effort reply just copied it verbatim. Showing a different example
+    pair each time removes the one fixed anchor a model can default to."""
+    class First:
+        def choice(self, seq):
+            return seq[0]
+
+    class Last:
+        def choice(self, seq):
+            return seq[-1]
+
+    assert drv._naming_prompt(First()) != drv._naming_prompt(Last()), \
+        "the naming prompt should vary its example names, not always show the same pair"
+
+
+def test_naming_prompt_tells_the_model_not_to_just_copy_the_examples():
+    prompt = drv._naming_prompt(random.Random(0)).lower()
+    assert "of your own" in prompt or "not copied" in prompt or "not one of these" in prompt, \
+        "should explicitly discourage reusing the example names verbatim"
+
+
+def test_ask_for_name_forwards_the_given_rng_into_the_prompt():
+    class First:
+        def choice(self, seq):
+            return seq[0]
+
+    class Last:
+        def choice(self, seq):
+            return seq[-1]
+
+    c1, c2 = _RecordingClient(), _RecordingClient()
+    drv._ask_for_name(c1, drv.LLM_MODEL, think=False, rng=First())
+    drv._ask_for_name(c2, drv.LLM_MODEL, think=False, rng=Last())
+    assert c1.last["messages"][0]["content"] != c2.last["messages"][0]["content"], \
+        "the rng passed in should actually steer which examples are shown"
 
 
 def test_recent_block_lists_history_for_a_memoryless_agent():

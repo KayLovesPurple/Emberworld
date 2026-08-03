@@ -304,8 +304,9 @@ def _looks_stuck(history, n=3):
 LLM_SYSTEM_PROMPT = (
     "You are someone living in a small text world that persists between "
     "visitors -- you have no memory of past turns, so trust what the world "
-    "and the journal tell you, and read the journal early; it carries what "
-    "past hands learned about living here. Living here is partly tending -- "
+    "and the journal tell you, and read the journal early; it's usually "
+    "kept in the hut, and carries what past hands learned about living "
+    "here. Living here is partly tending -- "
     "a light kept through the night, a potato grown and cooked, a cat "
     "who'll let you know if it's hungry -- and partly looking closely: "
     "this world holds more than any list of tasks, and unfamiliar objects, "
@@ -320,11 +321,29 @@ LLM_SYSTEM_PROMPT = (
     "For 'write', include your note text. Nothing else."
 )
 
-_NAMING_PROMPT = (
-    "Before you begin: give yourself a name for your time here -- anything "
-    "you like, plain (Tom, Wren) or strange (Ashfall, Nine). Reply with "
-    "just the name, nothing else."
-)
+# A wider pool than any single call shows, so the model never sees the same
+# fixed pair of examples twice in a row -- see _naming_prompt. BUG WE HIT:
+# with one hardcoded pair ("Tom, Wren" / "Ashfall, Nine"), nearly every run
+# picked "Wren" outright -- a low-effort reply just copies whatever's handed
+# to it rather than inventing something. Varying the examples removes the
+# one fixed anchor to copy.
+_PLAIN_NAME_EXAMPLES = ("Tom", "Wren", "Mara", "Old Joe")
+_STRANGE_NAME_EXAMPLES = ("Ashfall", "Nine", "Thistle", "Rooksong")
+
+
+def _naming_prompt(rng):
+    """Build the one-off naming prompt, drawing a fresh plain/strange
+    example pair from the pools above so no single name is ever the fixed
+    anchor -- paired with an explicit "not one of these" so a reply is
+    pushed toward inventing its own rather than echoing what's shown."""
+    plain = rng.choice(_PLAIN_NAME_EXAMPLES)
+    strange = rng.choice(_STRANGE_NAME_EXAMPLES)
+    return (
+        "Before you begin: give yourself a name for your time here -- "
+        "something of your own, not one of these examples, just in their "
+        f"spirit: plain (like {plain}) or strange (like {strange}). Reply "
+        "with just the name, nothing else."
+    )
 
 
 def _sanitize_name(raw):
@@ -345,17 +364,20 @@ def _sanitize_name(raw):
     return name
 
 
-def _ask_for_name(client, model, think):
+def _ask_for_name(client, model, think, rng=None):
     """One small call before the turn loop: let the hand name itself, framed
     as naming a character who lives here (not "who are you really") so it
     reads as a fantasy handle, not introspection. Any failure or unusable
-    reply just means an unnamed [Day N] stamp -- see _sanitize_name."""
+    reply just means an unnamed [Day N] stamp -- see _sanitize_name. `rng`
+    (default: a fresh random.Random) picks which example pair _naming_prompt
+    shows; pass world.rng from a caller that already has a World in scope."""
+    rng = rng or random.Random()
     try:
         reply = _ask_claude(
             client,
             "You're about to spend some time as a character living in a "
             "small persistent text world.",
-            _NAMING_PROMPT, model, think)
+            _naming_prompt(rng), model, think)
     except Exception:
         return None
     return _sanitize_name(reply)
@@ -412,7 +434,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
     think_note = "thinking" if think else "no-think"
-    w.hand_name = _ask_for_name(client, model, think)   # optional; None if declined/unusable
+    w.hand_name = _ask_for_name(client, model, think, w.rng)   # optional; None if declined/unusable
     who = w.hand_name or "Someone"
     print(f"({who} arrives -- {w.timestr()}. {turns} turns to spend. "
           f"[{model}, {think_note}])\n")

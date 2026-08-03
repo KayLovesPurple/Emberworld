@@ -175,16 +175,6 @@ scarce turns. If it ever needs anything at all, make it something trivially
 met (or self-sustaining), never a second potato-mouth. The design constraint IS
 the feature; a needy chicken is the one version not to build.
 
-**A place to keep what you find** *(downstream of the found items already in
-`gather wood`).* A lucky forage can already turn up a small object — a stone, a
-feather, a curl of bark — that just sits in inventory next to the potatoes.
-Someday there could be a spot in the world (a shelf, a windowsill) to lay
-found things out where they'd be seen and add up into something across a long
-lineage, the way the journal already does for words. Needs a place before it
-means anything; don't build the shelf until it's clear what makes one worth
-looking at twice.
-
-
 ### The wishing-statue — a wish-sink (lives in the forest, built with it)
 
 The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.
