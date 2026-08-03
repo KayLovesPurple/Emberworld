@@ -1,5 +1,8 @@
 # Emberworld
 
+*Built together with Claude Opus 4.8 and Sonnet 5 — noted once here rather
+than on every commit.*
+
 A small text world that keeps ticking whether or not anyone's watching — a
 hearth needs feeding, a potato grows, night falls, a cat wanders and gets hungry.
 You can play it yourself, or let a Claude reach in over the API and live in it
@@ -77,9 +80,12 @@ never come to harm** — that's guaranteed in the code and pinned by a test.
 Draw water from the well into the bucket, then water a planted crop to speed
 its growth. Gather fallen wood in the yard and add it to the hearth to keep the
 fire going, and once in a while turn up a small found curio—a pinecone, a
-smooth stone, or some other odd little thing—alongside it. A curio can be
-carried, given to the cat (some it plays with, some it ignores, but either
-way it leaves its mark), or set on the hut's shelf for whoever comes next.
+smooth stone, or some other odd little thing—alongside it. A path off the
+yard leads to the forest's edge, where lingering a turn or two reliably turns
+up a curio of its own — the same find, just a place you can go looking for
+one instead of waiting on a rare roll. A curio can be carried, given to the
+cat (some it plays with, some it ignores, but either way it leaves its
+mark), or set on the hut's shelf for whoever comes next.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -108,13 +114,16 @@ A running list of intended features, roughly in dependency order. Each depends
 on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
-1. **The forest** *(a real project, its own design pass).* A new place to travel
-   to — the world getting bigger, not just deeper. It earns its existence by
-   carrying three things at once: wood-gathering *relocates* here (the yard goes
-   back to being just the yard), the mysterious statue lives here, and the herb
-   you steep for tea grows here. Room to grow later into weather, foraging,
-   getting lost in the dark — and birds for the cat to chirp at (a line already
-   waiting in the cat's idle-action list).
+1. **The forest** *(a real project, its own design pass).* A v1 doorway already
+   exists — `the forest's edge`, off the yard, where lingering a turn or two
+   reliably turns up a curio (the same find table `gather wood` draws from,
+   just far more generous). Named "edge" rather than "forest" deliberately, so
+   the full build can grow into it without a rename. The rest is still ahead:
+   wood-gathering *relocating* here (the yard goes back to being just the
+   yard), the mysterious statue, and the herb you steep for tea. Room to grow
+   later into weather, foraging, getting lost in the dark past the treeline —
+   and birds for the cat to chirp at (a line already waiting in the cat's
+   idle-action list).
 
 2. **Tea** *(once fire is reliable and the forest gives you something to brew).*
    The first thing *made from multiple systems at once*: water (well) + fire

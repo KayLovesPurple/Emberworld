@@ -62,21 +62,27 @@ def _cat_go(world, cat, direction):
 
 
 def cat_wander(world, cat):
-    """Autonomous: the cat drifts between rooms, drawn toward a lit hearth."""
+    """Autonomous: the cat drifts between the hut and the yard, drawn toward
+    a lit hearth. Confined to the 'in'/'out' pair on purpose -- those are the
+    only two directions _cat_go knows how to narrate (doorway/tail-high
+    wording); a hand-only place like the forest's edge stays a hand-only
+    place rather than getting the cat wandered into it with the wrong flavor
+    text."""
     room = world.get(cat.location)
-    if room is None or not room.exits:
+    directions = [d for d in room.exits if d in ("in", "out")] if room else []
+    if not directions:
         return
     r = world.rng.random()
     warm_here = _room_is_warm(world, cat.location)
-    warm_exits = [d for d, dest in room.exits.items() if _room_is_warm(world, dest)]
+    warm_exits = [d for d in directions if _room_is_warm(world, room.exits[d])]
     if warm_here:
         if r < 0.10:                                   # cozy: rarely leaves warmth
-            _cat_go(world, cat, world.rng.choice(list(room.exits)))
+            _cat_go(world, cat, world.rng.choice(directions))
     elif warm_exits:
         if r < 0.60:                                   # drawn toward a lit hearth
             _cat_go(world, cat, world.rng.choice(warm_exits))
     elif r < 0.25:                                     # otherwise idle drift
-        _cat_go(world, cat, world.rng.choice(list(room.exits)))
+        _cat_go(world, cat, world.rng.choice(directions))
 
 
 def cat_hunger(world, cat):

@@ -33,7 +33,7 @@
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
 
-- **cat_wander** -- Autonomous: the cat drifts between rooms, drawn toward a lit hearth.
+- **cat_wander** -- Autonomous: the cat drifts between the hut and the yard, drawn toward
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
 - **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
@@ -44,6 +44,7 @@
 - **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it
+- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or
 
 ## World rules (from the code's own constants)
 
@@ -54,6 +55,7 @@
 - The cat stays content (and may do small idle things) below hunger **12**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **40** fuel -- a full night's burn, and enough to revive a spent hearth.
+- A found curio turns up **15%** of the time on a lucky gather, but **50%** of the time on any turn spent at the forest's edge -- the reliable source, not the incidental bonus.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.

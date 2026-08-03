@@ -143,6 +143,41 @@ against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
 entity from a save predating this feature, the same way it already
 backfilled the `curio` tag itself.
 
+## The forest's edge — v1, a doorway not the forest
+
+One new room (`forest_edge` in `build_world`), reachable from the yard via
+its `"forest"` exit (`"go forest"`), with an exit back keyed `"yard"`. It
+exists to give a hand somewhere to *go* rather than only things to *tend* —
+and to fix a real spawn-starvation complaint: waiting on `gather wood`'s rare
+`FOUND_ITEM_CHANCE` roll to ever see a curio at all.
+
+- **Finding is passive, not a verb.** `forest_finds` is a behavior attached
+  to the room entity itself, not a dedicated command — a new verb is a new
+  thing to discover, and the whole point of the curiosity-nudge rework was
+  that discovery shouldn't ride on a hand guessing the right word. Instead,
+  any tick where the actor's `location` is the room (arriving via `go
+  forest`, or any later `wait`/action while still there) rolls
+  `FOREST_FIND_CHANCE` — deliberately far more generous than the yard's
+  `FOUND_ITEM_CHANCE` (see the `World rules` bullet the reference
+  generates from both constants together) — against the *same* `FOUND_ITEMS`
+  table `gather wood` draws from. No forked curio type, no new rules: a
+  forest-found curio is the identical entity, so `give`/`place` treat it
+  exactly like a yard-found one.
+- **The dark ahead is description-only.** `forest_edge.exits == {"yard":
+  "yard"}` — no second room, no going deeper, on purpose. That headroom is
+  reserved for the real forest build (the statue, the tea herb,
+  wood-gathering relocating here) noted in README's "Someday" list; naming
+  this room "the forest's edge" rather than just "the forest" is what lets
+  that later work grow into it without a rename.
+- **The cat stays out of it.** `cat_wander` picked uniformly among
+  `room.exits` before this, which would have sent the cat down the new
+  `"forest"`/`"yard"` exits too — except `_cat_go`'s departure/arrival
+  wording only knows how to narrate `"in"`/`"out"` (doorway, tail-high
+  phrasing), so the cat would arrive with backwards-sounding text. Rather
+  than teach the cat subsystem a third room, `cat_wander` now filters its
+  candidate exits down to `{"in", "out"}` — the cat's world stays the hut
+  and the yard exactly as before; the forest is a hand-only place for now.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

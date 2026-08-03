@@ -158,10 +158,35 @@ def lamp_burning(world, lamp):
     lamp.description = _lamp_description(lamp)
 
 
+FOREST_FIND_CHANCE = 0.5    # far more generous than the yard's incidental
+                            # FOUND_ITEM_CHANCE -- the forest's edge is the
+                            # reliable source now, not a rare bonus off a chore
+
+
+def forest_finds(world, room):
+    """Autonomous: while a hand lingers at the forest's edge (arriving, or
+    spending any later turn there), each turn has a good chance of turning
+    up a curio underfoot -- the same find table `gather wood` draws from,
+    just fired far more often, since a visit here is meant to reliably pay
+    off rather than leave you waiting on a rare roll."""
+    actor = world.get("you")
+    if actor is None or actor.location != room.id:
+        return
+    if world.rng.random() < FOREST_FIND_CHANCE:
+        name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
+        world.add(Entity(world.fresh_id("found"), name,
+                          _found_description(look_line, reaction),
+                          location=actor.id, portable=True,
+                          attrs={"curio": True, "cat_reaction": reaction}))
+        world.announce(f"Half-buried by the path, {name} — you pocket it.",
+                       room.id)
+
+
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
                    "patch_volunteer": patch_volunteer,
                    "bucket_state": bucket_state, "hearth_state": hearth_state,
-                   "hungering": hungering, "lamp_burning": lamp_burning})
+                   "hungering": hungering, "lamp_burning": lamp_burning,
+                   "forest_finds": forest_finds})
 
 
 def _patch_in(world, room_id):
@@ -790,6 +815,10 @@ def generate_reference():
             f"- Gathering wood yields **{WOOD_PER_GATHER}**; feeding one unit "
             f"into the hearth restores **{FUEL_PER_WOOD}** fuel -- a full "
             "night's burn, and enough to revive a spent hearth.",
+            f"- A found curio turns up **{FOUND_ITEM_CHANCE:.0%}** of the time "
+            f"on a lucky gather, but **{FOREST_FIND_CHANCE:.0%}** of the time "
+            "on any turn spent at the forest's edge -- the reliable source, "
+            "not the incidental bonus.",
             f"- If the vegetable patch stays empty for **{PATCH_VOLUNTEER_TURNS}** "
             "turns straight, one volunteer potato plant sprouts on its own -- a "
             "floor against a seedless lineage, not a routine source.",
@@ -842,8 +871,16 @@ def build_world():
         exits={"out": "yard"}))
     w.add(Entity("yard", "The Yard",
         "Long grass, wet with evening. A vegetable patch of turned soil runs "
-        "along the fence; the dark shape of a well stands near the gate.",
-        exits={"in": "hut"}))
+        "along the fence; the dark shape of a well stands near the gate. "
+        "Past the fence, a path leads off toward the forest's edge.",
+        exits={"in": "hut", "forest": "forest_edge"}))
+    forest_edge = w.add(Entity("forest_edge", "The Forest's Edge",
+        "The yard's small sounds fade out behind you. Trees close ranks "
+        "along the path here, though it opens into a narrow clearing before "
+        "the real dark begins -- the gaps between the trunks run down into "
+        "a black you don't go into. Not yet.",
+        exits={"yard": "yard"}))
+    forest_edge.attach("forest_finds")
 
     lamp = w.add(Entity("lamp", "lamp", "", location="hut",
         portable=True, attrs={"lit": False, "fuel": 0}))

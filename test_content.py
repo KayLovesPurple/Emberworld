@@ -15,6 +15,7 @@ from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
+    FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
 )
@@ -1136,6 +1137,111 @@ def test_reference_generates_and_mentions_key_things():
     for anchor in ("plant potato", "feed cat", "burning", "cat_wander"):
         assert anchor in ref, f"reference missing '{anchor}'"
     assert str(CAT_HUNGER_CAP) in ref, "numeric rules didn't render"
+
+
+# ===========================================================================
+# 8. THE FOREST'S EDGE -- v1: a doorway, not the forest. One new room off the
+#    yard that turns up curios far more reliably than a yard gather, so a
+#    hand that wants one can go get one instead of waiting on an RNG roll
+#    mid-chore. No statue, no herb, no wood-relocation, no going deeper --
+#    the dark ahead stays description-only.
+# ===========================================================================
+class _Lucky:                                # force the find roll to fire
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+class _Unlucky:                              # never let the find roll fire
+    def random(self): return 1.0
+    def choice(self, seq): return seq[0]
+
+
+def test_yard_lists_a_visible_exit_to_the_forest_edge():
+    """Regression-guard against the invisible-affordance failure: a hand
+    must be able to SEE it can go to the forest before it'll ever try."""
+    w, actor = fresh()
+    w.rng = _Unlucky()                       # keep the yard's own gather-adjacent chance out of it
+    run(w, actor, "go out")
+    seen = w.perceive(actor)
+    assert "forest" in seen.lower(), f"forest exit isn't visible: {seen!r}"
+    assert "go forest" in w.available_actions(actor)
+
+
+def test_going_to_the_forest_edge_arrives_and_offers_the_way_back():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    result = run(w, actor, "go out", "go forest")
+    assert actor.location == "forest_edge"
+    assert "FOREST" in result.upper()
+    assert "yard" in result.lower()
+    assert "go yard" in w.available_actions(actor)
+
+
+def test_lingering_at_the_forest_edge_can_turn_up_a_curio():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")         # arrive with no lucky roll yet
+    assert w.contents(actor.id) == [], "setup should start carrying nothing"
+    w.rng = _Lucky()
+    result = w.act(actor, "wait")
+    found = [e for e in w.contents(actor.id) if e.attrs.get("curio")]
+    assert len(found) == 1, f"a lucky turn at the forest's edge should add a curio: {found}"
+    name, look_line, reaction = FOUND_ITEMS[0]
+    assert found[0].name == name
+    assert found[0].description == _found_description(look_line, reaction)
+    assert name in result, f"the wait result should name the find: {result!r}"
+
+
+def test_forest_edge_find_is_not_guaranteed_every_turn():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "wait")
+    assert w.contents(actor.id) == [], "an unlucky turn shouldn't add a curio"
+
+
+def test_forest_edge_find_chance_is_more_generous_than_the_yards():
+    """Pins the design rule directly: the forest is the reliable source now,
+    the yard's incidental drop is the garnish."""
+    assert FOREST_FIND_CHANCE > FOUND_ITEM_CHANCE
+
+
+def test_forest_found_curio_behaves_like_any_other_curio():
+    """No forked curio type: something found at the forest's edge can be
+    carried home and given to the cat or set on the shelf exactly like a
+    yard-found curio."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = _Lucky()
+    run(w, actor, "wait")
+    found = next(e for e in w.contents(actor.id) if e.attrs.get("curio"))
+    w.rng = _Unlucky()
+    run(w, actor, "go yard", "go in")            # carry it back to the hut and its shelf
+    result = w.act(actor, f"place {found.name} on shelf")
+    assert found.location == w.get("shelf").id
+    assert "shelf" in result.lower()
+
+
+def test_forest_edge_has_no_further_exit_into_the_woods():
+    """Guards the creep-line: the dark ahead is description-only in v1, no
+    second room, so nobody accidentally wires one in later without noticing."""
+    w, actor = fresh()
+    forest = w.get("forest_edge")
+    assert set(forest.exits) == {"yard"}, f"unexpected exits: {forest.exits}"
+
+
+def test_forest_edge_and_a_found_curio_survive_save_load_roundtrip():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = _Lucky()
+    run(w, actor, "wait")
+    found = next(e for e in w.contents(actor.id) if e.attrs.get("curio"))
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    actor2 = w2.get("you")
+    assert actor2.location == "forest_edge"
+    carried2 = next(e for e in w2.contents(actor2.id) if e.attrs.get("curio"))
+    assert carried2.name == found.name
 
 
 # ---------------------------------------------------------------------------
