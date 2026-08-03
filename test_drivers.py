@@ -107,6 +107,31 @@ def test_existing_found_item_is_tagged_as_a_curio_on_load():
         assert loaded.get("found_1").attrs.get("curio")
 
 
+def test_existing_found_item_is_backfilled_with_its_cat_reaction_on_load():
+    """Curios found before give-to-cat existed have no cat_reaction attr yet;
+    ensure_shelf should backfill it by name so `give` works on an old save
+    without a fresh world. An unrecognised legacy name defaults to "ignores"
+    rather than crashing give-to-cat."""
+    from content import FOUND_ITEMS
+    stone_name, _, stone_reaction = next(t for t in FOUND_ITEMS if t[0] == "a smooth grey stone")
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        w, actor = fresh()
+        w.add(Entity("found_1", stone_name, "a smooth stone", location=actor.id, portable=True))
+        w.add(Entity("found_2", "a thing no longer in the table", "mysterious",
+                     location=actor.id, portable=True))
+        with open(save_path, "w") as f:
+            json.dump(w.to_data(), f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            loaded, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        assert loaded.get("found_1").attrs.get("cat_reaction") == stone_reaction
+        assert loaded.get("found_2").attrs.get("cat_reaction") == "ignores"
+
+
 def test_llm_session_log_uses_descriptive_name_and_italic_thoughts():
     """A visit gets its own Markdown record; thoughts must be visually distinct."""
     with tempfile.TemporaryDirectory() as d:
@@ -338,6 +363,53 @@ def test_tending_note_does_not_flag_a_healthy_lit_hearth_or_lamp_by_day():
     run = lambda *cmds: [w.act(actor, c) for c in cmds]
     run("light hearth", "light lamp")
     assert drv._tending_note(w) == ""
+
+
+def test_tending_note_flags_a_ripe_unharvested_crop():
+    # BUG WE HIT: "Six-Fingers" arrived with a ripe crop needing nothing else
+    # and no tending note fired, so a genuinely pressing task (harvest before
+    # the potato goes to waste) read as a quiet turn and drew the curiosity
+    # nudge instead -- exactly backwards.
+    from content import _crop_in
+    w, actor = fresh()
+    actor.location = "yard"
+    run = lambda *cmds: [w.act(actor, c) for c in cmds]
+    run("take potato", "plant potato")
+    _crop_in(w, "yard").attrs["ready"] = True
+    assert "ready to harvest" in drv._tending_note(w).lower()
+
+
+def test_tending_note_does_not_flag_a_still_growing_crop():
+    w, actor = fresh()
+    actor.location = "yard"
+    run = lambda *cmds: [w.act(actor, c) for c in cmds]
+    run("take potato", "plant potato")
+    assert drv._tending_note(w) == ""
+
+
+# ===========================================================================
+# 2b-2. CURIOSITY NUDGE -- fires on quiet turns (see above), but points at
+#     real, present scenery in the current room rather than a generic
+#     "look at something" -- concrete beats abstract, per the "Six-Fingers"
+#     case, where a hand with nothing pressing and no concrete pull instead
+#     went hunting through the journal for a stale detail to reconcile.
+# ===========================================================================
+def test_curiosity_nudge_names_hut_scenery_in_the_hut():
+    assert "shelf" in drv._curiosity_nudge("hut").lower()
+
+
+def test_curiosity_nudge_names_yard_scenery_in_the_yard():
+    nudge = drv._curiosity_nudge("yard").lower()
+    assert any(word in nudge for word in ("well", "gate", "grass", "fence"))
+
+
+def test_curiosity_nudge_differs_between_rooms():
+    assert drv._curiosity_nudge("hut") != drv._curiosity_nudge("yard")
+
+
+def test_curiosity_nudge_falls_back_gracefully_for_an_unknown_location():
+    # future rooms shouldn't crash the loop just for lacking a bespoke entry
+    assert drv._curiosity_nudge("nowhere-yet") != ""
 
 
 # ===========================================================================

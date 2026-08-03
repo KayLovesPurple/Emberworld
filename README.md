@@ -74,9 +74,14 @@ wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
 never come to harm** — that's guaranteed in the code and pinned by a test.
 Draw water from the well into the bucket, then water a planted crop to speed
 its growth. Gather fallen wood in the yard and add it to the hearth to keep the
-fire going. In the hut, a small shelf is for setting aside found curios—a
-smooth stone, feather, or other small thing worth keeping—for whoever comes
-next.
+fire going, and once in a while turn up a small found curio—a pinecone, a
+smooth stone, or some other odd little thing—alongside it. A curio can be
+carried, given to the cat (some it plays with, some it ignores, but either
+way it leaves its mark), or set on the hut's shelf for whoever comes next.
+
+Only one potato grows at a time, and that cap is important: it flattens
+the efficiency gradient that would otherwise pull the world toward
+farm-optimisation, so think hard before lifting it.
 
 ## Testing
 
@@ -122,12 +127,6 @@ encounters it, wonders, and can't resolve it, so the *journal* becomes where the
 lineage theorises and a shared myth grows around an object that means nothing.
 The restraint IS the feature. Resist every future urge to explain it.
 
-**A standing legibility fix worth doing anytime:** surface the *player's own
-hunger* in the standing perception, the way the cat's hunger already shows in its
-description. Agents feed every potato to the loud, legible cat and never cook for
-themselves because their own hunger is silent. Make it visible and a hand will
-likely finally cook and eat — closing a loop it currently always skips.
-
 **Clay — the open-material question** *(a design problem, not a quick feature).*
 Clay would be the first *open* material: a raw thing the player/agent shapes into
 whatever they intend — a teapot, a dish for the cat's potato, a jar for
@@ -145,6 +144,15 @@ building: how much must made things actually *do*?
   - **LLM-defined function** (frontier, risky): the agent describes what it made
     and the world honours it. Unbounded, hard to test — approach with great care,
     if ever.
+
+The axis that actually matters here is not safe-to-risky but *reset or
+richer* (see the calm-axis invariant). The line for functional made things
+is loop-*scaling*, not loop-*touching*. In practice the world is already
+protected: only one potato grows at a time, so watering has a hard ceiling —
+a made thing can make tending quicker but can't make it *yield more*, because
+there's no more to yield. So functional clay is welcome as long as any new
+material keeps that property: makes a chore shorter, never scales its output.
+    
 Dependencies: wants a source (forest/riverbank), firing (hearth/kiln), and pairs
 naturally with tea (a thrown teapot) and the cat (its own dish). Downstream of
 the forest and tea. Do NOT spec this like the others — it deserves its own design
@@ -175,6 +183,12 @@ scarce turns. If it ever needs anything at all, make it something trivially
 met (or self-sustaining), never a second potato-mouth. The design constraint IS
 the feature; a needy chicken is the one version not to build.
 
+Potential, but not a priority: **A standing legibility fix worth doing anytime:** surface the *player's own
+hunger* in the standing perception, the way the cat's hunger already shows in its
+description. Agents feed every potato to the loud, legible cat and never cook for
+themselves because their own hunger is silent. Make it visible and a hand will
+likely finally cook and eat — closing a loop it currently always skips.
+
 ### The wishing-statue — a wish-sink (lives in the forest, built with it)
 
 The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.
@@ -190,3 +204,18 @@ The statue threads this because the granter is diegetic. The agent isn't petitio
 **On the wishes we can't grant.** Most of the interesting ones are un-grantable — too expensive (company, the forest itself), or wrong to grant because the not-having is the point (same as the statue's own pointlessness, the crow's harmless gifts, the vetoed cat-gift). Not-granting is frequently the *right* response, not a failure: a world where every want is instantly met has no yearning left in it, and yearning is half of what makes the lineage journal move. Log the un-granted ones anyway, in a "what they reached for" note beside the journal — the same act as the sky photo or a postcard, catching the shape of a small real thing so it outlasts the moment. Mostly never actioned. Kept anyway. A keepsake, not a to-do list.
 
 **Dependency:** the forest, which is its own project. This is filed now so the design intent — especially the inert constraint — survives until then.
+
+
+### Reset or richer — the calm-axis invariant
+
+The load-bearing rule for the curio shelf and everything downstream of it (found things, and clay when it comes). Stated so it survives the next well-meaning edit, the way "the cat can never come to harm" and "the statue stays mechanically inert" are stated:
+
+**After any act with a found or made thing, ask: is the world reset to where
+it was, or is it one thing richer? Reset is a chore. Richer is the point.**
+
+- BANNED: anything that feeds a maintenance loop — a thing whose purpose is to hold off decay or make tending easier by *scaling* it. A found flint that
+  lights the fire is banned not because it "does something" but because lighting is maintenance — it just makes you better at the treadmill.
+- WELCOME: anything that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea) — both are the calm axis, because choice, not permanence, is what distinguishes them. A clay bird (pure mark) is welcome; a bowl-that-is-just-a-bowl is welcome; a made thing that merely makes an existing chore *shorter* (same result, fewer turns — buying back time for the calm axis) is welcome too.
+- The potato & the hearth are the grandfathered maintenance loops. Do not add more.
+
+The test is not "does it accomplish anything?" (that would ban clay, which we want) — it is "does its effect reset, or does it make the world richer?"

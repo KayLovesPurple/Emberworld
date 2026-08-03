@@ -103,6 +103,46 @@ Event scoping: `world.announce(msg, room_id)` is heard only in that room;
 `location` chain (so a carried lamp is still "in" your room). Use these rather
 than reinventing "which room is this in."
 
+## Found curios: reset or richer
+
+`gather wood` rarely turns up a small found object (`FOUND_ITEMS` in
+content.py: name, a bare odd-register look_line, and a `cat_reaction` of
+`"plays"` or `"ignores"`). A curio has exactly three fates, and picking one
+forecloses the others:
+
+- **Notice** — `look <thing>` shows the odd line, with a cat hint appended
+  only for a `"plays"` reaction (`_found_description`). Free, pressure-free;
+  a hand can just carry it and write about it.
+- **Give to the cat** (`give <thing> to cat`, `cmd_give`) — consumes it from
+  the pack, fires a reaction message, and turns the item into a fixed,
+  non-portable trace in the room description (`_CAT_GIVE_REACTIONS` /
+  `_CAT_GIVE_TRACES`, keyed by `cat_reaction`).
+- **Leave on the shelf** (`place`/`put <thing> on shelf`, `cmd_place`) —
+  consumes it from the pack onto the hut's display-surface shelf, listed in
+  `_shelf_description`; persists for whoever visits next.
+
+**The invariant, stated once so it doesn't drift**: after any curio action,
+the world must be one thing richer, never reset. Concretely — `give` and
+`put` may never touch a resource that feeds a maintenance loop (cat hunger,
+bucket water, firewood, hearth fuel) or advance the clock themselves; they
+may only add a durable, visible trace. The potato is the one grandfathered
+maintenance loop already in the game; nothing here should become a second
+one. `test_giving_or_placing_a_curio_touches_no_maintenance_resource` in
+test_content.py pins this by calling `cmd_give`/`cmd_place` directly rather
+than through `world.act` — going through the dispatcher would tick the
+world and let unrelated autonomy (hunger rising, fire burning down) muddy
+what the handler itself did or didn't touch.
+
+Legibility rides on the object, not the parser: a `"plays"` curio's own
+look-line ends "— the cat might bat at it", and `give`/`place` only appear
+in `available_actions` when there's a carried curio (and, for give, a cat)
+to act on — nothing to memorize.
+
+Backward compatibility: `ensure_shelf` backfills `cat_reaction` (by name
+against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
+entity from a save predating this feature, the same way it already
+backfilled the `curio` tag itself.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be
@@ -196,11 +236,23 @@ exists (each fixed a real failure we watched happen):
   chores left to do, and the agent went hunting for one (re-checking a fed
   cat, a lit hearth). `_tending_note` reuses the exact thresholds the world's
   own descriptions already key off (`CAT_MEOW_THRESHOLD`, `LAMP_LOW_FUEL`,
-  `HEARTH_LOW_FUEL`) to build a short, state-gated line — present only when
-  something genuinely needs attention. When nothing does, `_CURIOSITY_NUDGE`
-  fires in its place: exploration wins the turn precisely when there's no
-  chore competing for it, instead of a curiosity sentence being wallpaper
-  repeated every turn alongside the chores (the old failure mode).
+  `HEARTH_LOW_FUEL`) — plus a ripe, unharvested crop in the patch — to build
+  a short, state-gated line, present only when something genuinely needs
+  attention. When nothing does, `_curiosity_nudge(actor.location)` fires in
+  its place: exploration wins the turn precisely when there's no chore
+  competing for it, instead of a curiosity sentence being wallpaper repeated
+  every turn alongside the chores (the old failure mode). **Gotcha we hit,
+  round two**: gating alone wasn't enough. The "Six-Fingers" run arrived to
+  an almost-fully-tended world, had one genuinely quiet stretch, and — with
+  only an abstract "look at something you haven't tried" on offer — spent
+  three of its ten turns instead reconciling a predecessor's stale, offhand
+  journal detail ("the bucket was sitting at 5") against the actual world.
+  A gated-but-generic nudge still loses to the nearest *concrete* thing in
+  view, and that thing was the journal, not the world. The fix: `_QUIET_NUDGES`
+  gives each room its own line naming real, present scenery (the curio
+  shelf, the well's dark throat…) instead of a content-free exhortation — a
+  named detail is a target, "be curious" is not — with `_CURIOSITY_NUDGE_FALLBACK`
+  covering any room without a bespoke entry.
 - **Optional self-naming** (`_ask_for_name`, once, before the turn loop):
   every entry used to be anonymous and attribution-less, so hands couldn't
   be told apart, and journal entries had picked up a copied `-- a visitor`

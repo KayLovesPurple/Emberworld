@@ -10,7 +10,7 @@ build_world(). See ARCHITECTURE.md for the full recipe.
 """
 
 from world import World, Entity, VERBS, FREE_VERBS, BEHAVIORS, SAVE, SAVE_VERSION, DAY_LENGTH
-from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat
+from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +387,44 @@ def cmd_place(world, actor, arg):
     return f"You set {_the(e.name)} on the shelf."
 
 
+# The give-to-cat reaction and the durable trace it leaves behind, keyed by
+# the curio's own cat_reaction. The gesture matters regardless of which
+# fires -- see cmd_give's docstring and the reset-or-richer invariant it
+# guards: either way the thing is gone from the pack and the world is one
+# thing richer, never reset.
+_CAT_GIVE_REACTIONS = {
+    "plays": "{cap} pounces on {thing}, batting it round before losing interest.",
+    "ignores": "{cap} sniffs {thing} once, unimpressed, and stalks off.",
+}
+_CAT_GIVE_TRACES = {
+    "plays": "{name}, well-battered after a game with the cat",
+    "ignores": "{name}, given to the cat and roundly ignored",
+}
+
+
+def cmd_give(world, actor, arg):
+    """give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark."""
+    if not arg:
+        return "Give what to the cat? e.g.  give pinecone to cat"
+    cat = world.get("cat")
+    if cat is None or cat.location != actor.location:
+        return "There's no cat here to give that to."
+    item_name = arg.lower().strip()
+    if " to " in item_name:
+        item_name = item_name.split(" to ", 1)[0].strip()
+    e = find_visible(world, actor, item_name)
+    if not e or e.location != actor.id:
+        return f"You aren't carrying any '{arg}'."
+    if not e.attrs.get("curio"):
+        return "That's not something to give the cat like this -- food goes through `feed cat`."
+    reaction = e.attrs.get("cat_reaction", "ignores")
+    cap, thing, name = _cat_cap(cat), _the(e.name), e.name
+    e.location = actor.location
+    e.portable = False
+    e.description = _CAT_GIVE_TRACES[reaction].format(name=name)
+    return _CAT_GIVE_REACTIONS[reaction].format(cap=cap, thing=thing)
+
+
 def cmd_inventory(world, actor, arg):
     """inventory -- list what you're carrying and how hungry you feel."""
     names = _carried_names(world, actor)
@@ -520,16 +558,34 @@ WOOD_PER_GATHER = 3          # a little more than one night's worth, to stock up
 FUEL_PER_WOOD = HEARTH_FUEL_START    # one add wood restores a full night's fuel
 
 # Small, purely cosmetic finds a lucky gather can turn up alongside the wood.
-# No mechanics attached -- they're just there to reward the "worth
-# experimenting" nudge in the system prompt with something concrete to find.
+# Each is (name, look_line, cat_reaction): look_line is a bare, odd, specific
+# fragment -- not a summary sentence -- assembled into a full description by
+# _found_description below. cat_reaction ("plays"/"ignores") drives both the
+# look-line's optional cat hint and what `give <thing> to cat` does with it;
+# see the invariant at cmd_give: this shelf/give pairing is the world's calm
+# axis, and neither affordance may touch a maintenance resource (fire, food,
+# water) -- only ever leave the world one durable thing richer.
 FOUND_ITEMS = (
-    ("a smooth grey stone", "a stone worn smooth and round, cool in your palm"),
-    ("a jay's feather", "a jay's feather, blue-black and sharply barred"),
-    ("a curl of birch bark", "a curl of birch bark, pale and papery"),
-    ("a knot of bleached twine", "a bit of old twine, sun-bleached and knotted"),
-    ("a sprig of dried moss", "a sprig of moss, dried to a soft green-grey"),
+    ("a pinecone", "tight and resinous, one scale broken", "plays"),
+    ("a small brown feather", "barred, downy at the quill", "plays"),
+    ("a smooth grey stone", "river-worn, a pale band round its middle", "ignores"),
+    ("a curl of blue glass", "sea-frosted, edges gone soft", "ignores"),
+    ("a bone button", "four holes, one thread still knotted through", "ignores"),
+    ("a jay's feather", "blue-black, sharply barred, one edge gone soft", "plays"),
+    ("a knot of bleached twine", "sun-bleached, knotted twice, frayed at both ends", "plays"),
+    ("a curl of birch bark", "curled tight, papery, peels if you're not careful", "ignores"),
+    ("a sprig of dried moss", "dry and soft, crumbles a little at the edges", "ignores"),
 )
 FOUND_ITEM_CHANCE = 0.15
+
+
+def _found_description(look_line, reaction):
+    """Assemble a curio's full description from its bare look_line -- adding
+    the cat hint only for a cat_reaction of "plays", since only those finds
+    are worth a cat's attention."""
+    if reaction == "plays":
+        return f"{look_line} — the cat might bat at it."
+    return f"{look_line}."
 
 
 def cmd_gather(world, actor, arg):
@@ -540,10 +596,11 @@ def cmd_gather(world, actor, arg):
     result = (f"You push through the long grass and gather fallen branches. "
               f"You now have {actor.attrs['wood']} wood.")
     if world.rng.random() < FOUND_ITEM_CHANCE:
-        name, desc = world.rng.choice(FOUND_ITEMS)
-        world.add(Entity(world.fresh_id("found"), name, desc,
+        name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
+        world.add(Entity(world.fresh_id("found"), name,
+                          _found_description(look_line, reaction),
                           location=actor.id, portable=True,
-                          attrs={"curio": True}))
+                          attrs={"curio": True, "cat_reaction": reaction}))
         result += f"\nSomething catches your eye in the grass: {name}."
     return result
 
@@ -661,8 +718,8 @@ VERBS.update({
     "plant": cmd_plant, "harvest": cmd_harvest,
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
-    "draw": cmd_draw, "water": cmd_water, "place": cmd_place,
-    "gather": cmd_gather,
+    "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
+    "gather": cmd_gather, "give": cmd_give,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
@@ -739,6 +796,9 @@ def generate_reference():
 # ---------------------------------------------------------------------------
 # The world, assembled fresh (used only when there's no save to inherit).
 # ---------------------------------------------------------------------------
+_FOUND_ITEM_REACTIONS = {name: reaction for name, _, reaction in FOUND_ITEMS}
+
+
 def ensure_shelf(world):
     """Add shelf/curio metadata to an older saved world when needed."""
     for entity in world.entities.values():
@@ -746,6 +806,11 @@ def ensure_shelf(world):
         # meaning of curios discovered before the explicit tag was introduced.
         if entity.id.startswith("found_"):
             entity.attrs.setdefault("curio", True)
+            # give-to-cat needs a reaction; a name no longer in the table
+            # (renamed or retired since this curio was found) still needs
+            # give to work, so it defaults to "ignores" rather than crashing.
+            entity.attrs.setdefault(
+                "cat_reaction", _FOUND_ITEM_REACTIONS.get(entity.name, "ignores"))
     shelf = world.get("shelf")
     if shelf is None:
         shelf = world.add(Entity("shelf", "shelf",

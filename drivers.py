@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp
+from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -389,10 +389,34 @@ def _ask_for_name(client, model, think, rng=None):
 # wallpaper/nudge-fatigue problem it was meant to fix. Showing up only on a
 # turn where nothing needs tending lets exploration win the quiet moments
 # instead of competing with a chore for attention.
-_CURIOSITY_NUDGE = (
+#
+# Gated-but-generic wasn't enough on its own, though: a hand with nothing
+# pressing and only an abstract "look at something" still defaulted to the
+# nearest concrete thing in view -- which turned out to be a predecessor's
+# offhand journal detail, not the world itself (the "Six-Fingers" run: three
+# turns spent reconciling a stale "bucket holds 5" aside, the one *specific*
+# thing on offer). So each room gets its own line naming real, present
+# scenery -- a named detail is a target, "be curious" is not.
+_QUIET_NUDGES = {
+    "hut": ("\n(Nothing needs tending right now -- the curio shelf, the iron "
+            "knife, the old woodsmoke smell in these walls: something in "
+            "here might reward a closer look.)"),
+    "yard": ("\n(Nothing needs tending right now -- the gate, the long "
+             "grass, the well's dark throat: something out here might "
+             "reward a closer look.)"),
+}
+_CURIOSITY_NUDGE_FALLBACK = (
     "\n(Nothing needs tending right now -- a good moment to look closely at "
     "something you haven't tried, or wander somewhere new.)"
 )
+
+
+def _curiosity_nudge(location):
+    """The quiet-turn nudge for the given room id, naming real scenery there
+    instead of a generic exhortation. Falls back to the old generic line for
+    any location without a bespoke entry -- there are only two rooms today,
+    but a future room should degrade gracefully, not crash the turn loop."""
+    return _QUIET_NUDGES.get(location, _CURIOSITY_NUDGE_FALLBACK)
 
 
 def _tending_note(world):
@@ -400,7 +424,11 @@ def _tending_note(world):
     now -- reusing the exact thresholds the world's own descriptions already
     key off (CAT_MEOW_THRESHOLD, LAMP_LOW_FUEL, HEARTH_LOW_FUEL), so it only
     speaks up when there's something real to tend, never as a standing
-    checklist recited regardless of state."""
+    checklist recited regardless of state. A ripe, unharvested crop counts
+    too: without it, a hand that arrives to nothing but a crop waiting to be
+    lifted reads as having nothing to do, and the curiosity nudge below
+    fires instead of the one thing that's actually pressing (see the
+    "Six-Fingers" case in the commit that added this check)."""
     notes = []
     cat = world.get("cat")
     if cat is not None and cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
@@ -415,6 +443,9 @@ def _tending_note(world):
     if hearth is not None and hearth.attrs.get("lit") \
             and hearth.attrs.get("fuel", 0) <= HEARTH_LOW_FUEL:
         notes.append("the hearth is running low")
+    crop = _crop_in(world, "yard")
+    if crop is not None and crop.attrs.get("ready"):
+        notes.append("a crop in the patch is ready to harvest")
     if not notes:
         return ""
     return "\n(Right now: " + "; ".join(notes) + ".)"
@@ -454,7 +485,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                          "is changing. Free actions like look/read never pass time "
                          "-- use `wait` to let the world move, or do something new.)")
             elif not tending:
-                nudge = _CURIOSITY_NUDGE
+                nudge = _curiosity_nudge(actor.location)
             else:
                 nudge = ""
             known = ""

@@ -229,6 +229,9 @@ class World:
             acts.append(f"pet {cat.name}")
             if any("potato" in e.name for e in carried):
                 acts.append(f"feed {cat.name}")
+            for e in carried:
+                if e.attrs.get("curio"):
+                    acts.append(f"give {e.name} to {cat.name}")
             if not cat.attrs.get("given_name"):
                 acts.append("name cat <name>")
         return acts

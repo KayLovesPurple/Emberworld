@@ -25,8 +25,9 @@
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
-- `place` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf.
+- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf.
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
+- `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors

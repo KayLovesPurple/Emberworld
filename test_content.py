@@ -14,7 +14,7 @@ from world import World, Entity
 from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
-    HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS,
+    HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
 )
@@ -409,11 +409,31 @@ def test_gather_wood_can_turn_up_a_found_item():
     result = w.act(actor, "gather wood")
     found = [e for e in w.contents(actor.id) if e.location == actor.id]
     assert len(found) == 1, f"a lucky gather should add exactly one found item: {found}"
-    name, desc = FOUND_ITEMS[0]
-    assert found[0].name == name and found[0].description == desc
+    name, look_line, reaction = FOUND_ITEMS[0]
+    assert found[0].name == name
+    assert found[0].description == _found_description(look_line, reaction)
     assert found[0].portable, "a found item must be carryable"
     assert found[0].attrs.get("curio"), "a found item should be marked as a curio"
+    assert found[0].attrs.get("cat_reaction") == reaction
     assert name in result, f"result didn't name the find: {result!r}"
+
+
+def test_found_items_table_is_well_formed():
+    """Guards the data itself: every curio needs a unique name and a cat
+    reaction the give-to-cat verb actually knows how to handle."""
+    names = [name for name, _, _ in FOUND_ITEMS]
+    assert len(names) == len(set(names)), "duplicate curio name in FOUND_ITEMS"
+    for name, look_line, reaction in FOUND_ITEMS:
+        assert reaction in ("plays", "ignores"), f"{name!r} has an unknown cat_reaction {reaction!r}"
+        assert look_line == look_line.strip() and not look_line.endswith("."), \
+            f"{name!r}'s look_line should be a bare fragment, not pre-punctuated: {look_line!r}"
+
+
+def test_found_item_look_line_ends_with_a_cat_hint_only_when_cat_eligible():
+    plays_line = _found_description("tight and resinous, one scale broken", "plays")
+    ignores_line = _found_description("river-worn, a pale band round its middle", "ignores")
+    assert plays_line == "tight and resinous, one scale broken — the cat might bat at it."
+    assert ignores_line == "river-worn, a pale band round its middle."
 
 
 def test_gather_wood_found_item_is_rare_not_guaranteed():
@@ -428,12 +448,17 @@ def test_gather_wood_found_item_is_rare_not_guaranteed():
     assert actor.attrs["wood"] == WOOD_PER_GATHER, "wood itself must still be gathered"
 
 
+def _stone_tuple():
+    return next(t for t in FOUND_ITEMS if t[0] == "a smooth grey stone")
+
+
 def test_shelf_displays_a_found_item_and_lets_a_later_hand_retrieve_it():
     """The shelf is persistent, legible storage rather than a decorative prop."""
     w, actor = fresh()
     assert "curio shelf" in w.get("shelf").description, \
         "the shelf should make its purpose legible to a visiting agent"
-    stone_name, stone_description = FOUND_ITEMS[0]
+    stone_name, stone_look_line, stone_reaction = _stone_tuple()
+    stone_description = _found_description(stone_look_line, stone_reaction)
     stone = w.add(Entity(w.fresh_id("found"), stone_name, stone_description,
                          location=actor.id, portable=True))
 
@@ -454,7 +479,8 @@ def test_taking_a_found_curio_does_not_double_the_article():
     carried-item lines read naturally), but a verb response that prepends its
     own 'the' must strip it first, or it reads 'the a smooth grey stone'."""
     w, actor = fresh()
-    name, desc = FOUND_ITEMS[0]           # "a smooth grey stone"
+    name, look_line, reaction = _stone_tuple()   # "a smooth grey stone"
+    desc = _found_description(look_line, reaction)
     w.add(Entity(w.fresh_id("found"), name, desc,
                  location="yard", portable=True, attrs={"curio": True}))
     run(w, actor, "go out")
@@ -464,7 +490,8 @@ def test_taking_a_found_curio_does_not_double_the_article():
 
 def test_dropping_a_found_curio_does_not_double_the_article():
     w, actor = fresh()
-    name, desc = FOUND_ITEMS[0]
+    name, look_line, reaction = _stone_tuple()
+    desc = _found_description(look_line, reaction)
     w.add(Entity(w.fresh_id("found"), name, desc,
                  location=actor.id, portable=True, attrs={"curio": True}))
     result = w.act(actor, f"drop {name}").splitlines()[0]
@@ -473,11 +500,147 @@ def test_dropping_a_found_curio_does_not_double_the_article():
 
 def test_placing_a_found_curio_on_the_shelf_does_not_double_the_article():
     w, actor = fresh()
-    name, desc = FOUND_ITEMS[0]
+    name, look_line, reaction = _stone_tuple()
+    desc = _found_description(look_line, reaction)
     w.add(Entity(w.fresh_id("found"), name, desc,
                  location=actor.id, portable=True, attrs={"curio": True}))
     result = w.act(actor, f"place {name} on shelf").splitlines()[0]
     assert result == "You set the smooth grey stone on the shelf.", f"double article: {result!r}"
+
+
+# ===========================================================================
+# GIVE TO CAT -- the shelf's counterpart affordance. Every found curio has a
+# cat_reaction ("plays"/"ignores"); either way, giving it consumes it from
+# the pack and leaves a durable trace in the room, same as the shelf. Reset
+# or richer: neither affordance may touch a maintenance resource (fire,
+# food, water) -- see test_giving_or_placing_a_curio_touches_no_maintenance_
+# resource below, which pins that line.
+# ===========================================================================
+def _curio_tuple(name):
+    return next(t for t in FOUND_ITEMS if t[0] == name)
+
+
+def _add_curio(world, actor, name, location=None):
+    n, look_line, reaction = _curio_tuple(name)
+    return world.add(Entity(world.fresh_id("found"), n,
+                             _found_description(look_line, reaction),
+                             location=location or actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": reaction}))
+
+
+def test_look_at_a_carried_curio_shows_its_odd_line_and_cat_hint():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    result = w.act(actor, "look pinecone")
+    assert result == "tight and resinous, one scale broken — the cat might bat at it."
+
+
+def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_leaves_a_trace():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    result = w.act(actor, "give pinecone to cat")
+    assert result.splitlines()[0] == \
+        "The cat pounces on the pinecone, batting it round before losing interest."
+    assert not any(e.name == "a pinecone" and e.location == actor.id
+                   for e in w.contents(actor.id)), "giving it away must consume it from the pack"
+    assert "well-battered after a game with the cat" in w.perceive(actor)
+
+
+def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():
+    w, actor = fresh()
+    _add_curio(w, actor, "a smooth grey stone")
+    result = w.act(actor, "give stone to cat")
+    assert result.splitlines()[0] == \
+        "The cat sniffs the smooth grey stone once, unimpressed, and stalks off."
+    assert "given to the cat and roundly ignored" in w.perceive(actor)
+
+
+def test_give_trace_persists_across_a_save_load_roundtrip():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert "well-battered after a game with the cat" in w2.perceive(w2.get("you"))
+
+
+def test_putting_a_curio_on_the_shelf_via_the_put_alias():
+    w, actor = fresh()
+    _add_curio(w, actor, "a bone button")
+    result = w.act(actor, "put bone button on shelf")
+    assert "shelf" in result.lower()
+    assert any(e.name == "a bone button" for e in w.contents("shelf"))
+
+
+def test_gather_can_still_yield_a_find_after_giving_one_away():
+    class Lucky:
+        def random(self): return 0.0
+        def choice(self, seq): return seq[0]
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    run(w, actor, "go out")
+    w.rng = Lucky()
+    result = w.act(actor, "gather wood")
+    assert "Something catches your eye" in result, "a curio must stay refindable after one is given away"
+
+
+def test_give_redirects_a_non_curio_to_feed():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato")
+    w.get("cat").location = actor.location   # the cat wanders on its own; pin it here
+    result = w.act(actor, "give potato to cat")
+    assert "feed" in result.lower()
+    assert any("potato" in e.name for e in w.contents(actor.id)), \
+        "a redirected give must not consume the item"
+
+
+def test_give_requires_a_cat_in_the_room():
+    w, actor = fresh()          # actor starts in the hut; move the cat out
+    _add_curio(w, actor, "a pinecone")
+    w.get("cat").location = "yard"
+    result = w.act(actor, "give pinecone to cat")
+    assert "no cat here" in result.lower()
+
+
+def test_give_requires_carrying_the_item():
+    w, actor = fresh()
+    result = w.act(actor, "give pinecone to cat")
+    assert "aren't carrying" in result.lower()
+
+
+def test_giving_or_placing_a_curio_touches_no_maintenance_resource():
+    """The invariant that guards the whole feature: a found-thing affordance
+    may only ever leave the world richer (a durable trace), never touch a
+    resource that feeds a maintenance loop (cat hunger, water, firewood,
+    fire-life), and must not itself advance the clock. Calls the handler
+    directly rather than through world.act -- going through act() would tick
+    the world and let unrelated autonomous behaviors (hunger rising, fire
+    burning down) muddy exactly what THIS handler did or didn't touch."""
+    from content import cmd_give, cmd_place
+    handlers = {"give": (cmd_give, "to cat"), "put": (cmd_place, "on shelf")}
+    for verb, item in (("give", "a pinecone"), ("give", "a smooth grey stone"),
+                       ("put", "a bone button")):
+        w, actor = fresh()
+        cat = w.get("cat")
+        cat.location = actor.location
+        cat.attrs["hunger"] = 5
+        hearth = w.get("hearth")
+        hearth.attrs["lit"] = True
+        hearth.attrs["fuel"] = 10
+        actor.attrs["wood"] = 4
+        w.get("bucket").attrs["water"] = 2
+        time_before, day_before = w.time, w.day()
+
+        _add_curio(w, actor, item)
+        fn, suffix = handlers[verb]
+        fn(w, actor, f"{item.split(' ', 1)[1]} {suffix}")
+
+        assert cat.attrs["hunger"] == 5, "give/put must not touch cat hunger"
+        assert w.get("bucket").attrs["water"] == 2, "must not touch the bucket"
+        assert actor.attrs["wood"] == 4, "must not touch firewood"
+        assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10, "must not touch fire-life"
+        assert w.time == time_before, "the handler itself must not advance the clock"
+        assert w.day() == day_before
 
 
 def test_actions_lists_the_current_options_without_passing_time():
@@ -488,6 +651,21 @@ def test_actions_lists_the_current_options_without_passing_time():
     assert w.time == before, "asking for actions should be free"
     assert "Available actions:" in result and "go out" in result
     assert "place knife on shelf" in result, "contextual shelf action was omitted"
+
+
+def test_actions_offers_give_to_cat_when_carrying_a_curio_alongside_the_cat():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    actions = w.available_actions(actor)
+    assert "give a pinecone to cat" in actions, "give-to-cat wasn't offered"
+
+
+def test_actions_does_not_offer_give_to_cat_without_the_cat_present():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.get("cat").location = "yard"     # actor stays in the hut
+    actions = w.available_actions(actor)
+    assert not any(a.startswith("give ") for a in actions)
 
 
 def test_wood_and_hearth_fuel_survive_save_load_roundtrip():
