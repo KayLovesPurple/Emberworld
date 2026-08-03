@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, VERBS, FREE_VERBS
+from content import build_world, ensure_shelf, VERBS, FREE_VERBS
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -73,6 +73,7 @@ def load_or_build(quiet=False):
     if os.path.exists(SAVE):
         try:
             w = World.load(SAVE)
+            ensure_shelf(w)
             actor = w.get("you")
             if actor:
                 if not quiet:
@@ -111,9 +112,12 @@ HELP = """\
 Verbs:  look [thing] / go <exit> / take / drop / inventory
         light <thing> / snuff <thing> / kindle lamp / wait
         plant potato / harvest / cook potato / eat <thing>
-        feed cat / pet cat / write <note> / read journal / save / quit
-The hearth cooks; kindle the tin lamp from a lit hearth for portable light
-(kindle lamp / light lamp are the same thing). Night is dark without a flame.
+        draw water / water crop / gather wood / add wood
+        feed cat / pet cat / place <thing> on shelf / write <note> / read journal / save / quit
+        actions -- show what you can do from here right now (free)
+The hearth cooks; add gathered wood to keep it burning. Draw water from the
+well to speed a growing crop. Kindle the tin lamp from a lit hearth for portable
+light (kindle lamp / light lamp are the same thing). Night is dark without a flame.
 There's a cat -- it wanders, it likes the fire lit, and it can be fed a potato.
 The world (and your journal) persist between runs. Leave a note for whoever comes next."""
 

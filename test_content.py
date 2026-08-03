@@ -412,6 +412,7 @@ def test_gather_wood_can_turn_up_a_found_item():
     name, desc = FOUND_ITEMS[0]
     assert found[0].name == name and found[0].description == desc
     assert found[0].portable, "a found item must be carryable"
+    assert found[0].attrs.get("curio"), "a found item should be marked as a curio"
     assert name in result, f"result didn't name the find: {result!r}"
 
 
@@ -425,6 +426,37 @@ def test_gather_wood_found_item_is_rare_not_guaranteed():
     w.act(actor, "gather wood")
     assert w.contents(actor.id) == [], "an unlucky gather shouldn't add a found item"
     assert actor.attrs["wood"] == WOOD_PER_GATHER, "wood itself must still be gathered"
+
+
+def test_shelf_displays_a_found_item_and_lets_a_later_hand_retrieve_it():
+    """The shelf is persistent, legible storage rather than a decorative prop."""
+    w, actor = fresh()
+    assert "curio shelf" in w.get("shelf").description, \
+        "the shelf should make its purpose legible to a visiting agent"
+    stone_name, stone_description = FOUND_ITEMS[0]
+    stone = w.add(Entity(w.fresh_id("found"), stone_name, stone_description,
+                         location=actor.id, portable=True))
+
+    actions = w.available_actions(actor)
+    assert f"place {stone_name} on shelf" in actions, "shelf action wasn't offered"
+    result = w.act(actor, f"place {stone_name} on shelf")
+    shelf = w.get("shelf")
+    assert stone.location == shelf.id and "set the" in result.lower()
+    assert stone_name in w.perceive(actor), "displayed item isn't visible in the hut"
+    assert f"take {stone_name}" in w.available_actions(actor), "retrieval wasn't offered"
+
+    result = w.act(actor, f"take {stone_name}")
+    assert stone.location == actor.id and "you take" in result.lower()
+
+
+def test_actions_lists_the_current_options_without_passing_time():
+    w, actor = fresh()
+    w.get("knife").location = actor.id
+    before = w.time
+    result = w.act(actor, "actions")
+    assert w.time == before, "asking for actions should be free"
+    assert "Available actions:" in result and "go out" in result
+    assert "place knife on shelf" in result, "contextual shelf action was omitted"
 
 
 def test_wood_and_hearth_fuel_survive_save_load_roundtrip():
@@ -797,19 +829,18 @@ def test_fresh_world_seed_journal_has_the_three_widened_entries():
     w, actor = fresh()
     entries = w.get("journal").attrs["entries"]
     assert entries == [
-        "[Day 1] To whoever comes next: the hearth cooks, and the lamp "
+        "[a while ago] To whoever comes next: the hearth cooks, and the lamp "
         "lights — kindle it at the hearth before the dark comes. Plant "
-        "early; the potatoes take their time. There's a cat — feed it a "
-        "potato when it's hungry, and it likes the fire lit. I left before "
-        "the harvest. — someone before you",
-        "[Day 2] Fed the cat, kept a potato in the ground, planted another "
-        "before I left. Carry the rhythm on.",
-        "[Day 3] Kept the fire fed and the cat fed — in that order, or the "
-        "cat will let you know. Quiet few days, and I grew unexpectedly "
-        "fond of the cat. Once or twice of an evening I caught myself "
-        "wishing for a bit of company that wasn't four-legged — but "
-        "you're a kind of company, reading this, even if we never share "
-        "the room. Passing it on. — the last hand",
+        "early; the potatoes take their time. There's a cat: feed it a "
+        "potato when it's hungry, and it likes the fire lit.",
+        "[some days later] Fed the cat, kept a potato in the ground, "
+        "planted another before I left. Carry the rhythm on.",
+        "[Day 1] Kept the fire fed and the cat fed — in that order, or the "
+        "cat will let you know. Quiet few days, and I grew unexpectedly fond "
+        "of the cat. Once or twice of an evening I caught myself wishing for "
+        "a bit of company that wasn't four-legged; but you're a kind of "
+        "company, reading this, even if we never share the room. I left "
+        "before the harvest. — someone before you",
     ], f"seed journal entries don't match: {entries!r}"
 
 

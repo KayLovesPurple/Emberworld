@@ -70,6 +70,37 @@ def test_cat_is_drawn_to_a_lit_hearth():
     assert cat.location == "hut", "cat ignored the warm room next door"
 
 
+def test_cat_departure_and_arrival_messages_match_the_actual_direction():
+    """BUG (reported from a real playtest transcript): the cat's move
+    messages were hardcoded 'src always says slips out, dest always says
+    pads in' regardless of which room was actually which -- so a yard->hut
+    move announced 'slips out' in the yard (backwards: it was coming
+    inside) and a hut->yard move announced 'pads in' in the yard (also
+    backwards: it was going outside). The wording must key off the real
+    direction instead."""
+    from cat import _cat_go
+    w, actor = fresh()
+    cat = w.get("cat")
+
+    cat.location = "hut"
+    w.log = []
+    _cat_go(w, cat, "out")                     # hut -> yard
+    assert cat.location == "yard"
+    heard_hut = next(m for (m, where) in w.log if where == "hut")
+    heard_yard = next(m for (m, where) in w.log if where == "yard")
+    assert heard_hut == "The cat slips out through the doorway."
+    assert heard_yard == "The cat pads out into the yard, tail high."
+
+    cat.location = "yard"
+    w.log = []
+    _cat_go(w, cat, "in")                      # yard -> hut
+    assert cat.location == "hut"
+    heard_yard2 = next(m for (m, where) in w.log if where == "yard")
+    heard_hut2 = next(m for (m, where) in w.log if where == "hut")
+    assert heard_yard2 == "The cat slips in through the doorway."
+    assert heard_hut2 == "The cat pads in, tail high."
+
+
 def test_cat_meow_is_heard_only_in_its_own_room():
     """Scoping stress test with a non-player mover: a hungry cat in the yard
     meows in the yard, never the hut."""

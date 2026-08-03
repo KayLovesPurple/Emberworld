@@ -12,6 +12,7 @@
 - `take` / `get` / `grab` -- take <thing> -- pick up a portable object.
 - `drop` -- drop <thing> -- set down something you're carrying.
 - `inventory` / `i` -- inventory -- list what you're carrying and how hungry you feel.  _(free -- costs no time)_
+- `actions` -- actions -- list the things you can do from here right now.  _(free -- costs no time)_
 - `wait` / `z` -- wait -- let one tick pass while you do nothing.
 - `light` / `kindle` -- light <thing> -- set a fuel source burning (the hearth cooks); light lamp / kindle lamp lights the tin lamp from a lit hearth.
 - `snuff` -- snuff <thing> -- put out a lit flame.
@@ -24,6 +25,7 @@
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
+- `place` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf.
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 

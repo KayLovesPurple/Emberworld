@@ -15,6 +15,7 @@ import tempfile
 from datetime import datetime
 
 import drivers as drv
+from world import Entity
 from _test_helpers import fresh
 
 
@@ -51,6 +52,58 @@ def test_stale_save_file_is_set_aside_not_crashed():
             drv.SAVE = orig
         assert w.day() == 1, "should have started a fresh world"
         assert os.path.exists(save_path + ".bak"), "old save wasn't preserved"
+
+
+def test_existing_save_is_given_the_new_shelf():
+    """A live lineage should gain the shelf without needing a fresh world."""
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        data = fresh()[0].to_data()
+        data["entities"] = [e for e in data["entities"] if e["id"] != "shelf"]
+        with open(save_path, "w") as f:
+            json.dump(data, f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            w, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        shelf = w.get("shelf")
+        assert shelf is not None and shelf.location == "hut"
+
+
+def test_existing_shelf_receives_the_clearer_purpose_text_on_load():
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        data = fresh()[0].to_data()
+        shelf_data = next(e for e in data["entities"] if e["id"] == "shelf")
+        shelf_data["description"] = "a narrow wooden shelf, empty but for a little dust"
+        with open(save_path, "w") as f:
+            json.dump(data, f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            w, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        assert "curio shelf" in w.get("shelf").description
+
+
+def test_existing_found_item_is_tagged_as_a_curio_on_load():
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        w, actor = fresh()
+        w.add(Entity("found_1", "a smooth grey stone", "a smooth stone",
+                     location=actor.id, portable=True))
+        with open(save_path, "w") as f:
+            json.dump(w.to_data(), f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            loaded, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        assert loaded.get("found_1").attrs.get("curio")
 
 
 def test_llm_session_log_uses_descriptive_name_and_italic_thoughts():

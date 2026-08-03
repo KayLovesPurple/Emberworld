@@ -42,14 +42,23 @@ def _cat_description(cat):
 
 
 def _cat_go(world, cat, direction):
+    """Move the cat one room, along the given exit direction ('in'/'out').
+    The departure/arrival lines key off that direction rather than being
+    hardcoded to always say 'out'/'in' -- otherwise a yard->hut move reads
+    as the cat going 'out' when it's actually coming inside, and vice versa."""
     src = cat.location
     room = world.get(src)
     dest = room.exits.get(direction)
     if not dest:
         return
     cat.location = dest
-    world.announce(f"{_cat_cap(cat)} slips out through the doorway.", src)
-    world.announce(f"{_cat_cap(cat)} pads in, tail high.", dest)
+    cap = _cat_cap(cat)
+    if direction == "out":
+        world.announce(f"{cap} slips out through the doorway.", src)
+        world.announce(f"{cap} pads out into the yard, tail high.", dest)
+    else:
+        world.announce(f"{cap} slips in through the doorway.", src)
+        world.announce(f"{cap} pads in, tail high.", dest)
 
 
 def cat_wander(world, cat):

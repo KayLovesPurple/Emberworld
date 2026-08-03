@@ -173,7 +173,7 @@ class World:
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
         from content import _crop_in, _patch_in, find_visible
-        acts = ["look", "wait"]
+        acts = ["look", "actions", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
             acts.append(f"go {d}")
@@ -199,6 +199,12 @@ class World:
             acts.append("add wood")
         for e in carried:
             acts.append(f"drop {e.name}")
+        shelf = next((e for e in here if e.attrs.get("display_surface")), None)
+        if shelf:
+            for e in carried:
+                acts.append(f"place {e.name} on shelf")
+            for e in self.contents(shelf.id):
+                acts.append(f"take {e.name}")
         for e in here + carried:
             if "lit" in e.attrs:
                 acts.append(("snuff " if e.attrs["lit"] else "light ") + e.name)

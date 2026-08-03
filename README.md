@@ -62,6 +62,8 @@ local transcripts are ignored by Git.
 ## The rules, in brief
 
 Type `help` in-game for the verb list, or see `REFERENCE.md` for everything.
+Type `actions` at any point to see the actions currently available to you; it
+is free and does not advance time.
 The essentials: the **hearth** is what cooks; the tin **lamp** is your only
 portable light, kindled (or re-kindled, to top it back up) from a lit hearth.
 Night is pitch dark without the lamp burning — in the dark you can only
@@ -70,6 +72,11 @@ day to find the lamp before the first night falls. Potatoes must be planted,
 grown, harvested, and cooked before they'll feed you. There's a cat: it
 wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
 never come to harm** — that's guaranteed in the code and pinned by a test.
+Draw water from the well into the bucket, then water a planted crop to speed
+its growth. Gather fallen wood in the yard and add it to the hearth to keep the
+fire going. In the hut, a small shelf is for setting aside found curios—a
+smooth stone, feather, or other small thing worth keeping—for whoever comes
+next.
 
 ## Testing
 

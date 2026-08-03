@@ -200,7 +200,10 @@ def find_visible(world, actor, name, prefer=None):
     name = name.lower().strip()
     if not name:
         return None
-    matches = [e for e in world.contents(actor.location) + world.contents(actor.id)
+    here = world.contents(actor.location)
+    displayed = [item for surface in here if surface.attrs.get("display_surface")
+                 for item in world.contents(surface.id)]
+    matches = [e for e in here + world.contents(actor.id) + displayed
                if e.id != actor.id and (name in e.name.lower() or name == e.id)]
     if not matches:
         return None
@@ -347,6 +350,32 @@ def cmd_drop(world, actor, arg):
     return f"You set down the {e.name}."
 
 
+def _shelf_description(world, shelf):
+    """Describe the shelf as a small, visible record of what hands kept."""
+    items = world.contents(shelf.id)
+    if not items:
+        return "a narrow curio shelf, empty but for a little dust"
+    return ("a narrow curio shelf, holding: "
+            + ", ".join(e.name for e in items))
+
+
+def cmd_place(world, actor, arg):
+    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf."""
+    shelf = next((e for e in world.contents(actor.location)
+                  if e.attrs.get("display_surface")), None)
+    if not shelf:
+        return "There's nowhere here to set that out. The shelf is in the hut."
+    item_name = arg.lower().strip()
+    if item_name.endswith(" on shelf"):
+        item_name = item_name[:-len(" on shelf")].strip()
+    e = find_visible(world, actor, item_name)
+    if not e or e.location != actor.id:
+        return f"You aren't carrying any '{arg}'."
+    e.location = shelf.id
+    shelf.description = _shelf_description(world, shelf)
+    return f"You set the {e.name} on the shelf."
+
+
 def cmd_inventory(world, actor, arg):
     """inventory -- list what you're carrying and how hungry you feel."""
     names = _carried_names(world, actor)
@@ -357,6 +386,12 @@ def cmd_inventory(world, actor, arg):
     if not names:
         return head + "\nYour hands are empty."
     return head + "\nYou are carrying:\n" + "\n".join(f"  - {n}" for n in names)
+
+
+def cmd_actions(world, actor, arg):
+    """actions -- list the things you can do from here right now."""
+    return "Available actions:\n" + "\n".join(
+        f"  - {action}" for action in world.available_actions(actor))
 
 
 def cmd_wait(world, actor, arg):
@@ -496,7 +531,8 @@ def cmd_gather(world, actor, arg):
     if world.rng.random() < FOUND_ITEM_CHANCE:
         name, desc = world.rng.choice(FOUND_ITEMS)
         world.add(Entity(world.fresh_id("found"), name, desc,
-                          location=actor.id, portable=True))
+                          location=actor.id, portable=True,
+                          attrs={"curio": True}))
         result += f"\nSomething catches your eye in the grass: {name}."
     return result
 
@@ -598,19 +634,19 @@ VERBS.update({
     "go": cmd_go, "move": cmd_go,
     "take": cmd_take, "get": cmd_take, "grab": cmd_take,
     "drop": cmd_drop,
-    "inventory": cmd_inventory, "i": cmd_inventory,
+    "inventory": cmd_inventory, "i": cmd_inventory, "actions": cmd_actions,
     "wait": cmd_wait, "z": cmd_wait,
     "light": cmd_light, "kindle": cmd_light, "snuff": cmd_snuff,
     "plant": cmd_plant, "harvest": cmd_harvest,
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
-    "draw": cmd_draw, "water": cmd_water,
+    "draw": cmd_draw, "water": cmd_water, "place": cmd_place,
     "gather": cmd_gather,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
 })
-FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "read", "save"})
+FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
 
 
 # ---------------------------------------------------------------------------
@@ -682,6 +718,29 @@ def generate_reference():
 # ---------------------------------------------------------------------------
 # The world, assembled fresh (used only when there's no save to inherit).
 # ---------------------------------------------------------------------------
+def ensure_shelf(world):
+    """Add shelf/curio metadata to an older saved world when needed."""
+    for entity in world.entities.values():
+        # Found items have always used this generated id prefix. Preserve the
+        # meaning of curios discovered before the explicit tag was introduced.
+        if entity.id.startswith("found_"):
+            entity.attrs.setdefault("curio", True)
+    shelf = world.get("shelf")
+    if shelf is None:
+        shelf = world.add(Entity("shelf", "shelf",
+            "a narrow curio shelf, empty but for a little dust",
+            location="hut",
+            attrs={"display_surface": True}))
+    else:
+        shelf.attrs["display_surface"] = True
+        # The first shelf release used a plainer description. Refresh that
+        # generated wording when an older save is loaded, while leaving any
+        # future, hand-authored shelf description alone.
+        if shelf.description.startswith("a narrow wooden shelf"):
+            shelf.description = _shelf_description(world, shelf)
+    return shelf
+
+
 def build_world():
     w = World()
     w.add(Entity("hut", "A One-Room Hut",
@@ -711,20 +770,21 @@ def build_world():
     journal = w.add(Entity("journal", "journal",
         "a worn journal, its cover soft with handling", location="hut",
         portable=True, attrs={"entries": [
-            "[Day 1] To whoever comes next: the hearth cooks, and the lamp "
+            "[a while ago] To whoever comes next: the hearth cooks, and the lamp "
             "lights — kindle it at the hearth before the dark comes. Plant "
-            "early; the potatoes take their time. There's a cat — feed it a "
-            "potato when it's hungry, and it likes the fire lit. I left before "
-            "the harvest. — someone before you",
-            "[Day 2] Fed the cat, kept a potato in the ground, planted another "
-            "before I left. Carry the rhythm on.",
-            "[Day 3] Kept the fire fed and the cat fed — in that order, or the "
-            "cat will let you know. Quiet few days, and I grew unexpectedly "
-            "fond of the cat. Once or twice of an evening I caught myself "
-            "wishing for a bit of company that wasn't four-legged — but "
-            "you're a kind of company, reading this, even if we never share "
-            "the room. Passing it on. — the last hand",
+            "early; the potatoes take their time. There's a cat: feed it a "
+            "potato when it's hungry, and it likes the fire lit.",
+            "[some days later] Fed the cat, kept a potato in the ground, "
+            "planted another before I left. Carry the rhythm on.",
+            "[Day 1] Kept the fire fed and the cat fed — in that order, or the "
+            "cat will let you know. Quiet few days, and I grew unexpectedly fond "
+            "of the cat. Once or twice of an evening I caught myself wishing for "
+            "a bit of company that wasn't four-legged; but you're a kind of "
+            "company, reading this, even if we never share the room. I left "
+            "before the harvest. — someone before you",
         ]}))
+
+    ensure_shelf(w)
 
     build_cat(w)
 
