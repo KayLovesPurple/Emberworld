@@ -201,6 +201,28 @@ exists (each fixed a real failure we watched happen):
   fires in its place: exploration wins the turn precisely when there's no
   chore competing for it, instead of a curiosity sentence being wallpaper
   repeated every turn alongside the chores (the old failure mode).
+- **Optional self-naming** (`_ask_for_name`, once, before the turn loop):
+  every entry used to be anonymous and attribution-less, so hands couldn't
+  be told apart, and journal entries had picked up a copied `-- a visitor`
+  sign-off tic from nowhere in particular. One small call, framed as naming
+  a character who lives here (not "who are you really" — a fantasy handle,
+  not introspection) via `_NAMING_PROMPT`, lets a hand choose a name for its
+  visit; `_sanitize_name` strips it to a short plain token and rejects
+  anything that doesn't clean up into one (a refusal, an explanation, no
+  reply at all), so naming is genuinely optional, never forced. The result
+  is stored as `world.hand_name` — a plain runtime attribute, like
+  `world.rng`/`world.strict`, deliberately **not** part of `to_data()`, so
+  it never leaks into a save or bleeds into a later human session that
+  never sets it.
+- **Attribution lives in the stamp, not a sign-off** (`_day_stamp`, in
+  content.py): both `cmd_write` and `_leave_signoff` build their journal
+  stamp through this one shared helper — `[Day N]`, or `[Day N, Name]` when
+  `world.hand_name` is set — so the format can't drift between a hand's own
+  `write` and the automatic closing note. Since attribution is automatic,
+  the system prompt tells hands they needn't date or sign entries
+  themselves, which also curbs a doubling bug we saw in transcripts: a hand
+  copying the room header (`[Day 4, dusk]`) into its own note on top of the
+  harness's own `[Day 4]` stamp.
 
 Model and thinking config (see `_ask_claude`), current as of Sonnet 5:
 

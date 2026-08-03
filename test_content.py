@@ -833,6 +833,25 @@ def test_write_refusal_uses_generic_fallback_for_an_unmapped_location():
     assert "not here with you" in result.lower(), f"fallback clause missing: {result!r}"
 
 
+def test_write_stamps_plain_day_when_the_world_has_no_hand_name():
+    w, actor = fresh()
+    result = w.act(actor, "write hello")
+    assert "ink dries" in result.lower()
+    entry = w.get("journal").attrs["entries"][-1]
+    assert entry.startswith("[Day 1] hello"), f"unexpected stamp: {entry!r}"
+
+
+def test_write_stamps_day_and_name_when_the_world_has_a_hand_name():
+    """The LLM driver sets world.hand_name once at session start (see
+    drivers.py); cmd_write's stamp must pick it up so attribution lands in
+    the stamp itself rather than needing a manual sign-off."""
+    w, actor = fresh()
+    w.hand_name = "Wren"
+    w.act(actor, "write hello")
+    entry = w.get("journal").attrs["entries"][-1]
+    assert entry.startswith("[Day 1, Wren] hello"), f"unexpected stamp: {entry!r}"
+
+
 def test_carried_journal_persists_across_a_reload_as_the_same_actor():
     """The journal is safe by construction: nothing drops inventory on
     departure, and the persistent 'you' entity keeps carrying it across
@@ -866,12 +885,12 @@ def test_fresh_world_seed_journal_has_the_three_widened_entries():
         "potato when it's hungry, and it likes the fire lit.",
         "[some days later] Fed the cat, kept a potato in the ground, "
         "planted another before I left. Carry the rhythm on.",
-        "[Day 1] Kept the fire fed and the cat fed — in that order, or the "
-        "cat will let you know. Quiet few days, and I grew unexpectedly fond "
-        "of the cat. Once or twice of an evening I caught myself wishing for "
-        "a bit of company that wasn't four-legged; but you're a kind of "
-        "company, reading this, even if we never share the room. I left "
-        "before the harvest. — someone before you",
+        "[Day 1, Wren] Kept the fire fed and the cat fed — in that order, or "
+        "the cat will let you know. Quiet few days, and I grew unexpectedly "
+        "fond of the cat. Once or twice of an evening I caught myself "
+        "wishing for a bit of company that wasn't four-legged; but you're a "
+        "kind of company, reading this, even if we never share the room. I "
+        "left before the harvest.",
     ], f"seed journal entries don't match: {entries!r}"
 
 
@@ -882,6 +901,17 @@ def test_seed_journal_has_no_candle_reference():
     entries = w.get("journal").attrs["entries"]
     assert not any("candle" in e.lower() for e in entries), \
         f"a seed entry still mentions the retired candle: {entries!r}"
+
+
+def test_seed_journal_has_no_sign_off_tic():
+    """Regression: the dated seed used to end '-- someone before you', which
+    hands were copying into their own entries as '-- a visitor'. Now that
+    attribution lives in the stamp (see cmd_write), no seed should model
+    manual signing."""
+    w, actor = fresh()
+    entries = w.get("journal").attrs["entries"]
+    assert not any(e.rstrip().endswith("you") and "—" in e for e in entries), \
+        f"a seed entry still models a manual sign-off: {entries!r}"
     assert "lamp" in entries[0].lower() and "kindle" in entries[0].lower(), \
         f"day 1 should point at the lamp and kindling: {entries[0]!r}"
 

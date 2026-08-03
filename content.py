@@ -610,6 +610,16 @@ def _journal_missing_message(world):
     return "You've no journal to hand — it's not here with you."
 
 
+def _day_stamp(world):
+    """The auto-prepended journal stamp: '[Day N]', or '[Day N, Name]' when
+    the current hand has named itself (see drivers.py's llm_agent, which
+    sets world.hand_name once at session start). Shared by cmd_write and the
+    LLM sign-off so the format can't drift between the two paths -- and so
+    attribution lives in the stamp itself, with nothing for a hand to sign."""
+    name = getattr(world, "hand_name", None)
+    return f"[Day {world.day()}, {name}]" if name else f"[Day {world.day()}]"
+
+
 def cmd_write(world, actor, arg):
     """write <note> -- add a line to the shared journal for future visitors."""
     journal = find_visible(world, actor, "journal")
@@ -617,7 +627,7 @@ def cmd_write(world, actor, arg):
         return _journal_missing_message(world)
     if not arg:
         return "Write what? e.g.  write planted two potatoes near the fence."
-    journal.attrs.setdefault("entries", []).append(f"[Day {world.day()}] {arg}")
+    journal.attrs.setdefault("entries", []).append(f"{_day_stamp(world)} {arg}")
     return "You write in the journal. The ink dries slowly. It will keep."
 
 
@@ -787,12 +797,12 @@ def build_world():
             "potato when it's hungry, and it likes the fire lit.",
             "[some days later] Fed the cat, kept a potato in the ground, "
             "planted another before I left. Carry the rhythm on.",
-            "[Day 1] Kept the fire fed and the cat fed — in that order, or the "
-            "cat will let you know. Quiet few days, and I grew unexpectedly fond "
-            "of the cat. Once or twice of an evening I caught myself wishing for "
-            "a bit of company that wasn't four-legged; but you're a kind of "
-            "company, reading this, even if we never share the room. I left "
-            "before the harvest. — someone before you",
+            "[Day 1, Wren] Kept the fire fed and the cat fed — in that order, "
+            "or the cat will let you know. Quiet few days, and I grew "
+            "unexpectedly fond of the cat. Once or twice of an evening I "
+            "caught myself wishing for a bit of company that wasn't "
+            "four-legged; but you're a kind of company, reading this, even "
+            "if we never share the room. I left before the harvest.",
         ]}))
 
     ensure_shelf(w)

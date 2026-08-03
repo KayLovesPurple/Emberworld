@@ -157,6 +157,17 @@ def test_signoff_always_leaves_a_note():
     assert entries[-1].startswith("[Day "), "note wasn't day-stamped"
 
 
+def test_signoff_stamps_the_hand_name_when_the_world_has_one():
+    """Attribution lives in the stamp now, not a manual sign-off -- the
+    closing note's stamp must pick up world.hand_name exactly like cmd_write
+    does, via the same shared _day_stamp."""
+    w, actor = fresh()
+    w.hand_name = "Nine"
+    drv._leave_signoff(_FakeClient("A quiet visit. -- tester"), w, actor)
+    entries = w.get("journal").attrs["entries"]
+    assert entries[-1].startswith("[Day 1, Nine]"), f"unexpected stamp: {entries[-1]!r}"
+
+
 def test_signoff_falls_back_when_the_api_fails():
     class Boom:
         def __init__(self):
@@ -210,14 +221,17 @@ def test_signoff_cat_hunger_hint_uses_the_current_meow_threshold():
 
 
 class _RecordingClient:
-    """Captures the kwargs of the last create() call, returns a fixed reply."""
+    """Captures the kwargs of the last create() call; returns reply_text
+    (default "wait", override before calling for tests that need a specific
+    reply, e.g. self-naming)."""
     def __init__(self):
         self.last = None
+        self.reply_text = "wait"
         self.messages = self
 
     def create(self, **kw):
         self.last = kw
-        return _FakeMsg("wait")
+        return _FakeMsg(self.reply_text)
 
 
 def test_thinking_display_modes_are_requested_correctly():
@@ -325,6 +339,59 @@ def test_tending_note_does_not_flag_a_healthy_lit_hearth_or_lamp_by_day():
     assert drv._tending_note(w) == ""
 
 
+# ===========================================================================
+# 2c. SELF-NAMING -- optional, captured once at session start via one small
+#     call. Never forced: a refusal, an empty reply, or anything that
+#     doesn't clean up into a short plain handle just falls back to an
+#     unnamed [Day N] stamp.
+# ===========================================================================
+def test_sanitize_name_accepts_a_plain_name():
+    assert drv._sanitize_name("Wren") == "Wren"
+    assert drv._sanitize_name("Ashfall") == "Ashfall"
+
+
+def test_sanitize_name_strips_quotes_and_whitespace():
+    assert drv._sanitize_name('  "Nine"\n') == "Nine"
+
+
+def test_sanitize_name_takes_only_the_name_not_trailing_explanation():
+    assert drv._sanitize_name("Nine. That's what I'll go by.") == "Nine"
+
+
+def test_sanitize_name_rejects_empty_or_missing():
+    assert drv._sanitize_name("") is None
+    assert drv._sanitize_name("   ") is None
+    assert drv._sanitize_name(None) is None
+
+
+def test_sanitize_name_rejects_anything_too_long():
+    assert drv._sanitize_name("A Very Long Wandering Name Indeed") is None
+
+
+def test_sanitize_name_keeps_apostrophes_and_hyphens_drops_other_punctuation():
+    assert drv._sanitize_name("D'Artagnan!!!") == "D'Artagnan"
+    assert drv._sanitize_name("Ashfall-Ember") == "Ashfall-Ember"
+
+
+def test_ask_for_name_returns_a_sanitized_name_from_the_client():
+    c = _RecordingClient()
+    c.reply_text = "Wren"
+    name = drv._ask_for_name(c, drv.LLM_MODEL, think=False)
+    assert name == "Wren"
+    assert "name" in c.last["messages"][0]["content"].lower()
+
+
+def test_ask_for_name_falls_back_to_none_when_the_api_fails():
+    class Boom:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            raise RuntimeError("no network")
+
+    assert drv._ask_for_name(Boom(), drv.LLM_MODEL, think=False) is None
+
+
 def test_recent_block_lists_history_for_a_memoryless_agent():
     from collections import deque
     assert "nothing yet" in drv._recent_block(deque())
@@ -387,6 +454,17 @@ def test_system_prompt_frames_tending_and_curiosity_as_coequal():
         "curiosity must no longer be framed as outside the goals"
     assert "partly tending" in prompt and "partly looking" in prompt, \
         "tending and looking closely should read as coequal halves of one disposition"
+
+
+def test_system_prompt_tells_hands_entries_are_already_dated_for_them():
+    """Entries are auto-stamped with '[Day N]' (and a name, if the hand's
+    chosen one) by the harness -- a hand that doesn't know that tends to
+    copy the room header into its own note (the observed '[Day 4] [Day 4,
+    dusk] ...' doubling) or sign off manually. One line should head that off."""
+    prompt = drv.LLM_SYSTEM_PROMPT.lower()
+    assert "date" in prompt or "dated" in prompt, \
+        "should tell hands entries are already dated for them"
+    assert "sign" in prompt, "should tell hands they needn't sign entries themselves"
 
 
 def test_journal_excerpt_caps_length_but_keeps_seed_entry():

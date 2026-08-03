@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL
+from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -311,12 +311,55 @@ LLM_SYSTEM_PROMPT = (
     "this world holds more than any list of tasks, and unfamiliar objects, "
     "untried actions, and features of the landscape are worth "
     "experimenting with. What you learn, leave in the journal for those "
-    "who follow. IMPORTANT: looking, reading, and checking inventory are "
+    "who follow -- entries are dated (and named, if you chose one) for you, "
+    "so just write the note itself: no need to add a date or sign it. "
+    "IMPORTANT: looking, reading, and checking inventory are "
     "FREE and do NOT pass time -- only actions like wait, go, plant, cook "
     "advance the world; to let a crop grow or the night pass, use `wait` "
     "(repeatedly). Reply with EXACTLY ONE command from the allowed list. "
     "For 'write', include your note text. Nothing else."
 )
+
+_NAMING_PROMPT = (
+    "Before you begin: give yourself a name for your time here -- anything "
+    "you like, plain (Tom, Wren) or strange (Ashfall, Nine). Reply with "
+    "just the name, nothing else."
+)
+
+
+def _sanitize_name(raw):
+    """Turn a naming reply into a short, plain display name, or None if it
+    doesn't clean up into one -- naming is optional, never forced, so
+    anything that isn't clearly just a name (a refusal, an explanation, no
+    reply at all) simply falls back to an unnamed stamp."""
+    if not raw or not raw.strip():
+        return None
+    line = raw.strip().splitlines()[0].strip().strip("\"'")
+    for stop in (".", ",", ";", "!", "?"):
+        if stop in line:
+            line = line.split(stop)[0]
+    name = "".join(c for c in line if c.isalnum() or c in " '-").strip()
+    name = " ".join(name.split())              # collapse internal whitespace
+    if not name or len(name) > 20:
+        return None
+    return name
+
+
+def _ask_for_name(client, model, think):
+    """One small call before the turn loop: let the hand name itself, framed
+    as naming a character who lives here (not "who are you really") so it
+    reads as a fantasy handle, not introspection. Any failure or unusable
+    reply just means an unnamed [Day N] stamp -- see _sanitize_name."""
+    try:
+        reply = _ask_claude(
+            client,
+            "You're about to spend some time as a character living in a "
+            "small persistent text world.",
+            _NAMING_PROMPT, model, think)
+    except Exception:
+        return None
+    return _sanitize_name(reply)
+
 
 # Fires on a per-turn basis (see _tending_note below), not baked into the
 # standing system prompt above -- the old curiosity sentence was resent
@@ -369,7 +412,9 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
     think_note = "thinking" if think else "no-think"
-    print(f"(Someone arrives -- {w.timestr()}. {turns} turns to spend. "
+    w.hand_name = _ask_for_name(client, model, think)   # optional; None if declined/unusable
+    who = w.hand_name or "Someone"
+    print(f"({who} arrives -- {w.timestr()}. {turns} turns to spend. "
           f"[{model}, {think_note}])\n")
 
     system = LLM_SYSTEM_PROMPT
@@ -479,4 +524,4 @@ def _leave_signoff(client, w, actor, model=None, think=True, did=None):
     except Exception:
         note = ""
     note = note.strip().strip('"') or "A quiet visit. Nothing much changed. -- someone passing through"
-    journal.attrs.setdefault("entries", []).append(f"[Day {w.day()}] {note}")
+    journal.attrs.setdefault("entries", []).append(f"{_day_stamp(w)} {note}")
