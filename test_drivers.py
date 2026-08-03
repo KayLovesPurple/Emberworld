@@ -274,6 +274,57 @@ def test_stuck_detection_spots_repeated_no_op_looks_but_not_waiting():
     assert not drv._looks_stuck(w), "waiting is how time passes -- must not be flagged"
 
 
+# ===========================================================================
+# 2b. TENDING VS CURIOSITY -- chore-urgency is surfaced per-turn only when
+#     it's actually true (reusing the same thresholds the world's own
+#     descriptions key off), rather than recited as a standing goal list
+#     regardless of state. On a turn where nothing needs tending, a curiosity
+#     nudge fires instead -- so the freed-up quiet turns into something.
+# ===========================================================================
+def test_tending_note_is_empty_when_nothing_needs_attention():
+    w, actor = fresh()
+    assert drv._tending_note(w) == ""
+
+
+def test_tending_note_flags_a_hungry_cat():
+    from cat import CAT_MEOW_THRESHOLD
+    w, actor = fresh()
+    w.get("cat").attrs["hunger"] = CAT_MEOW_THRESHOLD
+    assert "cat is hungry" in drv._tending_note(w).lower()
+
+
+def test_tending_note_flags_dark_with_no_lamp_lit():
+    w, actor = fresh()
+    while w.phase() not in ("dusk", "night"):
+        w.act(actor, "wait")
+    assert "lamp" in drv._tending_note(w).lower()
+
+
+def test_tending_note_flags_a_low_lamp():
+    from content import LAMP_LOW_FUEL
+    w, actor = fresh()
+    run = lambda *cmds: [w.act(actor, c) for c in cmds]
+    run("light hearth", "light lamp")
+    w.get("lamp").attrs["fuel"] = LAMP_LOW_FUEL
+    assert "lamp is running low" in drv._tending_note(w).lower()
+
+
+def test_tending_note_flags_a_low_hearth():
+    from content import HEARTH_LOW_FUEL
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    hearth.attrs["lit"] = True
+    hearth.attrs["fuel"] = HEARTH_LOW_FUEL
+    assert "hearth is running low" in drv._tending_note(w).lower()
+
+
+def test_tending_note_does_not_flag_a_healthy_lit_hearth_or_lamp_by_day():
+    w, actor = fresh()
+    run = lambda *cmds: [w.act(actor, c) for c in cmds]
+    run("light hearth", "light lamp")
+    assert drv._tending_note(w) == ""
+
+
 def test_recent_block_lists_history_for_a_memoryless_agent():
     from collections import deque
     assert "nothing yet" in drv._recent_block(deque())
@@ -322,6 +373,20 @@ def test_system_prompt_encourages_experimentation_without_naming_features():
     assert "free" in prompt and "do not pass time" in prompt, \
         "the time rule must still be present"
     assert "one command" in prompt, "the one-command format rule must still be present"
+
+
+def test_system_prompt_frames_tending_and_curiosity_as_coequal():
+    """The old prompt put chores under a salient 'Goal:' label and curiosity
+    in a hedged, concessive aside ('this world holds more than your goals
+    name') -- grammatically demoting it. Chores and looking-closely must now
+    read as two equally-weighted halves of one disposition, not a goal list
+    plus an optional extra."""
+    prompt = drv.LLM_SYSTEM_PROMPT.lower()
+    assert "goal:" not in prompt, "chores must no longer be framed as a goal list"
+    assert "more than your goals" not in prompt, \
+        "curiosity must no longer be framed as outside the goals"
+    assert "partly tending" in prompt and "partly looking" in prompt, \
+        "tending and looking closely should read as coequal halves of one disposition"
 
 
 def test_journal_excerpt_caps_length_but_keeps_seed_entry():

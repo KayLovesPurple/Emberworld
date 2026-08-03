@@ -177,16 +177,30 @@ exists (each fixed a real failure we watched happen):
 - **The time rule in the system prompt**: the agent can't deduce that looking is
   free and only `wait`/`go`/etc. advance time, and can't remember being told — so
   we state it every turn. This broke the "wait by looking" deadlock.
-- **A standing nudge toward curiosity** (`LLM_SYSTEM_PROMPT`, once, not
-  per-turn): as the world grows we keep adding objects and actions a goal list
-  never names (a well, a bucket…). An agent that treats its stated goals and
-  its allowed-actions list as the whole universe never experiments, so new
-  features go undiscovered — and we can't enumerate every feature in the
-  prompt, it won't scale. So the standing instructions carry one generic
-  sentence encouraging the agent to try unfamiliar objects or actions it
-  notices, and to leave what it learns in the journal, so a discovery becomes
-  part of the lineage instead of being rediscovered (or missed) by every
-  visitor after it.
+- **Tending and looking-closely, framed as coequal, not goal-vs-extra**
+  (`LLM_SYSTEM_PROMPT`): as the world grows we keep adding objects and actions
+  a chore list never names (a well, a bucket…), and an agent that treats a
+  stated goal list as the whole universe never experiments. The prompt used to
+  put chores under a salient `Goal:` label and curiosity in a hedged aside
+  ("this world holds more than your goals name") — which grammatically
+  demoted it, and runs bore that out: agents obsessed over the cat and the
+  fire and almost never explored, even though the nudge was right there. The
+  fix wasn't adding a stronger nudge; it was rewriting the disposition so
+  tending and looking closely read as two equally-weighted halves of one
+  sentence ("partly tending... and partly looking closely..."), and moving
+  the actual nudging out of the standing prompt entirely — see the next bullet.
+- **Chore-urgency, surfaced per-turn only when it's true** (`_tending_note`):
+  the system prompt no longer recites "keep a light, feed the cat" every
+  single turn regardless of state — that's a static prompt resent unchanged
+  on every stateless call, so a tended world still read as a checklist with
+  chores left to do, and the agent went hunting for one (re-checking a fed
+  cat, a lit hearth). `_tending_note` reuses the exact thresholds the world's
+  own descriptions already key off (`CAT_MEOW_THRESHOLD`, `LAMP_LOW_FUEL`,
+  `HEARTH_LOW_FUEL`) to build a short, state-gated line — present only when
+  something genuinely needs attention. When nothing does, `_CURIOSITY_NUDGE`
+  fires in its place: exploration wins the turn precisely when there's no
+  chore competing for it, instead of a curiosity sentence being wallpaper
+  repeated every turn alongside the chores (the old failure mode).
 
 Model and thinking config (see `_ask_claude`), current as of Sonnet 5:
 

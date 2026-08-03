@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, VERBS, FREE_VERBS
+from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -303,21 +303,56 @@ def _looks_stuck(history, n=3):
 # real (or fake) API call.
 LLM_SYSTEM_PROMPT = (
     "You are someone living in a small text world that persists between "
-    "visitors -- and you have no memory of past turns, so trust what "
-    "the world and the journal tell you. Goal: keep a light through "
-    "the night, grow and cook a potato, eat when hungry. There's a cat "
-    "-- feed it if it's hungry, pet it if you like. Read the journal "
-    "early. IMPORTANT: looking, reading, and checking inventory are "
-    "FREE and do NOT pass time -- only actions like wait, go, plant, "
-    "cook advance the world. To let a crop grow or the night pass, use "
-    "`wait` (repeatedly). This world holds more than your goals name -- if "
-    "you notice an object or an available action you haven't tried, an "
-    "unfamiliar item or a feature of the landscape, it's worth "
-    "experimenting; the world sometimes rewards curiosity, and what you "
-    "learn you can leave in the journal for those who follow. Reply with "
-    "EXACTLY ONE command from the allowed list. For 'write', include your "
-    "note text. Nothing else."
+    "visitors -- you have no memory of past turns, so trust what the world "
+    "and the journal tell you, and read the journal early; it carries what "
+    "past hands learned about living here. Living here is partly tending -- "
+    "a light kept through the night, a potato grown and cooked, a cat "
+    "who'll let you know if it's hungry -- and partly looking closely: "
+    "this world holds more than any list of tasks, and unfamiliar objects, "
+    "untried actions, and features of the landscape are worth "
+    "experimenting with. What you learn, leave in the journal for those "
+    "who follow. IMPORTANT: looking, reading, and checking inventory are "
+    "FREE and do NOT pass time -- only actions like wait, go, plant, cook "
+    "advance the world; to let a crop grow or the night pass, use `wait` "
+    "(repeatedly). Reply with EXACTLY ONE command from the allowed list. "
+    "For 'write', include your note text. Nothing else."
 )
+
+# Fires on a per-turn basis (see _tending_note below), not baked into the
+# standing system prompt above -- the old curiosity sentence was resent
+# unchanged every single turn regardless of state, which is exactly the
+# wallpaper/nudge-fatigue problem it was meant to fix. Showing up only on a
+# turn where nothing needs tending lets exploration win the quiet moments
+# instead of competing with a chore for attention.
+_CURIOSITY_NUDGE = (
+    "\n(Nothing needs tending right now -- a good moment to look closely at "
+    "something you haven't tried, or wander somewhere new.)"
+)
+
+
+def _tending_note(world):
+    """A short, state-gated reminder of what actually needs attention right
+    now -- reusing the exact thresholds the world's own descriptions already
+    key off (CAT_MEOW_THRESHOLD, LAMP_LOW_FUEL, HEARTH_LOW_FUEL), so it only
+    speaks up when there's something real to tend, never as a standing
+    checklist recited regardless of state."""
+    notes = []
+    cat = world.get("cat")
+    if cat is not None and cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
+        notes.append("the cat is hungry")
+    lamp = world.get("lamp")
+    if lamp is not None:
+        if lamp.attrs.get("lit") and lamp.attrs.get("fuel", 0) <= LAMP_LOW_FUEL:
+            notes.append("the lamp is running low")
+        elif not lamp.attrs.get("lit") and world.phase() in ("dusk", "night"):
+            notes.append("dark's here (or coming) and the lamp isn't lit")
+    hearth = world.get("hearth")
+    if hearth is not None and hearth.attrs.get("lit") \
+            and hearth.attrs.get("fuel", 0) <= HEARTH_LOW_FUEL:
+        notes.append("the hearth is running low")
+    if not notes:
+        return ""
+    return "\n(Right now: " + "; ".join(notes) + ".)"
 
 
 def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True):
@@ -346,16 +381,20 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
         for i in range(turns):
             turns_left = turns - i
             actions = w.available_actions(actor)
-            nudge = ""
+            tending = _tending_note(w)
             if _looks_stuck(history):
                 nudge = ("\n(You keep repeating the same free action and nothing "
                          "is changing. Free actions like look/read never pass time "
                          "-- use `wait` to let the world move, or do something new.)")
+            elif not tending:
+                nudge = _CURIOSITY_NUDGE
+            else:
+                nudge = ""
             known = ""
             if journal_text is not None:
                 known = ("\nThe journal (you've already read it, it won't change) "
                          f"says:\n{journal_text}")
-            prompt = (f"{w.perceive(actor)}{known}\n\n{_recent_block(history)}{nudge}"
+            prompt = (f"{w.perceive(actor)}{known}{tending}\n\n{_recent_block(history)}{nudge}"
                       f"\n\nTurns left this visit: {turns_left}.\n\nAllowed:\n"
                       + "\n".join(actions) + "\n\nYour command:")
             try:
