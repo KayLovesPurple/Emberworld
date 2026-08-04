@@ -87,7 +87,10 @@ than the yard's incidental luck. A curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark), or
 set on the hut's shelf for whoever comes next. The forest's edge also has
 its own `listen`: a chosen, unpressured turn that just returns a bit of
-atmosphere and changes nothing — no reward, ever, on purpose.
+atmosphere and changes nothing — no reward, ever, on purpose. The yard (and
+the forest's edge) offer `watch clouds` in the same spirit, reading the sky
+instead of the trees — it steps back at night, when there's nothing up
+there to see.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -222,7 +225,7 @@ After any act with a found or made thing, ask: **is the world reset to where it 
 That's the rule of thumb, and it catches most cases. Where it's unclear, the deeper test underneath it is chosen or forced: a forced maintenance loop — effort spent under pressure (hunger, decay) whose only reward is the absence of a bad outcome — is the grim thing. A freely chosen act, done for the pleasure of the turn itself, is the calm axis, whether or not it leaves a mark.
 
 - BANNED: anything that feeds a forced maintenance loop — a thing whose purpose is to hold off decay or scale the tending of it. A found flint that lights the fire is banned not because it "does something" but because lighting is forced maintenance; it just makes you better at the treadmill.
-- WELCOME: anything freely chosen that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea, `listen`ing at the forest's edge) — both are the calm axis, because choice, not permanence, is what distinguishes them.
+- WELCOME: anything freely chosen that makes the world feel a little better, provided it doesn't scale a maintenance loop. It may leave a durable mark (a made bird, a pinecone in the cat's corner) or leave nothing at all (petting the cat, a cup of tea, `listen`ing at the forest's edge, `watch`ing clouds in the yard) — both are the calm axis, because choice, not permanence, is what distinguishes them.
 - The potato and the hearth are the grandfathered forced loops. Do not add more.
 
 The test is not "does it accomplish anything?" (that would ban clay, which we want), nor even "does it reset?" (that would ban tea and petting, which we also want) — it is whether the act is freely chosen or forced.

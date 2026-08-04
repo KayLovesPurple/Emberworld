@@ -16,6 +16,7 @@ from content import (
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
     FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
+    WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
 )
@@ -1343,6 +1344,95 @@ def test_listen_returns_varied_lines_not_always_the_same_one():
     w.rng = Cycle()
     seen = {cmd_listen(w, actor, "") for _ in range(len(LISTEN_LINES))}
     assert seen == set(LISTEN_LINES), "listen should draw from its full line pool"
+
+
+# ===========================================================================
+# WATCH CLOUDS -- the yard's (and forest's edge's) calm affordance, listen's
+# sibling. Same shape, same invariant: a chosen, unpressured turn that
+# changes nothing. The one difference is it reads the sky, so it's withdrawn
+# outright at night rather than describing a fixed thing every time.
+# ===========================================================================
+def test_watch_clouds_is_offered_and_cued_in_the_yard():
+    """Legibility, both signals: listed in actions, and cued in room text."""
+    w, actor = fresh()
+    result = run(w, actor, "go out")
+    assert "watch clouds" in w.available_actions(actor)
+    assert "cloud" in result.lower(), f"no cue in the room text: {result!r}"
+
+
+def test_watch_clouds_is_also_available_at_the_forest_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    assert "watch clouds" in w.available_actions(actor)
+
+
+def test_watch_clouds_is_not_available_in_the_hut():
+    w, actor = fresh()
+    assert "watch clouds" not in w.available_actions(actor)
+    result = w.act(actor, "watch")
+    assert "sky" in result.lower()
+
+
+def test_watch_clouds_touches_no_world_state():
+    """The same never-break constraint as listen: no reward, no state, no
+    accumulation of any kind -- only the clock advances."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    before = w.to_data()
+    cmd_watch_clouds(w, actor, "")
+    after = w.to_data()
+    assert before == after, "watch clouds must not change anything, ever"
+
+
+def test_watch_clouds_costs_a_turn_through_the_normal_dispatch():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    t0 = w.time
+    w.act(actor, "watch")
+    assert w.time == t0 + 1, "watch clouds should cost exactly one turn"
+
+
+def test_watch_clouds_returns_varied_lines_from_the_current_phases_pool():
+    class Cycle:                             # walk the line pool in order
+        def __init__(self):
+            self.i = 0
+        def choice(self, seq):
+            v = seq[self.i % len(seq)]
+            self.i += 1
+            return v
+    w, actor = fresh()
+    run(w, actor, "go out")
+    assert w.phase() in ("dawn", "day"), f"expected daylight, got {w.phase()}"
+    pool = WATCH_CLOUD_LINES[w.phase()]
+    w.rng = Cycle()
+    seen = {cmd_watch_clouds(w, actor, "") for _ in range(len(pool))}
+    assert seen == set(pool), "watch clouds should draw from the current phase's full pool"
+
+
+def test_watch_clouds_line_matches_dusk_once_dusk_falls():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    while w.phase() != "dusk":
+        w.act(actor, "wait")
+    line = cmd_watch_clouds(w, actor, "")
+    assert line in WATCH_CLOUD_LINES["dusk"], \
+        f"a dusk call returned a line outside the dusk pool: {line!r}"
+
+
+def test_watch_clouds_is_withdrawn_at_night():
+    """Withdrawal, not a forced night line: the affordance quietly disappears
+    when it wouldn't make sense, the same call the world already makes for
+    darkness elsewhere."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    assert "watch clouds" not in w.available_actions(actor)
+    result = w.act(actor, "watch")
+    assert result == WATCH_CLOUDS_NIGHT_MSG
+    all_lines = [ln for pool in WATCH_CLOUD_LINES.values() for ln in pool]
+    assert result not in all_lines
 
 
 # ---------------------------------------------------------------------------

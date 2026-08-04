@@ -789,6 +789,50 @@ def cmd_listen(world, actor, arg):
     return world.rng.choice(LISTEN_LINES)
 
 
+# listen's sibling -- the yard's (and forest's edge's) calm affordance, same
+# THE CONSTRAINT THAT MUST NEVER BREAK as listen: grants nothing, ever. No
+# rested-state, no buff, no find-chance, no progress. Costs a turn on
+# purpose -- a chosen use of time is the whole point. Where it differs from
+# listen: it reads the sky, so the line pool is keyed by daylight phase, and
+# it's withdrawn outright at night rather than describing a fixed thing --
+# there's nothing up there to see, so pretending otherwise would be a lie the
+# dark-hides-the-room logic elsewhere in this file already refuses to tell.
+WATCH_CLOUD_LINES = {
+    "dawn": (
+        "The early sky is streaked pink and grey, the colour lifting even "
+        "as you look.",
+        "Dawn cloud, edged in the first light, moving so slowly it might "
+        "be still.",
+    ),
+    "day": (
+        "High white clouds go over, in no hurry at all. You watch one "
+        "pull slowly apart.",
+        "The sky is doing almost nothing, very slowly, and it's enough to "
+        "stand and watch it.",
+        "A single cloud crosses the sun; the yard dims and brightens as "
+        "it passes.",
+    ),
+    "dusk": (
+        "The clouds have gone gold underneath, the light draining off the "
+        "top of the sky.",
+        "Evening is stacking the clouds in long grey banks, and the last "
+        "brightness slips behind them.",
+    ),
+}
+
+WATCH_CLOUDS_NIGHT_MSG = "The sky's gone to black -- nothing up there to watch for now."
+
+
+def cmd_watch_clouds(world, actor, arg):
+    """watch clouds -- pause under open sky and watch the clouds move; a chosen, unpressured turn that changes nothing (yard or the forest's edge, daylight only)."""
+    if actor.location not in ("yard", "forest_edge"):
+        return "There's no open sky to watch here."
+    phase = world.phase()
+    if phase == "night":
+        return WATCH_CLOUDS_NIGHT_MSG
+    return world.rng.choice(WATCH_CLOUD_LINES[phase])
+
+
 def cmd_save(world, actor, arg):
     """save -- write the world to disk (also happens automatically on quit)."""
     world.save()
@@ -808,6 +852,7 @@ VERBS.update({
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
     "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
+    "watch": cmd_watch_clouds,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
@@ -928,7 +973,8 @@ def build_world():
     w.add(Entity("yard", "The Yard",
         "Long grass, wet with evening. A vegetable patch of turned soil runs "
         "along the fence; the dark shape of a well stands near the gate. "
-        "Past the fence, a path leads off toward the forest's edge.",
+        "Past the fence, a path leads off toward the forest's edge. Overhead, "
+        "clouds cross an open sky -- worth a moment, watching them go.",
         exits={"in": "hut", "forest": "forest_edge"}))
     forest_edge = w.add(Entity("forest_edge", "The Forest's Edge",
         "The yard's small sounds fade out behind you. Trees close ranks "

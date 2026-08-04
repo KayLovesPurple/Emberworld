@@ -29,6 +29,7 @@
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
+- `watch` -- watch clouds -- pause under open sky and watch the clouds move; a chosen, unpressured turn that changes nothing (yard or the forest's edge, daylight only).
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors

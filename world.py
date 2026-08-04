@@ -197,6 +197,8 @@ class World:
             acts.append("gather wood")
         if room.id == "forest_edge":
             acts.append("listen")
+        if room.id in ("yard", "forest_edge") and self.phase() != "night":
+            acts.append("watch clouds")
         if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
             acts.append("add wood")
         for e in carried:

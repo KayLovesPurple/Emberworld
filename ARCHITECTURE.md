@@ -227,6 +227,29 @@ two without the third.
   someday statue's `wish` verb, which is shaped identically (a no-op that
   costs a turn and returns atmosphere).
 
+## `watch clouds` — listen's sibling in the yard
+
+A follow-up to the pacing rebalance above, same shape as `listen`: a verb
+(`watch`, cued in `available_actions` and room text as "watch clouds") that
+costs a turn and returns one random line from `WATCH_CLOUD_LINES`, available
+in the yard *and* at the forest's edge. Same never-break constraint —
+grants nothing, ever — and the same direct-handler test pattern
+(`test_watch_clouds_touches_no_world_state` calls `cmd_watch_clouds`
+directly, bypassing `world.act`'s tick, for the same reason `listen`'s does).
+
+The one real difference: it reads the sky, so `WATCH_CLOUD_LINES` is keyed
+by `world.phase()` (`dawn`/`day`/`dusk`) rather than being one flat pool,
+and it's withdrawn outright at night — no entry in `available_actions`, and
+calling it anyway returns the fixed `WATCH_CLOUDS_NIGHT_MSG` rather than a
+line from the pool. Withdrawal (not a forced "too dark to see" line) was the
+deliberate choice: an affordance quietly not being there when it wouldn't
+make sense is more honest than making up a night line for it, and it's the
+same call `is_dark` already makes elsewhere for a genuinely dark room. Note
+`is_dark` and `phase() == "night"` are independent checks here — a carried
+lit lamp keeps the yard's room description visible at night, but `watch
+clouds` still withdraws on phase alone, since a lamp doesn't put anything
+back in the sky to see.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be
