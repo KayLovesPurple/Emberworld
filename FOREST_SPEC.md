@@ -54,6 +54,11 @@ before adding anything interesting.
 
 ## Stage 2 — Texture generation: fragments, not rooms
 
+**Status: ✅ done.** `FOREST_FRAGMENTS` (near/mid/deep bands, each with
+light/sound/undergrowth/smell pools), `_forest_band(depth)`, and
+`describe_forest(depth, rng)` all shipped, wired into `venture`/`return`'s
+own result text.
+
 **Goal:** replace fixed venture/return text with recombined description
 fragments, banded by depth, so no two visits read the same and you (the
 designer) don't hand-author individual "rooms."

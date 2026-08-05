@@ -289,6 +289,34 @@ offers `return` once `forest_depth > 0` (same legibility rule as `give`/
 `place` only appearing when there's a curio to act on) — no point listing
 an action that can't do anything yet.
 
+## The forest, staged — Stage 2: texture generation
+
+Stage 1's `venture`/`return` returned one fixed line each; Stage 2 replaces
+that with generated prose so two visits (or two steps in a row) don't read
+alike. `FOREST_FRAGMENTS` is a dict of three depth bands (`"near"` 1–2,
+`"mid"` 3–5, `"deep"` 6+, via `_forest_band(depth)`), each holding four
+independent pools of bare, lowercase clauses — `light`, `sound`,
+`undergrowth`, `smell`. `describe_forest(depth, rng)` picks one fragment
+from each pool in the matching band and joins them into a single line.
+`venture`/`return` call it with `world.rng`, same as `forest_finds` and the
+cat's wandering, so `--fuzz` stays reproducible under a fixed seed.
+
+Depth 0 (the edge itself) isn't banded — it already has its own fixed room
+description, and landing back on it via `return` gets its own distinct line
+rather than a generated one, so there's never a moment where depth-0 prose
+tries to describe forest interior that isn't there.
+
+One gotcha worth flagging for future fragment-writing: `drivers.py`'s LLM
+driver scans every result string for `_REFUSAL_MARKERS` substrings (like
+`"can't"`, `"there's no"`) to tell a real refusal from a landed action, for
+its grounded end-of-visit `did` list. A forest fragment that happens to
+contain one of those substrings would make a successful `venture` misread
+as a no-op — caught in review by two fragments that said "you can't place"
+and "there's no stone in sight" before either shipped.
+`test_no_forest_fragment_reads_as_a_refusal_marker` in `test_content.py`
+guards this directly, and is worth re-running (or extending) whenever new
+fragments are added in later stages.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

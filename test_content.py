@@ -9,6 +9,7 @@ Run it either way:
 """
 
 import json
+import random
 
 from world import World, Entity, check_world
 from content import (
@@ -19,6 +20,7 @@ from content import (
     WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
+    FOREST_FRAGMENTS, _forest_band, describe_forest,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -1528,6 +1530,101 @@ def test_invariant_checker_passes_with_forest_depth_at_any_value():
     w, actor = fresh()
     run(w, actor, "go out", "go forest", "venture", "venture", "venture")
     assert check_world(w) == []
+
+
+# ===========================================================================
+# 10. FOREST TEXTURE GENERATION (FOREST_SPEC.md Stage 2) -- venture/return
+#    now describe where you are with fragments recombined per depth band,
+#    instead of one fixed line each, so two visits (or two steps at the same
+#    depth) don't read alike. Still no map, still no risk -- this stage only
+#    adds prose.
+# ===========================================================================
+class _Cycle:                                # walk an rng.choice pool in order
+    def __init__(self):
+        self.i = 0
+    def choice(self, seq):
+        v = seq[self.i % len(seq)]
+        self.i += 1
+        return v
+
+
+def test_forest_bands_are_contiguous_and_gapless_from_depth_one_upward():
+    """Every band declared in FOREST_FRAGMENTS must actually be reachable by
+    walking depth upward from 1, with no depth landing outside all of them."""
+    seen = {_forest_band(d) for d in range(1, 50)}
+    assert seen == set(FOREST_FRAGMENTS)
+
+
+def test_every_band_has_every_pool_populated():
+    """No empty pool anywhere -- describe_forest would crash on rng.choice([])."""
+    pool_names = {name for band in FOREST_FRAGMENTS.values() for name in band}
+    for band_name, band in FOREST_FRAGMENTS.items():
+        for pool_name in pool_names:
+            assert band.get(pool_name), \
+                f"{band_name}'s {pool_name} pool is missing or empty"
+
+
+def test_describe_forest_is_deterministic_given_a_seeded_rng():
+    """Same seed -> same output, so --fuzz stays reproducible."""
+    first = describe_forest(3, random.Random(42))
+    second = describe_forest(3, random.Random(42))
+    assert first == second
+
+
+def test_describe_forest_varies_across_different_rng_draws():
+    rng = _Cycle()
+    seen = {describe_forest(1, rng) for _ in range(6)}
+    assert len(seen) > 1, "describe_forest should read differently across draws"
+
+
+def test_venturing_returns_generated_texture_drawn_from_the_near_band():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    result = w.act(actor, "venture")
+    assert w.forest_depth == 1
+    band = FOREST_FRAGMENTS["near"]
+    assert any(frag in result for pool in band.values() for frag in pool), \
+        f"depth 1 should draw from the near band: {result!r}"
+
+
+def test_venturing_deeper_reaches_the_deep_bands_texture():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    result = ""
+    for _ in range(6):
+        result = w.act(actor, "venture")
+    assert w.forest_depth == 6
+    band = FOREST_FRAGMENTS["deep"]
+    assert any(frag in result for pool in band.values() for frag in pool), \
+        f"depth 6 should draw from the deep band: {result!r}"
+
+
+def test_returning_all_the_way_gives_a_distinct_back_at_the_edge_line():
+    """Landing back at depth 0 is its own line, not generated forest-interior
+    texture -- there's nothing to describe once you're back at the edge."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "venture")
+    result = w.act(actor, "return")
+    assert w.forest_depth == 0
+    assert "edge" in result.lower()
+    all_fragments = [f for band in FOREST_FRAGMENTS.values()
+                      for pool in band.values() for f in pool]
+    assert not any(f in result for f in all_fragments), \
+        f"depth 0 shouldn't show forest-interior texture: {result!r}"
+
+
+def test_no_forest_fragment_reads_as_a_refusal_marker():
+    """The LLM driver's _looks_like_refusal scans for substrings like "can't"
+    to tell a real refusal from a landed action -- a forest fragment that
+    happens to contain one would make a successful venture misread as a
+    no-op in the visit's grounded `did` list. Guard it here directly."""
+    from drivers import _REFUSAL_MARKERS
+    for band in FOREST_FRAGMENTS.values():
+        for pool in band.values():
+            for frag in pool:
+                low = frag.lower()
+                assert not any(m in low for m in _REFUSAL_MARKERS), \
+                    f"fragment reads as a refusal marker: {frag!r}"
 
 
 # ---------------------------------------------------------------------------
