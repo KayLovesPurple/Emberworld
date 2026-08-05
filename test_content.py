@@ -1431,13 +1431,22 @@ def test_watch_clouds_line_matches_dusk_once_dusk_falls():
 def test_watch_clouds_is_withdrawn_at_night():
     """Withdrawal, not a forced night line: the affordance quietly disappears
     when it wouldn't make sense, the same call the world already makes for
-    darkness elsewhere."""
+    darkness elsewhere.
+
+    BUG WE HIT: this used to call w.act(actor, "watch") and assert the
+    result equalled WATCH_CLOUDS_NIGHT_MSG exactly -- flaky, because going
+    through world.act() also ticks the world, and the cat's own autonomous
+    wandering can announce a line ("The cat pads out into the yard...") in
+    that same tick, which gets appended to the result and breaks the exact
+    match maybe 1 time in 5. Calling cmd_watch_clouds directly (as its
+    sibling tests in this section already do) sidesteps the tick entirely,
+    the same reasoning as test_watch_clouds_touches_no_world_state above."""
     w, actor = fresh()
     run(w, actor, "go out")
     while w.phase() != "night":
         w.act(actor, "wait")
     assert "watch clouds" not in w.available_actions(actor)
-    result = w.act(actor, "watch")
+    result = cmd_watch_clouds(w, actor, "")
     assert result == WATCH_CLOUDS_NIGHT_MSG
     all_lines = [ln for pool in WATCH_CLOUD_LINES.values() for ln in pool]
     assert result not in all_lines
