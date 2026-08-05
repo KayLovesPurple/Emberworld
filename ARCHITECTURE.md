@@ -166,11 +166,14 @@ and to fix a real spawn-starvation complaint: waiting on `gather wood`'s rare
   out "far more generous" had overshot into "guaranteed per visit" — see
   that section for why.
 - **The dark ahead is description-only.** `forest_edge.exits == {"yard":
-  "yard"}` — no second room, no going deeper, on purpose. That headroom is
-  reserved for the real forest build (the statue, the tea herb,
-  wood-gathering relocating here) noted in README's "Someday" list; naming
-  this room "the forest's edge" rather than just "the forest" is what lets
-  that later work grow into it without a rename.
+  "yard"}` — no second room, on purpose. That headroom is reserved for the
+  real forest build (the statue, the tea herb, wood-gathering relocating
+  here) noted in README's "Someday" list; naming this room "the forest's
+  edge" rather than just "the forest" is what lets that later work grow into
+  it without a rename. (Stage 1 of `FOREST_SPEC.md`, below, adds a depth
+  *counter* on top of this single room — `venture`/`return` move it, no new
+  room or exit involved — so "no second room" still holds even though
+  "no going deeper" no longer does.)
 - **The cat stays out of it.** `cat_wander` picked uniformly among
   `room.exits` before this, which would have sent the cat down the new
   `"forest"`/`"yard"` exits too — except `_cat_go`'s departure/arrival
@@ -208,6 +211,16 @@ two without the third.
   visit. A guaranteed faucet made every find worthless and flooded packs;
   see `test_forest_edge_entries_do_not_always_yield_a_curio` for the
   regression guard (repeated real-rng entries must sometimes come up empty).
+  **Round two**, after real play surfaced it again: even at 0.2, a hand that
+  lingered at the forest's edge for only a handful of turns (waiting, or —
+  once `FOREST_SPEC.md` Stage 1 added `venture`/`return` — shuttling depth
+  back and forth) kept landing 3-4 curios in "a few steps." `forest_finds`
+  rolls on *any* tick spent at `forest_edge`, whichever verb burns it, so
+  more turns there always compounds into more rolls — the fix had to be the
+  per-tick chance itself (cut to 0.08), not which verb is used to linger.
+  This drops it below the yard's `FOUND_ITEM_CHANCE`, retiring the "somewhat
+  better bet than the yard" rule — that comparison existed to fix the
+  original spawn-starvation complaint, not as a standing design goal.
 - **`listen`, the forest's calm affordance.** A verb, gated to
   `forest_edge`, that costs a turn (it's not in `FREE_VERBS` — the
   turn-cost is what makes it a genuine choice, not a freebie) and returns
@@ -249,6 +262,32 @@ same call `is_dark` already makes elsewhere for a genuinely dark room. Note
 lit lamp keeps the yard's room description visible at night, but `watch
 clouds` still withdraws on phase alone, since a lamp doesn't put anything
 back in the sky to see.
+
+## The forest, staged — Stage 1: the depth skeleton
+
+`FOREST_SPEC.md` lays out the forest's remaining build as seven ordered
+stages; this is the first one shipped. Two new verbs, `venture` (`world.
+forest_depth += 1`) and `return` (`-= 1`, floored at 0 — depth can't go
+negative, and below 0 there's simply "you're already back at the edge"),
+both gated to `forest_edge` since it's still the only room a hand can act
+from. No texture yet (both are fixed-flavor text) and no risk yet (`return`
+is always exact) — this stage only proves the plumbing the later stages
+build on.
+
+The one design decision worth calling out: `forest_depth` lives as a plain
+runtime attribute on `World` (declared in `world.py`'s `__init__`, right next
+to `rng`/`strict`), **not** as a field in `to_data()`/`from_data()`. That's
+deliberate, not an oversight — `World.from_data()` always builds via `cls()`
+first (which sets `forest_depth = 0`) and never touches it from the loaded
+data, so a fresh session automatically starts every visitor at the edge,
+however deep the previous session went before saving. This is the same
+pattern `hand_name` already uses (see "Optional self-naming" below): state
+that describes *this visit*, not the persistent world, doesn't go through
+`to_data()` at all — there's no reset code to write or forget, because
+there's nothing to reset in the first place. `available_actions` only
+offers `return` once `forest_depth > 0` (same legibility rule as `give`/
+`place` only appearing when there's a curio to act on) — no point listing
+an action that can't do anything yet.
 
 ## What keeps it from breaking
 

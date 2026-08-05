@@ -10,7 +10,7 @@ Run it either way:
 
 import json
 
-from world import World, Entity
+from world import World, Entity, check_world
 from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
@@ -1237,12 +1237,18 @@ def test_forest_edge_entries_do_not_always_yield_a_curio():
     assert misses > 0, "30 forest entries all found a curio -- finds aren't rare enough"
 
 
-def test_forest_edge_find_chance_is_still_a_somewhat_better_bet_than_the_yards():
-    """Pins the design rule directly: the forest's edge stays a slightly
-    better bet than the yard's incidental drop, even though the pacing
-    rebalance made both genuinely rare rather than the forest being a
-    reliable per-visit faucet."""
-    assert FOREST_FIND_CHANCE > FOUND_ITEM_CHANCE
+def test_forest_find_chance_was_cut_again_after_a_real_playtest_complaint():
+    """Pacing rebalance, round two: a hand that lingered at the forest's
+    edge for only a handful of turns (waiting, or -- once FOREST_SPEC.md
+    Stage 1 landed -- shuttling depth with venture/return) kept landing
+    3-4 curios in "a few steps." forest_finds rolls on ANY tick spent at
+    forest_edge regardless of which verb burns it (see forest_finds below),
+    so more turns there always means more rolls -- the fix is the per-tick
+    chance itself, not which verb is used to linger. This drops the chance
+    below the yard's FOUND_ITEM_CHANCE, which is fine: the forest no longer
+    needs to stay "a somewhat better bet than the yard" now that the
+    spawn-starvation problem that rule existed for is long since fixed."""
+    assert FOREST_FIND_CHANCE <= 0.1
 
 
 def test_forest_found_curio_behaves_like_any_other_curio():
@@ -1433,6 +1439,95 @@ def test_watch_clouds_is_withdrawn_at_night():
     assert result == WATCH_CLOUDS_NIGHT_MSG
     all_lines = [ln for pool in WATCH_CLOUD_LINES.values() for ln in pool]
     assert result not in all_lines
+
+
+# ===========================================================================
+# 9. FOREST DEPTH SKELETON (FOREST_SPEC.md Stage 1) -- venture/return give a
+#    hand something to push into past the edge, tracked by a plain depth
+#    counter that lives on the World itself (like world.rng, world.hand_name)
+#    rather than as a save-shaped field: the whole point is that POSITION is
+#    episodic (gone the moment a session ends) while EFFECTS (a curio found,
+#    wood carried out) persist normally through the save, same as ever. No
+#    texture, no risk, no new room yet -- forest_edge stays the only room;
+#    this stage only proves the plumbing.
+# ===========================================================================
+def test_fresh_world_starts_at_forest_depth_zero():
+    w, actor = fresh()
+    assert w.forest_depth == 0
+
+
+def test_venture_is_only_available_from_the_forest_edge():
+    w, actor = fresh()
+    result = w.act(actor, "venture")
+    assert w.forest_depth == 0, "venture shouldn't work outside the forest's edge"
+    assert "forest" in result.lower()
+
+
+def test_venturing_increases_depth_one_step_at_a_time():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    w.act(actor, "venture")
+    assert w.forest_depth == 1
+    w.act(actor, "venture")
+    assert w.forest_depth == 2
+
+
+def test_returning_decreases_depth_one_step_at_a_time():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert w.forest_depth == 3
+    w.act(actor, "return")
+    assert w.forest_depth == 2
+
+
+def test_return_never_takes_depth_below_zero():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    assert w.forest_depth == 0
+    result = w.act(actor, "return")
+    assert w.forest_depth == 0, "return must floor at zero, never go negative"
+    assert "edge" in result.lower()
+
+
+def test_venture_and_return_cost_a_turn_like_any_other_action():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    t0 = w.time
+    w.act(actor, "venture")
+    assert w.time == t0 + 1, "venture should cost exactly one turn"
+    t1 = w.time
+    w.act(actor, "return")
+    assert w.time == t1 + 1, "return should cost exactly one turn"
+
+
+def test_venture_is_always_offered_at_the_forest_edge_return_only_once_depth_is_above_zero():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    assert "venture" in w.available_actions(actor)
+    assert "return" not in w.available_actions(actor), \
+        "no point offering 'return' when there's nowhere to return from"
+    w.act(actor, "venture")
+    assert "return" in w.available_actions(actor)
+
+
+def test_forest_depth_does_not_survive_a_save_load_roundtrip():
+    """The load-bearing bit of the whole design: forest_depth is a plain
+    runtime attribute on World (like world.rng), never written into
+    to_data()/read back by from_data() -- so a fresh session always starts
+    at the edge, depth 0, no matter how deep a previous session went before
+    it saved."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "venture", "venture")
+    assert w.forest_depth == 2
+    assert "forest_depth" not in w.to_data(), "forest_depth must never be persisted"
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert w2.forest_depth == 0, "a reloaded world must start a fresh visitor at depth 0"
+
+
+def test_invariant_checker_passes_with_forest_depth_at_any_value():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert check_world(w) == []
 
 
 # ---------------------------------------------------------------------------

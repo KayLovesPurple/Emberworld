@@ -82,15 +82,21 @@ its growth. Gather fallen wood in the yard and add it to the hearth to keep the
 fire going, and once in a while turn up a small found curio—a pinecone, a
 smooth stone, or some other odd little thing—alongside it. A path off the
 yard leads to the forest's edge, where lingering sometimes turns up a curio
-of its own — the same find, rarer than a guarantee but a somewhat better bet
-than the yard's incidental luck. A curio can be carried, given to the cat
+of its own — the same find, rarer than a guarantee (rarer, in fact, than the
+yard's own incidental luck now — a pacing-rebalance round two cut it further
+after real play showed lingering there still turned up curios too fast). A
+curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark), or
 set on the hut's shelf for whoever comes next. The forest's edge also has
 its own `listen`: a chosen, unpressured turn that just returns a bit of
 atmosphere and changes nothing — no reward, ever, on purpose. The yard (and
 the forest's edge) offer `watch clouds` in the same spirit, reading the sky
 instead of the trees — it steps back at night, when there's nothing up
-there to see.
+there to see. From the forest's edge you can also `venture` a little further
+in and `return` toward the edge again — for now that's just a depth counter
+(no map, no texture, no risk yet), reset fresh at the start of every
+session, since where you got to in the forest is episodic even though
+anything you carry out of it isn't.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -119,18 +125,22 @@ A running list of intended features, roughly in dependency order. Each depends
 on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
-1. **The forest** *(a real project, its own design pass).* A v1 doorway already
-   exists — `the forest's edge`, off the yard, where lingering occasionally
-   turns up a curio (the same find table `gather wood` draws from, just a
-   somewhat better bet — rare on purpose, a delight rather than a per-visit
-   faucet) and `listen` offers a calm, unpressured turn that changes nothing.
+1. **The forest** *(a real project, its own design pass — now being built in
+   stages; see `FOREST_SPEC.md` for the full staged plan).* A v1 doorway
+   already exists — `the forest's edge`, off the yard, where lingering
+   occasionally turns up a curio (the same find table `gather wood` draws
+   from, kept deliberately rare — a delight rather than a per-visit faucet)
+   and `listen` offers a calm, unpressured turn that changes nothing.
    Named "edge" rather than "forest" deliberately, so the full build can grow
-   into it without a rename. The rest is still ahead: wood-gathering
-   *relocating* here (the yard goes back to being just the
-   yard), the mysterious statue, and the herb you steep for tea. Room to grow
-   later into weather, foraging, getting lost in the dark past the treeline —
-   and birds for the cat to chirp at (a line already waiting in the cat's
-   idle-action list).
+   into it without a rename. **`FOREST_SPEC.md` Stage 1 — done:** a
+   session-scoped depth counter plus `venture`/`return` verbs to move it (no
+   texture, no risk yet — see the spec for what that's laying the groundwork
+   for). The rest is still ahead: texture generation, the episodic-reset
+   rule made explicit, getting-lost risk, trail-marking, ambient texture, and
+   then wood-gathering *relocating* here (the yard goes back to being just
+   the yard), the mysterious statue, and the herb you steep for tea. Room to
+   grow later into weather, foraging — and birds for the cat to chirp at (a
+   line already waiting in the cat's idle-action list).
 
 2. **Tea** *(once fire is reliable and the forest gives you something to brew).*
    The first thing *made from multiple systems at once*: water (well) + fire

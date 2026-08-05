@@ -162,21 +162,31 @@ def lamp_burning(world, lamp):
     lamp.description = _lamp_description(lamp)
 
 
-FOREST_FIND_CHANCE = 0.2    # pacing rebalance: was 0.5, which felt near-
-                            # guaranteed per visit and flooded packs with
-                            # curios (see ARCHITECTURE.md's "Pacing
-                            # rebalance"). Still a somewhat better bet than
-                            # the yard's incidental FOUND_ITEM_CHANCE, but a
-                            # find is a delight now, never a guarantee.
+FOREST_FIND_CHANCE = 0.08   # pacing rebalance, round two: was 0.2. BUG WE HIT:
+                            # a hand that lingered at the forest's edge for even
+                            # a handful of turns (waiting, or -- once
+                            # FOREST_SPEC.md Stage 1 added venture/return --
+                            # shuttling depth back and forth) kept landing 3-4
+                            # curios in "a few steps." The roll fires on ANY
+                            # tick spent at forest_edge regardless of which
+                            # verb burns it (see forest_finds below), so more
+                            # turns there always means more rolls -- 0.2 per
+                            # tick compounds fast once a few turns are spent in
+                            # one place. No longer held to "a somewhat better
+                            # bet than the yard" (FOUND_ITEM_CHANCE, 0.15) --
+                            # that comparison existed to fix a since-resolved
+                            # spawn-starvation complaint, not as a standing rule.
 
 
 def forest_finds(world, room):
     """Autonomous: while a hand lingers at the forest's edge (arriving, or
-    spending any later turn there), each turn has a modest chance of turning
-    up a curio underfoot -- the same find table `gather wood` draws from,
-    just a little more often, since a visit here is the dedicated place to
-    look. Deliberately rare, not a guaranteed per-visit faucet: a find should
-    stay a delight, not fill out a pack on autopilot."""
+    spending any later turn there), each turn has a small chance of turning
+    up a curio underfoot -- the same find table `gather wood` draws from.
+    Deliberately rare, not a guaranteed per-visit faucet: a find should stay a
+    delight, not fill out a pack on autopilot -- and the chance is a per-tick
+    roll, so more turns spent here always means more chances, however they're
+    spent (see FOREST_FIND_CHANCE's comment for the incident that pinned this
+    down to a low number)."""
     actor = world.get("you")
     if actor is None or actor.location != room.id:
         return
@@ -789,6 +799,29 @@ def cmd_listen(world, actor, arg):
     return world.rng.choice(LISTEN_LINES)
 
 
+# FOREST_SPEC.md Stage 1 -- the skeleton: a plain depth counter (world.forest_
+# depth, declared in world.py alongside rng/strict) that venture/return move,
+# with no texture and no risk yet. Both verbs stay gated to forest_edge for
+# now, since it's still the only room a hand can act from -- depth describes
+# how far past it they've pushed, not a place with its own exits.
+def cmd_venture(world, actor, arg):
+    """venture -- push a little further into the forest, past the edge."""
+    if actor.location != "forest_edge":
+        return "There's nowhere to venture from here -- try the forest's edge."
+    world.forest_depth += 1
+    return "You push on past the edge, deeper into the trees."
+
+
+def cmd_return(world, actor, arg):
+    """return -- fall back toward the forest's edge from wherever you've ventured."""
+    if actor.location != "forest_edge":
+        return "There's nowhere to return from here."
+    if world.forest_depth <= 0:
+        return "You're already back at the edge."
+    world.forest_depth -= 1
+    return "You retrace your steps, back toward the edge."
+
+
 # listen's sibling -- the yard's (and forest's edge's) calm affordance, same
 # THE CONSTRAINT THAT MUST NEVER BREAK as listen: grants nothing, ever. No
 # rested-state, no buff, no find-chance, no progress. Costs a turn on
@@ -852,7 +885,7 @@ VERBS.update({
     "write": cmd_write, "read": cmd_read, "save": cmd_save,
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
     "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
-    "watch": cmd_watch_clouds,
+    "watch": cmd_watch_clouds, "venture": cmd_venture, "return": cmd_return,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,

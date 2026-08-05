@@ -30,6 +30,8 @@
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
 - `watch` -- watch clouds -- pause under open sky and watch the clouds move; a chosen, unpressured turn that changes nothing (yard or the forest's edge, daylight only).
+- `venture` -- venture -- push a little further into the forest, past the edge.
+- `return` -- return -- fall back toward the forest's edge from wherever you've ventured.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 
 ## Autonomous behaviors
@@ -57,7 +59,7 @@
 - The cat stays content (and may do small idle things) below hunger **24**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **60** fuel -- a full night's burn, and enough to revive a spent hearth.
-- A found curio turns up **15%** of the time on a lucky gather, and **20%** of the time on any turn spent at the forest's edge -- a somewhat better bet, never a guarantee either way.
+- A found curio turns up **15%** of the time on a lucky gather, and **8%** of the time on any turn spent at the forest's edge -- a somewhat better bet, never a guarantee either way.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.

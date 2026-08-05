@@ -92,6 +92,12 @@ class World:
         self.log = []                    # (message, room_id_or_None) this tick
         self.strict = False              # if True, check invariants every tick
         self.rng = random.Random()       # world's own randomness (cat wander, etc.)
+        # FOREST_SPEC.md Stage 1: how far a hand has ventured into the forest
+        # this session. Deliberately a plain runtime attribute, like rng/strict
+        # above, not part of to_data()/from_data() -- position in the forest is
+        # episodic (gone the instant a session ends), unlike anything a hand
+        # actually carries or changes out there, which persists normally.
+        self.forest_depth = 0
 
     # --- bookkeeping -------------------------------------------------------
     def add(self, e):
@@ -197,6 +203,9 @@ class World:
             acts.append("gather wood")
         if room.id == "forest_edge":
             acts.append("listen")
+            acts.append("venture")
+            if self.forest_depth > 0:
+                acts.append("return")
         if room.id in ("yard", "forest_edge") and self.phase() != "night":
             acts.append("watch clouds")
         if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
