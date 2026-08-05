@@ -550,6 +550,72 @@ def test_name_example_pools_are_wide_and_varied_enough_to_dilute_repeats():
     assert len(set(drv._STRANGE_NAME_EXAMPLES)) == len(drv._STRANGE_NAME_EXAMPLES)
 
 
+class _SequencedClient:
+    """Like _RecordingClient, but returns a different reply on each
+    successive create() call -- needed to test _ask_for_name's reroll,
+    which makes a second call only when the first lands on a known-overused
+    name."""
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.messages = self
+        self.calls = 0
+
+    def create(self, **kw):
+        self.calls += 1
+        return _FakeMsg(self.replies.pop(0))
+
+
+def test_ask_for_name_rerolls_once_on_a_known_overused_name():
+    """BUG WE HIT (round five): "Marrow" turned up as a self-chosen name
+    across three independent real sessions running -- and unlike
+    Wren/Thistlewick before it, it isn't derived from (or even close to)
+    anything in either example pool, so pool tuning can't touch it. It's
+    just a name the model defaults to for "something strange" regardless
+    of what's shown. Rather than accept it, reroll once against a small,
+    empirically-observed denylist."""
+    c = _SequencedClient(["Marrow", "Birchwind"])
+    name = drv._ask_for_name(c, drv.LLM_MODEL, think=False)
+    assert name == "Birchwind"
+    assert c.calls == 2
+
+
+def test_ask_for_name_denylist_check_is_case_insensitive():
+    c = _SequencedClient(["marrow", "Cindergate"])
+    assert drv._ask_for_name(c, drv.LLM_MODEL, think=False) == "Cindergate"
+
+
+def test_ask_for_name_keeps_the_name_if_the_reroll_lands_on_it_again():
+    """One reroll is a nudge toward something else, not a veto: if the
+    second, deliberate answer is the same tired default again, it's kept
+    rather than discarded to an unnamed visit."""
+    c = _SequencedClient(["Marrow", "MARROW"])
+    assert drv._ask_for_name(c, drv.LLM_MODEL, think=False) == "MARROW"
+    assert c.calls == 2
+
+
+def test_ask_for_name_returns_none_if_the_reroll_api_call_fails():
+    class _FlakyOnSecondCall:
+        def __init__(self):
+            self.messages = self
+            self.calls = 0
+
+        def create(self, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                return _FakeMsg("Marrow")
+            raise RuntimeError("no network")
+
+    assert drv._ask_for_name(_FlakyOnSecondCall(), drv.LLM_MODEL, think=False) is None
+
+
+def test_ask_for_name_does_not_reroll_on_a_fine_name():
+    """The common case: a normal, non-overused reply is accepted outright,
+    with no second call spent on it."""
+    c = _SequencedClient(["Cindergate"])
+    assert drv._ask_for_name(c, drv.LLM_MODEL, think=False) == "Cindergate"
+    assert c.calls == 1
+
+
 def test_ask_for_name_forwards_the_given_rng_into_the_prompt():
     class First:
         def choice(self, seq):

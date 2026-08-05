@@ -403,20 +403,46 @@ def _sanitize_name(raw):
     return name
 
 
+# BUG WE HIT (round five): "Marrow" turned up as a self-chosen name across
+# three independent real sessions running -- and unlike Wren (round one) or
+# Thistlewick (round three) before it, it isn't derived from, or even close
+# to, anything in either example pool (see _PLAIN_NAME_EXAMPLES/_STRANGE_
+# NAME_EXAMPLES above). No amount of pool widening or instruction-tightening
+# touches it, because it was never a reaction to what's SHOWN -- it's just
+# the model's own default completion for "something strange," independent
+# of the prompt's examples. Pool/instruction fixes can't reach that; the
+# only lever left is rerolling the actual output. Kept as a small, hand-
+# curated denylist of names *observed* to recur, not a preemptive guess at
+# what might -- same restraint as the pools themselves.
+_OVERUSED_NAMES = {"marrow"}
+
+
 def _ask_for_name(client, model, think, rng=None):
     """One small call before the turn loop: let the hand name itself, framed
     as naming a character who lives here (not "who are you really") so it
     reads as a fantasy handle, not introspection. Any failure or unusable
     reply just means an unnamed [Day N] stamp -- see _sanitize_name. `rng`
     (default: a fresh random.Random) picks which example pair _naming_prompt
-    shows; pass world.rng from a caller that already has a World in scope."""
+    shows; pass world.rng from a caller that already has a World in scope.
+
+    Rerolls once (see _OVERUSED_NAMES above) if the sanitized reply is a
+    known-overused default -- but only once, and only as a nudge toward
+    something else, not a veto: if the reroll lands on the same tired name
+    again, that's kept rather than discarded. A hand's second, deliberate
+    answer is still its answer; naming just isn't allowed to loop forever
+    chasing a "better" one."""
     rng = rng or random.Random()
+    system = ("You're about to spend some time as a character living in a "
+              "small persistent text world.")
     try:
-        reply = _ask_claude(
-            client,
-            "You're about to spend some time as a character living in a "
-            "small persistent text world.",
-            _naming_prompt(rng), model, think)
+        reply = _ask_claude(client, system, _naming_prompt(rng), model, think)
+    except Exception:
+        return None
+    name = _sanitize_name(reply)
+    if name is None or name.lower() not in _OVERUSED_NAMES:
+        return name
+    try:
+        reply = _ask_claude(client, system, _naming_prompt(rng), model, think)
     except Exception:
         return None
     return _sanitize_name(reply)

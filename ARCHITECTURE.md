@@ -445,7 +445,21 @@ exists (each fixed a real failure we watched happen):
   copy. The result is stored as `world.hand_name` — a plain runtime
   attribute, like `world.rng`/`world.strict`, deliberately **not** part of
   `to_data()`, so it never leaks into a save or bleeds into a later human
-  session that never sets it.
+  session that never sets it. **Gotcha we hit, round five**: even after the
+  pools were widened and diversified (round two) and the instruction ruled
+  out suffix/prefix derivations (round three), "Marrow" turned up as the
+  self-chosen name across three independent real sessions running — and
+  unlike Wren or Thistlewick before it, it isn't derived from, or even
+  close to, anything in either example pool. It's just the model's own
+  default completion for "something strange," regardless of what's shown —
+  a pool or instruction fix has nothing to grab onto, since the problem was
+  never a reaction to the examples in the first place. `_ask_for_name` now
+  rerolls once (see `_OVERUSED_NAMES`) if the sanitized reply matches a
+  small, hand-curated list of names *observed* to recur — but only once,
+  and only as a nudge, not a veto: if the reroll lands on the same tired
+  name again, that's kept rather than discarded. A hand's second,
+  deliberate answer is still its answer; naming just isn't allowed to loop
+  forever chasing a "better" one.
 - **Attribution lives in the stamp, not a sign-off** (`_day_stamp`, in
   content.py): both `cmd_write` and `_leave_signoff` build their journal
   stamp through this one shared helper — `[Day N]`, or `[Day N, Name]` when
