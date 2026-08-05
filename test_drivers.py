@@ -521,12 +521,16 @@ def test_naming_prompt_discourages_trivial_variations_not_just_verbatim_copies()
         "should explicitly discourage a suffix/prefix tacked onto an example, not just verbatim copies"
 
 
-def test_thistle_is_not_in_the_strange_pool():
-    """Regression guard for the exact incident above: Thistle is a strong
-    attractor for a "Thistle + common suffix" derivation (Thistlewick,
-    Thistledown, ...), so it stays out of the pool rather than relying on
-    the instruction alone to head off every possible derivation of it."""
-    assert "Thistle" not in drv._STRANGE_NAME_EXAMPLES
+def test_thistle_is_back_in_the_strange_pool_protected_by_the_instruction():
+    """Round four: Thistle was reinstated by request. Round three's actual
+    fix was the instruction ruling out suffix/prefix derivations generally
+    (see test_naming_prompt_discourages_trivial_variations_not_just_verbatim_copies
+    above) -- excluding the word itself was belt-and-braces on top of that,
+    not the load-bearing part. So Thistle can safely sit in the pool again
+    as long as that instruction still stands guard."""
+    assert "Thistle" in drv._STRANGE_NAME_EXAMPLES
+    prompt = drv._naming_prompt(random.Random(0)).lower()
+    assert "suffix" in prompt or "prefix" in prompt or "variation" in prompt
 
 
 def test_name_example_pools_are_wide_and_varied_enough_to_dilute_repeats():

@@ -352,11 +352,18 @@ LLM_SYSTEM_PROMPT = (
 # Thistlewick, Thistledown, ...) and, more generally, strengthened
 # _naming_prompt below to rule out suffix/prefix variations of an example,
 # not just literal reuse of it.
+#
+# Round four: Thistle reinstated by request. Round three's actual fix was
+# the instruction change (ruling out suffix/prefix derivations generally,
+# not just banning one word), so the word itself was never the necessary
+# part of the fix -- dropping it was belt-and-braces on top of that. With
+# the instruction now doing the real work, there's no reason Thistle in
+# particular has to stay excluded.
 _PLAIN_NAME_EXAMPLES = ("Tom", "Wren", "Mara", "Old Joe", "Priya", "Femi",
                         "Suki", "Hank", "Delphine", "Gus", "Noor", "Constance")
 _STRANGE_NAME_EXAMPLES = ("Ashfall", "Nine", "Anchor", "Rooksong", "Slate",
                           "Midwinter", "Quiet", "Cooper", "Fargate",
-                          "Kettle", "Tuesday", "Ledger")
+                          "Kettle", "Tuesday", "Ledger", "Thistle")
 
 
 def _naming_prompt(rng):
