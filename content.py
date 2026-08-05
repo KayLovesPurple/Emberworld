@@ -340,6 +340,13 @@ _EXIT_LABELS = {
     "forest_edge": {"yard": "back to the yard"},
 }
 
+# A hand's own wording for an exit doesn't always match the short key rooms
+# are keyed by (see build_world's `exits={...}`) -- "go inside" is a natural
+# way to say "go in" near the hut. Mapped to the canonical key before
+# `room.exits` is consulted, so it only ever works where that key actually
+# exists as an exit (i.e. "inside" does nothing without an "in" exit nearby).
+_DIRECTION_ALIASES = {"inside": "in"}
+
 
 def _exit_label(room_id, direction):
     """A longer, legible phrase for an exit's entry in the Exits: line --
@@ -380,9 +387,11 @@ def cmd_look(world, actor, arg):
 
 
 def cmd_go(world, actor, arg):
-    """go <exit> -- move through a named exit (you can also just type the exit name)."""
+    """go <exit> -- move through a named exit (you can also just type the exit name; "inside" works anywhere "in" does)."""
     room = world.get(actor.location)
-    dest = room.exits.get(arg.lower().strip())
+    key = arg.lower().strip()
+    key = _DIRECTION_ALIASES.get(key, key)
+    dest = room.exits.get(key)
     if not dest:
         return f"You can't go {arg or 'that way'}."
     actor.location = dest

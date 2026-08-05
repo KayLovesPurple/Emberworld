@@ -1627,6 +1627,30 @@ def test_no_forest_fragment_reads_as_a_refusal_marker():
                     f"fragment reads as a refusal marker: {frag!r}"
 
 
+# ===========================================================================
+# 11. EXIT ALIASES -- a hand's own wording for an exit doesn't always match
+#    the short key a room is keyed by; "go inside" is a natural way to say
+#    "go in" near the hut.
+# ===========================================================================
+def test_go_inside_acts_the_same_as_go_in_near_the_hut():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    assert actor.location == "yard"
+    result = w.act(actor, "go inside")
+    assert actor.location == "hut"
+    assert "HUT" in result.upper()
+
+
+def test_inside_only_works_where_an_in_exit_actually_exists():
+    """The alias resolves to the canonical "in" key before room.exits is
+    consulted, so it does nothing (rather than teleporting) anywhere "in"
+    isn't a real exit -- the hut itself has no "in" exit of its own."""
+    w, actor = fresh()
+    result = w.act(actor, "go inside")
+    assert actor.location == "hut", "shouldn't move at all -- no 'in' exit from the hut"
+    assert "can't go" in result.lower()
+
+
 # ---------------------------------------------------------------------------
 # Built-in runner, so you don't need pytest installed.
 # ---------------------------------------------------------------------------
