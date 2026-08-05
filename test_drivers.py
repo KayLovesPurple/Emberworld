@@ -509,6 +509,43 @@ def test_naming_prompt_tells_the_model_not_to_just_copy_the_examples():
         "should explicitly discourage reusing the example names verbatim"
 
 
+def test_naming_prompt_discourages_trivial_variations_not_just_verbatim_copies():
+    """BUG WE HIT (round three): with "Thistle" sitting in the strange pool,
+    a run named itself "Thistlewick" -- not a verbatim copy of the example
+    (so the old "not one of these examples" instruction didn't catch it),
+    just the example plus a common fantasy-name suffix tacked on. The
+    instruction has to explicitly rule out that kind of trivial
+    derivation, not just literal reuse."""
+    prompt = drv._naming_prompt(random.Random(0)).lower()
+    assert "suffix" in prompt or "prefix" in prompt or "variation" in prompt, \
+        "should explicitly discourage a suffix/prefix tacked onto an example, not just verbatim copies"
+
+
+def test_thistle_is_not_in_the_strange_pool():
+    """Regression guard for the exact incident above: Thistle is a strong
+    attractor for a "Thistle + common suffix" derivation (Thistlewick,
+    Thistledown, ...), so it stays out of the pool rather than relying on
+    the instruction alone to head off every possible derivation of it."""
+    assert "Thistle" not in drv._STRANGE_NAME_EXAMPLES
+
+
+def test_name_example_pools_are_wide_and_varied_enough_to_dilute_repeats():
+    """BUG WE HIT: a handful of names (Marrow, Thistlewick, ...) kept turning
+    up across independent runs even though neither is a literal pool entry --
+    the old 4-item _STRANGE_NAME_EXAMPLES pool leaned almost entirely on one
+    narrow register (botanical/elemental compound nouns: Ashfall, Thistle,
+    Rooksong), so the *shown example itself* kept nudging toward the same
+    conceptual neighborhood a low-effort reply then converges on. A wider,
+    conceptually varied pool (objects, numbers, time, color, craft -- not
+    just plants-and-ash) means the one example a given call shows is far
+    less likely to point every run toward the same flavor."""
+    assert len(drv._PLAIN_NAME_EXAMPLES) >= 10
+    assert len(drv._STRANGE_NAME_EXAMPLES) >= 10
+    assert len(set(drv._PLAIN_NAME_EXAMPLES)) == len(drv._PLAIN_NAME_EXAMPLES), \
+        "no duplicate entries -- each slot should widen the pool, not pad it"
+    assert len(set(drv._STRANGE_NAME_EXAMPLES)) == len(drv._STRANGE_NAME_EXAMPLES)
+
+
 def test_ask_for_name_forwards_the_given_rng_into_the_prompt():
     class First:
         def choice(self, seq):

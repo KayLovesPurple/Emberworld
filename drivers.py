@@ -331,23 +331,51 @@ LLM_SYSTEM_PROMPT = (
 # picked "Wren" outright -- a low-effort reply just copies whatever's handed
 # to it rather than inventing something. Varying the examples removes the
 # one fixed anchor to copy.
-_PLAIN_NAME_EXAMPLES = ("Tom", "Wren", "Mara", "Old Joe")
-_STRANGE_NAME_EXAMPLES = ("Ashfall", "Nine", "Thistle", "Rooksong")
+#
+# BUG WE HIT (round two): even after widening to 4 examples each, a handful
+# of names (Marrow, Thistlewick, ...) kept recurring across independent
+# runs -- and neither is even a literal pool entry. The old strange pool
+# leaned almost entirely on one register (botanical/elemental compound
+# nouns: Ashfall, Thistle, Rooksong), so whichever single example a call
+# happened to show still nudged every run toward the same conceptual
+# neighborhood, which a low-effort reply then converges on regardless of
+# the exact word shown. Widened both pools and, more importantly,
+# deliberately spread the strange pool across unrelated registers --
+# object, number, time, color, craft, direction -- not just plants and ash,
+# so the one example any given call shows points in a genuinely different
+# direction each time, not just a different word in the same direction.
+#
+# BUG WE HIT (round three): with "Thistle" still sitting in the pool, a run
+# named itself "Thistlewick" -- not a verbatim copy (so the old instruction
+# didn't catch it), just Thistle plus a common fantasy-name suffix tacked
+# on. Dropped Thistle (a strong attractor for exactly that derivation:
+# Thistlewick, Thistledown, ...) and, more generally, strengthened
+# _naming_prompt below to rule out suffix/prefix variations of an example,
+# not just literal reuse of it.
+_PLAIN_NAME_EXAMPLES = ("Tom", "Wren", "Mara", "Old Joe", "Priya", "Femi",
+                        "Suki", "Hank", "Delphine", "Gus", "Noor", "Constance")
+_STRANGE_NAME_EXAMPLES = ("Ashfall", "Nine", "Anchor", "Rooksong", "Slate",
+                          "Midwinter", "Quiet", "Cooper", "Fargate",
+                          "Kettle", "Tuesday", "Ledger")
 
 
 def _naming_prompt(rng):
     """Build the one-off naming prompt, drawing a fresh plain/strange
     example pair from the pools above so no single name is ever the fixed
-    anchor -- paired with an explicit "not one of these" so a reply is
-    pushed toward inventing its own rather than echoing what's shown."""
+    anchor -- paired with an explicit "not a version of these" (not just
+    "not one of these") so a reply is pushed toward inventing its own
+    rather than either echoing what's shown or lightly remixing it (a
+    suffix/prefix tacked on the example still counts as remixing -- see the
+    "Thistlewick" incident in the comment above the pools)."""
     plain = rng.choice(_PLAIN_NAME_EXAMPLES)
     strange = rng.choice(_STRANGE_NAME_EXAMPLES)
     return (
         "Before you begin: give yourself a name for your time here -- "
-        "something of your own, not one of these examples, just in their "
-        f"spirit: plain (like {plain}) or strange (like {strange}). Reply "
-        "with just the name, nothing else."
-    )
+        "something of your own. Not one of these examples, and not a "
+        "variation of one either (no suffix or prefix tacked onto an "
+        "example) -- just in their spirit: plain (like {plain}) or "
+        "strange (like {strange}). Reply with just the name, nothing else."
+    ).format(plain=plain, strange=strange)
 
 
 def _sanitize_name(raw):
