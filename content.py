@@ -172,16 +172,26 @@ FOREST_FIND_CHANCE = 0.08   # pacing rebalance, round two: was 0.2. BUG WE HIT:
                             # verb burns it (see forest_finds below), so more
                             # turns there always means more rolls -- 0.2 per
                             # tick compounds fast once a few turns are spent in
-                            # one place. No longer held to "a somewhat better
-                            # bet than the yard" (FOUND_ITEM_CHANCE, 0.15) --
-                            # that comparison existed to fix a since-resolved
-                            # spawn-starvation complaint, not as a standing rule.
+                            # one place.
+                            #
+                            # FOREST_SPEC.md Stage 7: wood-gathering relocated
+                            # here from the yard, and deliberately does NOT
+                            # bring its own separate find-roll along with it
+                            # (see cmd_gather below) -- this per-tick roll
+                            # already fires on a gather-wood turn same as any
+                            # other, so a second roll stacked on top would be
+                            # exactly the intensification the relocation spec
+                            # explicitly ruled out ("moved, not intensified").
+                            # The old yard-side FOUND_ITEM_CHANCE (0.15) and
+                            # its "somewhat better bet than the yard" framing
+                            # are retired along with the yard roll itself.
 
 
 def forest_finds(world, room):
     """Autonomous: while a hand lingers at the forest's edge (arriving, or
     spending any later turn there), each turn has a small chance of turning
-    up a curio underfoot -- the same find table `gather wood` draws from.
+    up a curio underfoot -- the one and only find-roll here, including on a
+    `gather wood` turn now that gathering has relocated to this room too.
     Deliberately rare, not a guaranteed per-visit faucet: a find should stay a
     delight, not fill out a pack on autopilot -- and the chance is a per-tick
     roll, so more turns spent here always means more chances, however they're
@@ -695,8 +705,8 @@ def cmd_water(world, actor, arg):
 WOOD_PER_GATHER = 3          # a little more than one night's worth, to stock up
 FUEL_PER_WOOD = HEARTH_FUEL_START    # one add wood restores a full night's fuel
 
-# Small, purely cosmetic finds a lucky gather can turn up alongside the wood.
-# Each is (name, look_line, cat_reaction): look_line is a bare, odd, specific
+# Small, purely cosmetic finds forest_finds (above) can turn up. Each is
+# (name, look_line, cat_reaction): look_line is a bare, odd, specific
 # fragment -- not a summary sentence -- assembled into a full description by
 # _found_description below. cat_reaction ("plays"/"ignores") drives both the
 # look-line's optional cat hint and what `give <thing> to cat` does with it;
@@ -714,7 +724,6 @@ FOUND_ITEMS = (
     ("a curl of birch bark", "curled tight, papery, peels if you're not careful", "ignores"),
     ("a sprig of dried moss", "dry and soft, crumbles a little at the edges", "ignores"),
 )
-FOUND_ITEM_CHANCE = 0.15
 
 
 def _found_description(look_line, reaction):
@@ -726,21 +735,20 @@ def _found_description(look_line, reaction):
     return f"{look_line}."
 
 
+# FOREST_SPEC.md Stage 7: wood-gathering relocated here from the yard (the
+# yard goes back to being just the yard). Deliberately carries no find-roll
+# of its own -- forest_finds already fires on any tick spent at the
+# forest's edge, gather-wood turns included, so a second roll stacked on
+# top would double the effective find chance right here, exactly the
+# intensification the relocation spec ruled out. This is still the
+# grandfathered hearth-fuel loop; only where it happens moved.
 def cmd_gather(world, actor, arg):
-    """gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else)."""
-    if actor.location != "yard":
-        return "There's nothing to forage here -- try the yard."
+    """gather wood -- forage the forest's edge for fallen branches and deadfall."""
+    if actor.location != "forest_edge":
+        return "There's nothing to forage here -- try the forest's edge."
     actor.attrs["wood"] = actor.attrs.get("wood", 0) + WOOD_PER_GATHER
-    result = (f"You push through the long grass and gather fallen branches. "
-              f"You now have {actor.attrs['wood']} wood.")
-    if world.rng.random() < FOUND_ITEM_CHANCE:
-        name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
-        world.add(Entity(world.fresh_id("found"), name,
-                          _found_description(look_line, reaction),
-                          location=actor.id, portable=True,
-                          attrs={"curio": True, "cat_reaction": reaction}))
-        result += f"\nSomething catches your eye in the grass: {name}."
-    return result
+    return (f"You gather fallen branches and deadfall from the forest floor. "
+            f"You now have {actor.attrs['wood']} wood.")
 
 
 def cmd_add_wood(world, actor, arg):
@@ -1019,6 +1027,99 @@ def describe_forest(depth, rng):
     return text[0].upper() + text[1:]
 
 
+# FOREST_SPEC.md Stage 6 -- ambient, unscripted texture: the actual "crack
+# in the closedness." Unlike FOREST_FRAGMENTS (which always fires, banded
+# by depth, describing what's *there*), this is a small independent chance
+# of something happening that isn't tied to depth or to any verb -- no
+# "investigate" option references it, and it explains nothing, same
+# restraint as the statue. Layered on top of whatever describe_forest
+# already returned that step, never in place of it.
+FOREST_AMBIENT_CHANCE = 0.12
+
+FOREST_AMBIENT = (
+    "somewhere off to the side, a branch cracks, and nothing follows it",
+    "a smell drifts past, unplaceable, and then it's gone",
+    "an unseen bird runs through a few notes and stops",
+    "something rustles low in the undergrowth, gone by the time you look",
+    "a cold thread of air crosses your path and is gone",
+    "the light shifts, just slightly, though nothing overhead moved",
+)
+
+
+def _forest_ambient(rng):
+    """Rolls FOREST_AMBIENT_CHANCE and returns "" most of the time, or a
+    leading-space-prefixed line so call sites can just append the result
+    (`+ _forest_ambient(world.rng)`) without an if-statement of their own.
+    Draws through the same passed-in rng as describe_forest, for the same
+    --fuzz-reproducibility reason."""
+    if rng.random() < FOREST_AMBIENT_CHANCE:
+        return " " + rng.choice(FOREST_AMBIENT)
+    return ""
+
+
+# FOREST_SPEC.md Stage 7 -- the statue: randomly discovered, not placed at a
+# fixed depth, so it can never become a coordinate on an authored map (the
+# whole reason Stages 2-6 built texture instead of rooms). Below
+# STATUE_MIN_DEPTH it cannot appear at all -- a deep-visit thing, not a
+# short-trip accident. Beyond that floor, each venture carries a small
+# independent chance of surfacing it. Once found this session,
+# statue_found_this_session (session-scoped, alongside forest_depth --
+# declared in world.py) means it won't flicker in and out of existence on
+# repeated ventures, and a hand can wish at it again later in the visit
+# from anywhere deep enough, without needing the exact depth it first
+# appeared at.
+STATUE_MIN_DEPTH = 3
+STATUE_DISCOVERY_CHANCE = 0.15
+
+STATUE_DISCOVERY_TEXT = (
+    " Between two trunks stands something that isn't a tree -- a weathered "
+    "stone figure, worn past recognizing, moss thick in its folds. However "
+    "long it's stood here, it was long before you."
+)
+
+# THE CONSTRAINT THAT MUST NEVER BREAK: the statue stays mechanically
+# inert. Lore says it grants; mechanics grant nothing; if anything is ever
+# granted, it happens invisibly, later, by us -- never by this verb. The
+# instant `wish` visibly does something, it stops being mechanic-free,
+# wants aimed at it become performance, and it becomes the very god this
+# design exists to avoid. See README's "wishing-statue" section.
+STATUE_WISH_LINE = "The stone takes your wish and says nothing. Whatever you asked, it keeps."
+
+
+def ensure_statue(world):
+    """Create the statue's persistent record the first time it's actually
+    needed -- lazily, unlike ensure_shelf/ensure_cairn, since most visits
+    (most whole lineages, even) may go a long time without ever finding it.
+    Nothing else depends on this entity existing before then."""
+    statue = world.get("statue")
+    if statue is None:
+        statue = world.add(Entity("statue", "statue",
+            "a weathered stone figure, worn past recognizing, moss thick "
+            "in its folds", location="forest_edge", portable=False,
+            attrs={"wishes": []}))
+    return statue
+
+
+def _statue_reachable(world, actor):
+    """Whether `wish` can do anything right now: the statue has to have
+    been found THIS session, and the hand has to currently be deep enough
+    to reach it again -- found once doesn't mean wishable from the edge."""
+    return (getattr(world, "statue_found_this_session", False)
+            and actor.location == "forest_edge"
+            and world.forest_depth >= STATUE_MIN_DEPTH)
+
+
+def cmd_wish(world, actor, arg):
+    """wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever."""
+    if not _statue_reachable(world, actor):
+        return "There's nothing here to wish to."
+    if not arg.strip():
+        return "Wish for what? e.g.  wish for rain"
+    statue = ensure_statue(world)
+    statue.attrs.setdefault("wishes", []).append(f"{_day_stamp(world)} {arg.strip()}")
+    return STATUE_WISH_LINE
+
+
 # FOREST_SPEC.md Stage 1 -- the skeleton: a plain depth counter (world.forest_
 # depth, declared in world.py alongside rng/strict) that venture/return move,
 # with no risk yet. Both verbs stay gated to forest_edge for now, since it's
@@ -1029,7 +1130,19 @@ def cmd_venture(world, actor, arg):
     if actor.location != "forest_edge":
         return "There's nowhere to venture from here -- try the forest's edge."
     world.forest_depth += 1
-    return "You push on, deeper into the trees. " + describe_forest(world.forest_depth, world.rng)
+    discovery = ""
+    if (not world.statue_found_this_session
+            and world.forest_depth >= STATUE_MIN_DEPTH
+            and world.rng.random() < STATUE_DISCOVERY_CHANCE):
+        world.statue_found_this_session = True
+        discovery = STATUE_DISCOVERY_TEXT
+    # Composition order (FOREST_SPEC.md cross-cutting requirement):
+    # discovery text leads, then ambient -- off-course doesn't apply to
+    # venture, only return, so this is the full order for this verb.
+    return ("You push on, deeper into the trees. "
+            + describe_forest(world.forest_depth, world.rng)
+            + discovery
+            + _forest_ambient(world.rng))
 
 
 # FOREST_SPEC.md Stage 4 -- getting lost: a bounded, opt-in risk. Below
@@ -1071,11 +1184,12 @@ def cmd_return(world, actor, arg):
             return (lead + " When the trees finally open up, you're back at "
                     "the edge already -- sooner than you expected, and not "
                     "quite sure how.")
-        return lead + " " + describe_forest(new_depth, world.rng)
+        return lead + " " + describe_forest(new_depth, world.rng) + _forest_ambient(world.rng)
     world.forest_depth -= 1
     if world.forest_depth == 0:
         return "You retrace your steps and come back out at the forest's edge, the yard's quiet within reach again."
-    return "You fall back a step. " + describe_forest(world.forest_depth, world.rng)
+    return ("You fall back a step. " + describe_forest(world.forest_depth, world.rng)
+            + _forest_ambient(world.rng))
 
 
 # FOREST_SPEC.md Stage 5: trail-marking, a freely-chosen mitigation for
@@ -1251,7 +1365,7 @@ VERBS.update({
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
     "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
     "watch": cmd_watch_clouds, "venture": cmd_venture, "return": cmd_return,
-    "mark": cmd_mark_trail,
+    "mark": cmd_mark_trail, "wish": cmd_wish,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
@@ -1334,10 +1448,9 @@ def generate_reference():
             f"- Gathering wood yields **{WOOD_PER_GATHER}**; feeding one unit "
             f"into the hearth restores **{FUEL_PER_WOOD}** fuel -- a full "
             "night's burn, and enough to revive a spent hearth.",
-            f"- A found curio turns up **{FOUND_ITEM_CHANCE:.0%}** of the time "
-            f"on a lucky gather, and **{FOREST_FIND_CHANCE:.0%}** of the time "
-            "on any turn spent at the forest's edge -- a somewhat better bet, "
-            "never a guarantee either way.",
+            f"- A found curio turns up **{FOREST_FIND_CHANCE:.0%}** of the "
+            "time on any turn spent at the forest's edge (gathering wood "
+            "included) -- a delight, never a guarantee.",
             f"- If the vegetable patch stays empty for **{PATCH_VOLUNTEER_TURNS}** "
             "turns straight, one volunteer potato plant sprouts on its own -- a "
             "floor against a seedless lineage, not a routine source.",

@@ -207,6 +207,10 @@ it's fine to add.
 
 ## Stage 6 — Ambient, unscripted texture
 
+**Status: ✅ done.** `FOREST_AMBIENT`/`_forest_ambient` in content.py,
+layered onto `venture`/`return` (including the Stage 4 off-course branch).
+See ARCHITECTURE.md's "Stage 6" section for the landed shape.
+
 **Goal:** the actual "crack in the closedness" — events not tied to any
 verb, that neither the player nor you-the-designer fully control the timing
 or shape of.
@@ -234,6 +238,11 @@ it, same spirit as the statue.
 ---
 
 ## Stage 7 — Integration: the three things the forest carries
+
+**Status: 🟡 two of three done.** Wood-gathering relocation and the statue
+are built — see ARCHITECTURE.md's "Stage 7" section. **The tea-herb is
+deliberately deferred**, by request, not forgotten; it depends on nothing
+built so far being revisited, so it can slot in on its own whenever.
 
 **Goal:** now that the forest itself is built, move in the content the
 README already commits to.

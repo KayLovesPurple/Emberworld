@@ -16,15 +16,18 @@ from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
-    FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
+    FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
     WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
     CALM_ACK_AT, CALM_ACK_LINE,
     CAIRN_ID, CAIRN_GROWTH_CM, CAIRN_BANDS, _cairn_description,
     ensure_cairn, cmd_stack_stone,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
-    FOREST_FRAGMENTS, _forest_band, describe_forest, cmd_return, cmd_mark_trail,
+    FOREST_FRAGMENTS, _forest_band, describe_forest, cmd_venture, cmd_return, cmd_mark_trail,
     SAFE_DEPTH_THRESHOLD, OFF_COURSE_CHANCE, OFF_COURSE_LINES,
+    FOREST_AMBIENT_CHANCE, FOREST_AMBIENT, _forest_ambient,
+    STATUE_MIN_DEPTH, STATUE_DISCOVERY_CHANCE, STATUE_DISCOVERY_TEXT,
+    STATUE_WISH_LINE, ensure_statue, _statue_reachable, cmd_wish,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
     SHELF_CAPACITY, _shelf_description,
@@ -244,20 +247,26 @@ def test_water_and_bucket_state_survive_save_load_roundtrip():
 #    BUG WE HIT: fire was a countdown with no reset, so a long lineage always
 #    inherited a cold hearth with no recourse. Wood fixes that.
 # ===========================================================================
-def test_gather_wood_in_the_yard_increases_carried_wood():
+def test_gather_wood_at_the_forest_edge_increases_carried_wood():
+    """FOREST_SPEC.md Stage 7: wood-gathering relocated here from the yard."""
     w, actor = fresh()
-    run(w, actor, "go out")
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
     result = w.act(actor, "gather wood")
     assert actor.attrs["wood"] == WOOD_PER_GATHER, \
         f"gather didn't add {WOOD_PER_GATHER} wood: {actor.attrs}"
     assert str(WOOD_PER_GATHER) in result, f"result didn't name the new amount: {result!r}"
 
 
-def test_gather_wood_is_gated_to_the_yard():
+def test_gather_wood_is_gated_to_the_forest_edge_not_the_yard():
     w, actor = fresh()
     result = w.act(actor, "gather wood")           # still in the hut
-    assert actor.attrs.get("wood", 0) == 0, "gathered wood outside the yard"
-    assert "yard" in result.lower()
+    assert actor.attrs.get("wood", 0) == 0, "gathered wood outside the forest's edge"
+    assert "forest" in result.lower()
+    run(w, actor, "go out")                        # the yard -- no longer valid either
+    result = w.act(actor, "gather wood")
+    assert actor.attrs.get("wood", 0) == 0, "the yard should no longer yield wood"
+    assert "forest" in result.lower()
 
 
 def test_add_wood_requires_wood_and_the_hearth_present():
@@ -315,7 +324,8 @@ def test_add_wood_to_a_lit_hearth_extends_its_fuel():
 
 def test_carried_wood_shows_in_the_standing_perception():
     w, actor = fresh()
-    run(w, actor, "go out", "gather wood")
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "gather wood")
     seen = w.perceive(actor)
     assert f"firewood ({WOOD_PER_GATHER})" in seen, \
         f"carried wood missing from the standing perception: {seen!r}"
@@ -368,11 +378,16 @@ def test_gather_and_add_wood_are_surfaced_in_available_actions():
     action list, not the room prose, so the verbs must appear there when
     legal."""
     w, actor = fresh()
+    w.rng = _Unlucky()
     run(w, actor, "go out")
-    assert "gather wood" in w.available_actions(actor), \
-        "gather wood should be offered in the yard"
+    assert "gather wood" not in w.available_actions(actor), \
+        "gather wood should no longer be offered in the yard"
 
-    run(w, actor, "gather wood", "go in")
+    run(w, actor, "go forest")
+    assert "gather wood" in w.available_actions(actor), \
+        "gather wood should be offered at the forest's edge"
+
+    run(w, actor, "gather wood", "go yard", "go in")
     assert "add wood" in w.available_actions(actor), \
         "add wood should be offered when carrying wood near the hearth"
 
@@ -409,13 +424,18 @@ def test_carried_single_item_has_no_count_suffix():
 
 def test_gather_wood_can_turn_up_a_found_item():
     """The curiosity nudge in the system prompt needs something to pay off:
-    a lucky gather sometimes turns up a small found object alongside the
-    wood -- purely cosmetic, freely carried, named in the result."""
+    a lucky turn at the forest's edge sometimes turns up a small found
+    object alongside the wood -- purely cosmetic, freely carried, named in
+    the result. FOREST_SPEC.md Stage 7: this now comes via forest_finds'
+    own per-tick roll (which fires on ANY forest-edge turn, gather-wood
+    included), not a separate roll cmd_gather makes itself -- see the
+    comment above cmd_gather for why a second roll would double-dip."""
     class Lucky:                             # force the find roll to fire
         def random(self): return 0.0
         def choice(self, seq): return seq[0]
     w, actor = fresh()
-    run(w, actor, "go out")
+    w.rng = _Unlucky()          # don't let arrival itself roll a find first
+    run(w, actor, "go out", "go forest")
     w.rng = Lucky()
     result = w.act(actor, "gather wood")
     found = [e for e in w.contents(actor.id) if e.location == actor.id]
@@ -448,12 +468,9 @@ def test_found_item_look_line_ends_with_a_cat_hint_only_when_cat_eligible():
 
 
 def test_gather_wood_found_item_is_rare_not_guaranteed():
-    class Unlucky:                           # never let the find roll succeed
-        def random(self): return 0.99
-        def choice(self, seq): return seq[0]
     w, actor = fresh()
-    run(w, actor, "go out")
-    w.rng = Unlucky()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
     w.act(actor, "gather wood")
     assert w.contents(actor.id) == [], "an unlucky gather shouldn't add a found item"
     assert actor.attrs["wood"] == WOOD_PER_GATHER, "wood itself must still be gathered"
@@ -729,11 +746,12 @@ def test_gather_can_still_yield_a_find_after_giving_one_away():
         def choice(self, seq): return seq[0]
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
-    w.act(actor, "give pinecone to cat")
-    run(w, actor, "go out")
+    w.act(actor, "give pinecone to cat")   # the cat starts in the hut
+    w.rng = _Unlucky()                     # don't let arrival itself roll first
+    run(w, actor, "go out", "go forest")
     w.rng = Lucky()
     result = w.act(actor, "gather wood")
-    assert "Something catches your eye" in result, "a curio must stay refindable after one is given away"
+    assert "you pocket it" in result, "a curio must stay refindable after one is given away"
 
 
 def test_give_redirects_a_non_curio_to_feed():
@@ -1364,10 +1382,10 @@ def test_forest_find_chance_was_cut_again_after_a_real_playtest_complaint():
     3-4 curios in "a few steps." forest_finds rolls on ANY tick spent at
     forest_edge regardless of which verb burns it (see forest_finds below),
     so more turns there always means more rolls -- the fix is the per-tick
-    chance itself, not which verb is used to linger. This drops the chance
-    below the yard's FOUND_ITEM_CHANCE, which is fine: the forest no longer
-    needs to stay "a somewhat better bet than the yard" now that the
-    spawn-starvation problem that rule existed for is long since fixed."""
+    chance itself, not which verb is used to linger. (The old yard-side
+    FOUND_ITEM_CHANCE this used to be compared against is retired -- see
+    FOREST_SPEC.md Stage 7, wood-gathering relocated here and dropped its
+    own separate roll rather than double the effective chance.)"""
     assert FOREST_FIND_CHANCE <= 0.1
 
 
@@ -2281,6 +2299,260 @@ def test_mark_trail_is_offered_only_at_the_forest_edge_past_depth_zero_and_not_y
         "already marked at the current depth -- offering it again would be a no-op"
 
 
+# ===========================================================================
+# FOREST_SPEC.md Stage 6 -- ambient, unscripted texture. Layered on top of
+# whatever describe_forest already returned, on any venture/return
+# (including the Stage 4 off-course branch), never in place of it, and
+# never referenced by any verb.
+# ===========================================================================
+class _AlwaysAmbient:
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+def test_forest_ambient_is_deterministic_given_a_seeded_rng():
+    import random as random_module
+    r1, r2 = random_module.Random(7), random_module.Random(7)
+    assert _forest_ambient(r1) == _forest_ambient(r2)
+
+
+def test_forest_ambient_returns_empty_string_most_of_the_time():
+    assert _forest_ambient(_Unlucky()) == ""
+
+
+def test_forest_ambient_draws_from_its_own_pool_when_it_fires():
+    assert _forest_ambient(_AlwaysAmbient()).strip() in FOREST_AMBIENT
+
+
+def test_venture_can_carry_an_ambient_line():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    w.rng = _AlwaysAmbient()
+    result = cmd_venture(w, actor, "")
+    assert any(line in result for line in FOREST_AMBIENT)
+
+
+def test_venture_omits_ambient_when_the_roll_misses():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    result = cmd_venture(w, actor, "")
+    assert not any(line in result for line in FOREST_AMBIENT)
+
+
+def test_return_can_carry_an_ambient_line_on_the_normal_branch():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture")
+    w.rng = _AlwaysAmbient()
+    result = cmd_return(w, actor, "")
+    assert any(line in result for line in FOREST_AMBIENT)
+
+
+def test_return_to_the_edge_never_carries_ambient_text():
+    """Depth 0 has its own fixed line, same reasoning describe_forest
+    already applies -- nothing forest-interior to layer ambience onto."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture")
+    w.rng = _AlwaysAmbient()
+    result = cmd_return(w, actor, "")
+    assert not any(line in result for line in FOREST_AMBIENT)
+
+
+def test_ambient_can_co_occur_with_an_off_course_return_without_crashing():
+    """The explicit FOREST_SPEC.md requirement: ambient lines must never
+    crash when they land on the same turn as a Stage 4 off-course event.
+    _AlwaysOffCourse forces random() to 0.0 too, so this also exercises the
+    co-occurrence for free, not just the crash-safety."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 2):
+        w.act(actor, "venture")
+    w.rng = _AlwaysOffCourse()
+    result = cmd_return(w, actor, "")   # must not raise
+    assert isinstance(result, str) and result
+
+
+# ===========================================================================
+# FOREST_SPEC.md Stage 7 -- the statue. Randomly discovered past
+# STATUE_MIN_DEPTH, mechanically inert: `wish` logs and confirms nothing,
+# ever. statue_found_this_session is session-scoped (like forest_depth),
+# so "found" doesn't survive a reload, but the statue entity itself
+# (created lazily on first wish) persists normally once it exists.
+# ===========================================================================
+class _AlwaysDiscover:
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+def test_statue_discovery_never_fires_below_statue_min_depth():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH):
+        result = w.act(actor, "venture")
+        if w.forest_depth < STATUE_MIN_DEPTH:
+            assert not w.statue_found_this_session
+            assert "stone figure" not in result
+
+
+def test_statue_can_be_discovered_past_the_min_depth():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    assert not w.statue_found_this_session
+    w.rng = _AlwaysDiscover()
+    result = w.act(actor, "venture")
+    assert w.forest_depth >= STATUE_MIN_DEPTH
+    assert w.statue_found_this_session
+    assert "stone figure" in result
+
+
+def test_statue_is_not_rediscovered_once_found_this_session():
+    """No flickering in and out of existence on repeated ventures -- once
+    found, later discovery text should not appear again."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysDiscover()
+    w.act(actor, "venture")
+    assert w.statue_found_this_session
+    result = w.act(actor, "venture")
+    assert "stone figure" not in result
+
+
+def test_wish_requires_the_statue_to_have_been_found_this_session():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH):
+        w.act(actor, "venture")
+    assert not w.statue_found_this_session
+    result = cmd_wish(w, actor, "a warm winter")
+    assert "nothing here" in result.lower()
+
+
+def test_wish_requires_currently_being_deep_enough():
+    """Found once doesn't mean wishable from the edge -- the hand has to
+    currently be at STATUE_MIN_DEPTH or beyond again."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysDiscover()
+    w.act(actor, "venture")
+    assert w.statue_found_this_session
+    w.rng = _Unlucky()
+    run(w, actor, "return", "return", "return", "return", "return", "return")
+    assert w.forest_depth < STATUE_MIN_DEPTH
+    result = cmd_wish(w, actor, "a warm winter")
+    assert "nothing here" in result.lower()
+
+
+def test_wish_works_again_at_a_different_depth_once_found():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysDiscover()
+    w.act(actor, "venture")
+    found_depth = w.forest_depth
+    w.rng = _Unlucky()
+    w.act(actor, "venture")   # one step deeper -- not the exact found depth
+    assert w.forest_depth != found_depth
+    assert w.forest_depth >= STATUE_MIN_DEPTH
+    result = cmd_wish(w, actor, "a warm winter")
+    assert result == STATUE_WISH_LINE
+
+
+def test_wish_requires_actual_wish_text():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    result = cmd_wish(w, actor, "")
+    assert "wish for what" in result.lower()
+
+
+def test_wish_logs_the_wish_and_returns_a_fixed_line_with_no_confirmation():
+    w, actor = fresh()
+    w.hand_name = "Rin"
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    result = cmd_wish(w, actor, "a warm winter")
+    assert result == STATUE_WISH_LINE
+    statue = w.get("statue")
+    assert any("a warm winter" in wish for wish in statue.attrs["wishes"])
+    assert any("Rin" in wish for wish in statue.attrs["wishes"])
+
+
+def test_wish_touches_no_state_besides_the_statues_own_wish_log():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    before = w.to_data()
+    cmd_wish(w, actor, "a warm winter")
+    after = w.to_data()
+    before_entities = {e["id"] for e in before["entities"]}
+    after_entities = {e["id"] for e in after["entities"]}
+    assert after_entities - before_entities == {"statue"}
+    before_by_id = {e["id"]: e for e in before["entities"]}
+    for e in after["entities"]:
+        if e["id"] == "statue":
+            continue
+        assert e == before_by_id[e["id"]], f"wish changed unrelated entity {e['id']}"
+
+
+def test_ensure_statue_is_idempotent():
+    w, actor = fresh()
+    statue1 = ensure_statue(w)
+    statue1.attrs["wishes"].append("a wish already logged")
+    statue2 = ensure_statue(w)
+    assert statue2 is statue1
+    assert statue2.attrs["wishes"] == ["a wish already logged"]
+
+
+def test_statue_found_this_session_does_not_survive_a_save_load_roundtrip():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert w.statue_found_this_session
+    assert "statue_found_this_session" not in w.to_data()
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert w2.statue_found_this_session is False
+
+
+def test_statue_wishes_persist_through_a_save_load_roundtrip():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    cmd_wish(w, actor, "a warm winter")
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    statue2 = w2.get("statue")
+    assert statue2 is not None
+    assert any("a warm winter" in wish for wish in statue2.attrs["wishes"])
+    assert w2.statue_found_this_session is False, "position/session facts still reset"
+
+
+def test_wish_action_is_offered_only_when_the_statue_is_reachable():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    assert not any(a.startswith("wish ") for a in w.available_actions(actor))
+    w.rng = _AlwaysDiscover()
+    w.act(actor, "venture")
+    assert any(a.startswith("wish ") for a in w.available_actions(actor))
+
+
 def test_no_forest_fragment_reads_as_a_refusal_marker():
     """The LLM driver's _looks_like_refusal scans for substrings like "can't"
     to tell a real refusal from a landed action -- a forest fragment that
@@ -2292,7 +2564,8 @@ def test_no_forest_fragment_reads_as_a_refusal_marker():
     from drivers import _REFUSAL_MARKERS
     all_fragments = [frag for band in FOREST_FRAGMENTS.values()
                       for pool in band.values() for frag in pool]
-    all_fragments += list(MOON_LINES) + list(OFF_COURSE_LINES)
+    all_fragments += list(MOON_LINES) + list(OFF_COURSE_LINES) + list(FOREST_AMBIENT)
+    all_fragments += [STATUE_DISCOVERY_TEXT, STATUE_WISH_LINE]
     all_fragments += [line for room in WILDLIFE_LINES.values()
                        for pool in room.values() for line in pool]
     for frag in all_fragments:

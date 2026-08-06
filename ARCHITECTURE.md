@@ -525,6 +525,104 @@ Costs a turn like any real action, needs nothing consumable, and is gated
 out of `available_actions` once redundant (depth 0, or already marked at
 the current depth) — same legibility rule as everywhere else in the game.
 
+## The forest, staged — Stage 6: ambient, unscripted texture
+
+The "crack in the closedness" the spec asked for: `FOREST_AMBIENT`/
+`_forest_ambient(rng)` is a small independent chance (`FOREST_AMBIENT_
+CHANCE`, 0.12), separate from Stage 2's depth-banded `FOREST_FRAGMENTS`,
+layered on top of whatever `describe_forest` already returned that step —
+never in place of it, and tied to no verb at all. No "investigate" option
+references it; same restraint as the statue, deliberately unexplained.
+
+Wired into both branches of `cmd_return` (the normal fall-back and the
+Stage 4 off-course landing) and into `cmd_venture` — but not the depth-0
+"back at the edge" lines in either, same reasoning `describe_forest`
+already follows: there's nothing forest-interior to layer ambience onto
+once you're back at the edge.
+
+The explicit spec requirement — ambient lines must never crash when they
+co-occur with an off-course event — turned out to be free rather than
+needing special handling: `_AlwaysOffCourse` (Stage 4's test double)
+forces `random()` to `0.0` unconditionally, so it *also* forces the
+ambient roll on the same call, which is what `test_ambient_can_co_occur_
+with_an_off_course_return_without_crashing` actually exercises, not a
+contrived combination.
+
+BUG WE HIT while writing the pool: two of the six ambient lines happened
+to contain a `_REFUSAL_MARKERS` substring ("you can't place", "already
+gone") — the exact same class of incident `test_no_forest_fragment_reads_
+as_a_refusal_marker` already existed to catch for `FOREST_FRAGMENTS`. That
+test now also scans `FOREST_AMBIENT` (and `MOON_LINES`/`OFF_COURSE_LINES`,
+picked up in the same pass) — worth re-running whenever any of these pools
+grow.
+
+## The forest, staged — Stage 7: wood relocation and the statue
+
+Two of the three things Stage 7 promised; the tea-herb is deliberately
+deferred (see FOREST_SPEC.md), not forgotten.
+
+**Wood-gathering relocated from the yard to the forest's edge** —
+`cmd_gather`'s location check flipped from `"yard"` to `"forest_edge"`,
+`available_actions` moved the cue to match, and the yard goes back to
+being just the yard (no room-description change needed; it never
+mentioned wood in the first place, discoverability always rode on the
+action list, per `test_yard_description_does_not_mention_wood`). The one
+real decision: `cmd_gather` **dropped its own separate find-roll**
+entirely rather than bringing `FOUND_ITEM_CHANCE` (0.15) along with it.
+`forest_finds` already rolls `FOREST_FIND_CHANCE` on any tick spent at
+the forest's edge, gather-wood turns included — stacking a second,
+independent roll on top would have doubled the effective find chance
+exactly where wood-gathering now happens, which is precisely the
+"moved, not intensified" constraint the spec states outright. `FOUND_
+ITEM_CHANCE` is retired along with the roll it powered.
+
+**The statue** is discovered, not placed. `STATUE_MIN_DEPTH` (3) gates it
+out entirely below that depth — a deep-visit thing, never a short-trip
+accident — and beyond it, each `venture` rolls `STATUE_DISCOVERY_CHANCE`
+(0.15) independently. On a hit, `world.statue_found_this_session` (session-
+scoped, declared in `World.__init__` alongside `forest_depth`/`forest_
+mark_depth`/`calm_visits`, for the identical episodic-reset reason) is set
+`True` and the discovery line is appended — composition order per the
+cross-cutting requirement, discovery text before the ambient roll, since
+`venture` has no off-course branch to also consider (that's `return`-only).
+Once found, it stays found for the rest of the session; `test_statue_is_
+not_rediscovered_once_found_this_session` pins that the discovery text
+never repeats on a later `venture`.
+
+`wish <something>` (`cmd_wish`) is gated by `_statue_reachable`: found
+this session *and* currently at `forest_edge` with `forest_depth >=
+STATUE_MIN_DEPTH` again — found-once doesn't mean wishable from the edge,
+but it also isn't pinned to the exact depth it first appeared at (the flag
+is a plain boolean, not a stored depth), so a hand can wish again from any
+sufficiently deep point later in the same visit. **The constraint that
+must never break, restated from README's "wishing-statue" section**: the
+verb is mechanically inert. `cmd_wish` never checks or grants anything —
+it appends the raw wish text (tagged with `_day_stamp`, the same stamp
+`cmd_write`/the LLM sign-off use) to `ensure_statue(world).attrs["wishes"]`
+and always returns the identical fixed `STATUE_WISH_LINE`, with no
+confirmation of anything heard or granted, ever. `ensure_statue` creates
+the statue's entity lazily, on the first actual wish — unlike `ensure_
+shelf`/`ensure_cairn`, it isn't wired into `load_or_build`, since most
+visits (plausibly most whole lineages) may never find it at all, and
+nothing else needs the entity to exist before then.
+
+Deliberately **not** added to `check_world`: a standing invariant that
+`statue_found_this_session` is never `True` below `STATUE_MIN_DEPTH`. The
+spec's cross-cutting section suggested this, but it doesn't actually hold
+in correct play — a hand who finds the statue at depth 5 and then
+`return`s to depth 1 still has the flag `True` (correctly: they still
+remember finding it) while currently shallower than the threshold. Adding
+that check would fire a false positive on ordinary, intended behavior, so
+the structural `to_data()`-shape test already covers the real risk here
+(a forest-transient field leaking into a save) without a check that would
+be wrong the moment someone actually returns partway back.
+
+BUG WE HIT while writing the discovery line: two successive drafts each
+tripped `test_no_forest_fragment_reads_as_a_refusal_marker` ("you can't
+tell", then "there's no telling") before landing on wording that avoids
+`_REFUSAL_MARKERS` altogether -- same incident class as Stage 6's ambient
+pool, worth expecting again for any future statue/forest prose.
+
 ## The full moon — the one exception to the night withdrawal
 
 `watch clouds` at night has always been a clean withdrawal (`WATCH_CLOUDS_

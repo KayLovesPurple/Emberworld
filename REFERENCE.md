@@ -26,13 +26,14 @@
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
 - `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once).
-- `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
+- `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall.
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
 - `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
 - `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
 - `mark` -- mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back.
+- `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 
@@ -51,7 +52,7 @@
 - **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's dying low on fuel or burning steady, so a hand can see it needs wood before it goes dark, not just be told after the fact.
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it is -- carried or set down -- warning inline as it runs low and again when it finally goes dark.
-- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there), each turn has a small chance of turning up a curio underfoot -- the same find table `gather wood` draws from.
+- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there), each turn has a small chance of turning up a curio underfoot -- the one and only find-roll here, including on a `gather wood` turn now that gathering has relocated to this room too.
 - **wildlife_glimpse** -- Autonomous: while a hand is present, a small independent chance per tick of glimpsing something living and entirely unrelated to whatever the hand is doing -- see WILDLIFE_LINES/WILDLIFE_CHANCE above.
 
 ## World rules (from the code's own constants)
@@ -63,7 +64,7 @@
 - The cat stays content (and may do small idle things) below hunger **24**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **60** fuel -- a full night's burn, and enough to revive a spent hearth.
-- A found curio turns up **15%** of the time on a lucky gather, and **8%** of the time on any turn spent at the forest's edge -- a somewhat better bet, never a guarantee either way.
+- A found curio turns up **8%** of the time on any turn spent at the forest's edge (gathering wood included) -- a delight, never a guarantee.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The hut's curio shelf holds up to **10** things at once -- personal and curated, unlike the forest-edge cairn, which is collective and never full.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.

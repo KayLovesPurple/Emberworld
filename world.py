@@ -105,6 +105,12 @@ class World:
         # above, for the identical reason: a trail marked this visit means
         # nothing to the next, memoryless hand.
         self.forest_mark_depth = 0
+        # FOREST_SPEC.md Stage 7: whether THIS session has found the statue
+        # yet (content.py's cmd_venture rolls for it past STATUE_MIN_DEPTH).
+        # Session-scoped like forest_depth/forest_mark_depth above, for the
+        # same reason -- whether you've found it is a fact about this visit,
+        # not the world; the next hand has to find it again on their own.
+        self.statue_found_this_session = False
         # Calm-axis session acknowledgment (see content.py's _calm_visit_ack):
         # how many times THIS hand has chosen a calm act at a given calm spot
         # this visit, keyed by spot (e.g. "forest_edge"). Same reasoning as
@@ -192,7 +198,7 @@ class World:
         # imports World/Entity from here, making a module-level import back
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in, find_visible, _is_full_moon, SHELF_CAPACITY
+        from content import _crop_in, _patch_in, find_visible, _is_full_moon, SHELF_CAPACITY, _statue_reachable
         acts = ["look", "actions", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
@@ -213,9 +219,8 @@ class World:
         bucket = find_visible(self, actor, "bucket")
         if crop and not crop.attrs.get("ready") and bucket and bucket.attrs.get("water", 0) > 0:
             acts.append("water crop")
-        if room.id == "yard":
-            acts.append("gather wood")
         if room.id == "forest_edge":
+            acts.append("gather wood")
             acts.append("listen")
             acts.append("venture")
             if self.forest_depth > 0:
@@ -224,6 +229,8 @@ class World:
                     acts.append("mark trail")
             if any("stone" in e.name.lower() for e in carried):
                 acts.append("stack stone on cairn")
+            if _statue_reachable(self, actor):
+                acts.append("wish <something>")
         if room.id in ("yard", "forest_edge") and (
                 self.phase() != "night" or _is_full_moon(self)):
             acts.append("watch clouds")

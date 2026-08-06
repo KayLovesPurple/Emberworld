@@ -78,13 +78,14 @@ grown, harvested, and cooked before they'll feed you. There's a cat: it
 wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
 never come to harm** — that's guaranteed in the code and pinned by a test.
 Draw water from the well into the bucket, then water a planted crop to speed
-its growth. Gather fallen wood in the yard and add it to the hearth to keep the
-fire going, and once in a while turn up a small found curio—a pinecone, a
-smooth stone, or some other odd little thing—alongside it. A path off the
-yard leads to the forest's edge, where lingering sometimes turns up a curio
-of its own — the same find, rarer than a guarantee (rarer, in fact, than the
-yard's own incidental luck now — a pacing-rebalance round two cut it further
-after real play showed lingering there still turned up curios too fast). A
+its growth. A path off the yard leads to the forest's edge, and that's
+where the wood comes from now too: gather fallen branches and deadfall
+there and add them to the hearth to keep the fire going. Any turn spent at
+the edge — gathering included — has a small independent chance of turning
+up a small found curio underfoot alongside whatever else you're doing: a
+pinecone, a smooth stone, or some other odd little thing. Rare on purpose,
+a delight rather than a per-visit faucet — the chance got cut twice over,
+in real play, after lingering there kept turning up curios too fast. A
 curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark —
 and rarely, if a played-with one is still lying around, the cat will bat
@@ -126,7 +127,14 @@ landing off-course beyond the mark, not the whole way back to the edge.
 Marking never lowers an existing, deeper mark — there's no way to mark
 yourself into more danger — and it's most useful marked as you go, since
 one step past your last mark is still real risk by design; the danger
-lives specifically in the ground gained since you last checked in.
+lives specifically in the ground gained since you last checked in. Push
+deep enough (past 3 steps in) and, rarely, a `venture` turns up the
+statue — mossy, unexplained, and mechanically inert: `wish <something>`
+there costs a turn, changes nothing, and returns the same fixed line every
+time, no matter what you ask for or whether anything comes of it. Once
+found, it stays findable again from anywhere deep enough for the rest of
+your visit; a short trip may never reach it at all, which is fine — see
+"The wishing-statue" below for what that not-finding is actually for.
 
 Two more things happen without any verb at all. Once in a long while
 (roughly every 29 days — the world's own clock, unrelated to anyone's
@@ -136,8 +144,13 @@ itself instead, purely to look at — it lights nothing and changes nothing.
 And rarely, in the yard or at the forest's edge, something living crosses
 your path uninvited — a fox at dusk, an owl heard once at night, a deer at
 dawn — gone by the time you're sure you saw it, with no verb to chase it
-and nothing it adds to your pack. Both are pure texture: proof, now and
-then, that the world holds more than the hand currently walking through it.
+and nothing it adds to your pack. In the forest specifically, every
+`venture` and `return` also carries a small, independent chance of one
+more line — a smell with no source, a bird that stops mid-song, a branch
+that cracks and nothing follows it — layered on top of the usual texture,
+tied to no verb and explaining nothing. All of it is pure texture: proof,
+now and then, that the world holds more than the hand currently walking
+through it.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -166,22 +179,20 @@ A running list of intended features, roughly in dependency order. Each depends
 on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
-1. **The forest** *(a real project, its own design pass — now being built in
-   stages; see `FOREST_SPEC.md` for the full staged plan).* A v1 doorway
-   already exists — `the forest's edge`, off the yard, where lingering
-   occasionally turns up a curio (the same find table `gather wood` draws
-   from, kept deliberately rare — a delight rather than a per-visit faucet)
-   and `listen` offers a calm, unpressured turn that changes nothing.
-   Named "edge" rather than "forest" deliberately, so the full build can grow
-   into it without a rename. **`FOREST_SPEC.md` Stage 1 — done:** a
-   session-scoped depth counter plus `venture`/`return` verbs to move it (no
-   texture, no risk yet — see the spec for what that's laying the groundwork
-   for). The rest is still ahead: texture generation, the episodic-reset
-   rule made explicit, getting-lost risk, trail-marking, ambient texture, and
-   then wood-gathering *relocating* here (the yard goes back to being just
-   the yard), the mysterious statue, and the herb you steep for tea. Room to
-   grow later into weather, foraging — and birds for the cat to chirp at (a
-   line already waiting in the cat's idle-action list).
+1. **The forest** *(a real project, its own design pass — see `FOREST_SPEC.md`
+   for the full staged plan).* **Stages 1-6 — done:** a session-scoped depth
+   counter with `venture`/`return`/`mark trail`, generated texture (near/mid/
+   deep bands plus an independent ambient-line chance), the episodic-reset
+   rule made explicit, and a bounded getting-lost risk past a safe depth.
+   **Stage 7 — two of three done:** wood-gathering has relocated here from
+   the yard (the yard is just the yard again, and gathering no longer rolls
+   its own separate find-chance — the forest's existing per-tick roll covers
+   it, so relocating didn't also intensify it), and the mysterious statue is
+   real, discoverable past a minimum depth, with a mechanically inert `wish`
+   verb (see "The wishing-statue" below). **Only the tea-herb is still
+   ahead**, deliberately deferred rather than forgotten. Room to grow later
+   into weather, foraging — and birds for the cat to chirp at (a line
+   already waiting in the cat's idle-action list).
 
 2. **Tea** *(once fire is reliable and the forest gives you something to brew).*
    The first thing *made from multiple systems at once*: water (well) + fire
@@ -189,12 +200,14 @@ commitment.
    than a single-verb loop — the cosiest possible use of a turn, and a
    self-directed comfort for the player the way petting is comfort for the cat.
 
-**The mysterious statue** *(in the forest, deliberately mechanic-free).* It must
-do NOTHING. No verb, no state, no puzzle — a room, a description, and no
-explanation, ever. Its entire value is that it resists the system: every hand
-encounters it, wonders, and can't resolve it, so the *journal* becomes where the
-lineage theorises and a shared myth grows around an object that means nothing.
-The restraint IS the feature. Resist every future urge to explain it.
+**The mysterious statue** *(built — FOREST_SPEC.md Stage 7 — deliberately
+mechanic-free even so).* It does NOTHING. No state, no puzzle, no
+explanation, ever — `wish <something>` is the one verb it answers to, and
+that verb is a no-op by design (see "The wishing-statue" below). Its entire
+value is that it resists the system: every hand who finds it wonders, and
+can't resolve it, so the *journal* becomes where the lineage theorises and
+a shared myth grows around an object that means nothing. The restraint IS
+the feature. Resist every future urge to explain it.
 
 **Clay — the open-material question** *(a design problem, not a quick feature).*
 Clay would be the first *open* material: a raw thing the player/agent shapes into
@@ -274,7 +287,7 @@ potato's own restraint — less because it competes with anything (it
 doesn't) and more for legibility: one anticipation arc per visit, not a
 flowerbed to manage.
 
-### The wishing-statue — a wish-sink (lives in the forest, built with it)
+### The wishing-statue — a wish-sink (built — FOREST_SPEC.md Stage 7)
 
 The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.
 
@@ -284,11 +297,9 @@ The statue threads this because the granter is diegetic. The agent isn't petitio
 
 **The constraint that must not be broken — the statue stays mechanically inert.** At build time the temptation will be to make it *do* something: grant an item, change state, react. It must not. The instant the statue visibly grants, three things break at once: it stops being mechanic-free (violates the forest's core value); wants aimed at it become performance (the exact failure we designed around); and it becomes the god we rejected — a power to petition rather than lore to speak to. Keep the three layers separate: **lore says it grants; mechanics grant nothing; the granting happens invisibly, later, by us.** Collapse them and the whole thing is ruined.
 
-**Behaviour, when eventually built.** `wish <something>` at the statue produces no state change of any kind — mechanically identical to a no-op — but returns atmosphere, and the wish is logged where we read it (tagged as a statue-wish: the most *deliberate* tier of want, since the agent spent a scarce turn walking to a stone to say it). Wishing costs a turn on purpose — the turn-cost *is* the signal; a free wish is cheap talk. No confirmation that anything was heard or granted, ever. Draft atmosphere line: *"The stone takes your wish and says nothing. Whatever you asked, it keeps."*
+**Behaviour, as built.** `wish <something>` at the statue produces no state change of any kind — mechanically identical to a no-op — but returns atmosphere, and the wish is logged where we read it (`statue.attrs["wishes"]`, tagged with the same day/name stamp the journal uses: the most *deliberate* tier of want, since the hand spent a scarce turn getting deep enough to say it). Wishing costs a turn on purpose — the turn-cost *is* the signal; a free wish is cheap talk. No confirmation that anything was heard or granted, ever. The actual line: *"The stone takes your wish and says nothing. Whatever you asked, it keeps."* The statue only ever appears past a minimum depth, discovered by chance rather than placed at a fixed point, so a short visit may never find it at all — and not finding it is the same "un-granted and that's fine" logic the wishes themselves already live by, one level up.
 
-**On the wishes we can't grant.** Most of the interesting ones are un-grantable — too expensive (company, the forest itself), or wrong to grant because the not-having is the point (same as the statue's own pointlessness, the crow's harmless gifts, the vetoed cat-gift). Not-granting is frequently the *right* response, not a failure: a world where every want is instantly met has no yearning left in it, and yearning is half of what makes the lineage journal move. Log the un-granted ones anyway, in a "what they reached for" note beside the journal — the same act as the sky photo or a postcard, catching the shape of a small real thing so it outlasts the moment. Mostly never actioned. Kept anyway. A keepsake, not a to-do list.
-
-**Dependency:** the forest, which is its own project. This is filed now so the design intent — especially the inert constraint — survives until then.
+**On the wishes we can't grant.** Most of the interesting ones are un-grantable — too expensive (company, the forest itself), or wrong to grant because the not-having is the point (same as the statue's own pointlessness, the crow's harmless gifts, the vetoed cat-gift). Not-granting is frequently the *right* response, not a failure: a world where every want is instantly met has no yearning left in it, and yearning is half of what makes the lineage journal move. The wish log is exactly this: a "what they reached for" record, the same act as the sky photo or a postcard, catching the shape of a small real thing so it outlasts the moment. Mostly never actioned. Kept anyway. A keepsake, not a to-do list — reading it, and occasionally granting one quietly, three hands later, is now a real thing to actually go do.
 
 
 ### Reset or richer — the calm-axis invariant
