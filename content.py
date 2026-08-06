@@ -200,11 +200,56 @@ def forest_finds(world, room):
                        room.id)
 
 
+# Ambient wildlife -- glimpsed, not met. No verb triggers it, no verb
+# resolves it, same restraint as the statue: it exists whether or not a hand
+# notices, and nothing a hand can do makes it happen or explains it. Phase-
+# keyed per room so what might be seen matches when it'd make sense to see
+# it (a fox doesn't cross the yard at noon). Distinct from forest_finds --
+# this never adds anything to a pack or the world; it's texture, not a find.
+WILDLIFE_CHANCE = 0.03   # per eligible tick -- rare, an occasional delight
+
+WILDLIFE_LINES = {
+    "yard": {
+        "dusk": (
+            "A fox crosses the yard, unhurried, and is gone before you're "
+            "sure you saw it.",
+        ),
+        "night": (
+            "Something small rustles along the fence line, then goes still.",
+        ),
+    },
+    "forest_edge": {
+        "dawn": (
+            "A deer stands at the treeline a moment, then steps back and is "
+            "gone.",
+        ),
+        "night": (
+            "An owl calls once from deeper in the trees, and doesn't call "
+            "again.",
+        ),
+    },
+}
+
+
+def wildlife_glimpse(world, room):
+    """Autonomous: while a hand is present, a small independent chance per
+    tick of glimpsing something living and entirely unrelated to whatever
+    the hand is doing -- see WILDLIFE_LINES/WILDLIFE_CHANCE above."""
+    actor = world.get("you")
+    if actor is None or actor.location != room.id:
+        return
+    pool = WILDLIFE_LINES.get(room.id, {}).get(world.phase())
+    if not pool:
+        return
+    if world.rng.random() < WILDLIFE_CHANCE:
+        world.announce(world.rng.choice(pool), room.id)
+
+
 BEHAVIORS.update({"burning": burning, "growing": growing, "patch_state": patch_state,
                    "patch_volunteer": patch_volunteer,
                    "bucket_state": bucket_state, "hearth_state": hearth_state,
                    "hungering": hungering, "lamp_burning": lamp_burning,
-                   "forest_finds": forest_finds})
+                   "forest_finds": forest_finds, "wildlife_glimpse": wildlife_glimpse})
 
 
 def _patch_in(world, room_id):
@@ -801,11 +846,36 @@ LISTEN_LINES = (
 )
 
 
+# Calm-axis session acknowledgment. Session-scoped (see world.calm_visits),
+# never saved: how many times THIS hand has chosen a calm act at a given calm
+# spot this visit. "listen" and "watch clouds" share one counter at the
+# forest's edge -- keyed by spot, not by verb -- because this is tracking
+# chosen presence, not mastery of one command; a future calm verb there (e.g.
+# a "look at flowers") should feed the same counter. Only the forest's edge
+# gets this: it's the one place nothing forces a hand to visit, so repeat
+# presence there actually means something chosen. The yard is constant
+# through-traffic for chores, so counting visits there would just be counting
+# the forced loop, not calm -- watch_clouds in the yard stays untouched.
+# Fires exactly once, at the third calm act, and never again this visit: not
+# a running status, not a buff, no confirmation of anything beyond that one
+# line -- same discipline as listen/watch_clouds granting nothing, one size
+# smaller. See test_calm_visit_ack_fires_once_on_the_third_calm_act_and_never_again.
+CALM_ACK_AT = 3
+CALM_ACK_LINE = " You're getting to know this stretch of quiet."
+
+
+def _calm_visit_ack(world, spot):
+    world.calm_visits[spot] = world.calm_visits.get(spot, 0) + 1
+    if world.calm_visits[spot] == CALM_ACK_AT:
+        return CALM_ACK_LINE
+    return ""
+
+
 def cmd_listen(world, actor, arg):
     """listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge)."""
     if actor.location != "forest_edge":
         return "There's nothing in particular to listen for here. Try the forest's edge."
-    return world.rng.choice(LISTEN_LINES)
+    return world.rng.choice(LISTEN_LINES) + _calm_visit_ack(world, "forest_edge")
 
 
 # FOREST_SPEC.md Stage 2 -- texture generation: fragments, not rooms. Each
@@ -946,12 +1016,42 @@ def cmd_venture(world, actor, arg):
     return "You push on, deeper into the trees. " + describe_forest(world.forest_depth, world.rng)
 
 
+# FOREST_SPEC.md Stage 4 -- getting lost: a bounded, opt-in risk. Below
+# SAFE_DEPTH_THRESHOLD, return is always exact -- airtight, since it's the
+# safety guarantee for a short, casual dip in (see
+# test_return_below_the_safe_depth_threshold_is_always_exact_even_under_a_forced_roll).
+# Beyond it, each return carries a small independent chance of landing
+# somewhere other than the expected depth-1 -- never past the edge (floor
+# 0), and never at the expected depth itself, or it wouldn't read as
+# off-course at all. No penalty beyond the mismatch: no damage, no lost
+# items, no extra turn spent -- the disorientation IS the whole cost.
+SAFE_DEPTH_THRESHOLD = 3
+OFF_COURSE_CHANCE = 0.18
+
+OFF_COURSE_LINES = (
+    "You lose the thread among the trees for a moment.",
+    "The way back blurs -- one stretch of trunks looks much like another.",
+    "You second-guess a turn, and by the time you're sure, you've gone the wrong way about it.",
+)
+
+
 def cmd_return(world, actor, arg):
-    """return -- fall back toward the forest's edge from wherever you've ventured."""
+    """return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected)."""
     if actor.location != "forest_edge":
         return "There's nowhere to return from here."
-    if world.forest_depth <= 0:
+    depth = world.forest_depth
+    if depth <= 0:
         return "You're already back at the edge."
+    if depth > SAFE_DEPTH_THRESHOLD and world.rng.random() < OFF_COURSE_CHANCE:
+        expected = depth - 1
+        new_depth = world.rng.choice([d for d in range(depth) if d != expected])
+        world.forest_depth = new_depth
+        lead = world.rng.choice(OFF_COURSE_LINES)
+        if new_depth == 0:
+            return (lead + " When the trees finally open up, you're back at "
+                    "the edge already -- sooner than you expected, and not "
+                    "quite sure how.")
+        return lead + " " + describe_forest(new_depth, world.rng)
     world.forest_depth -= 1
     if world.forest_depth == 0:
         return "You retrace your steps and come back out at the forest's edge, the yard's quiet within reach again."
@@ -991,15 +1091,106 @@ WATCH_CLOUD_LINES = {
 
 WATCH_CLOUDS_NIGHT_MSG = "The sky's gone to black -- nothing up there to watch for now."
 
+# The one exception to the night withdrawal above. A real, uncontrollable
+# clock the world keeps regardless of any hand's visits -- not tied to
+# forest_depth or anything session-scoped, so it's the rare case where a
+# hand can actually SEE that the world runs on a schedule bigger than any
+# one visit. Purely descriptive, on purpose: it must never light the room
+# (no free lamp-substitute) or change anything else -- same never-break
+# constraint as the rest of this calm family, just gated by date instead of
+# a dice roll.
+MOON_CYCLE_DAYS = 29
+
+MOON_LINES = (
+    "The moon stands full and close tonight, bright enough to throw a shadow.",
+    "A full moon rides high, and for once the dark has an edge to it, silvered.",
+    "Everything under the full moon reads in greys, sharp and unfamiliar.",
+)
+
+
+def _is_full_moon(world):
+    return world.day() % MOON_CYCLE_DAYS == 0
+
 
 def cmd_watch_clouds(world, actor, arg):
-    """watch clouds -- pause under open sky and watch the clouds move; a chosen, unpressured turn that changes nothing (yard or the forest's edge, daylight only)."""
+    """watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing."""
     if actor.location not in ("yard", "forest_edge"):
         return "There's no open sky to watch here."
     phase = world.phase()
     if phase == "night":
-        return WATCH_CLOUDS_NIGHT_MSG
-    return world.rng.choice(WATCH_CLOUD_LINES[phase])
+        if not _is_full_moon(world):
+            return WATCH_CLOUDS_NIGHT_MSG
+        line = world.rng.choice(MOON_LINES)
+    else:
+        line = world.rng.choice(WATCH_CLOUD_LINES[phase])
+    if actor.location == "forest_edge":
+        line += _calm_visit_ack(world, "forest_edge")
+    return line
+
+
+# The forest-edge cairn -- a collective, permanent counterpart to the hut's
+# shelf. The shelf is personal and reversible (a later hand can take an item
+# back); a stone added here isn't -- it stops being anyone's the instant it
+# joins the pile, and becomes part of something the whole lineage built, one
+# stone at a time, that no single hand owns or can undo. Reset-or-richer
+# taken to its most literal point: this can only ever grow.
+CAIRN_ID = "cairn"
+# cm added per stone. world.rng.choice, not .randint -- every rng stand-in
+# used across the test suite (see _Unlucky, Cycle above) only implements
+# .random()/.choice(), the same convention describe_forest's fragment draws
+# already follow. A small range, not a fixed amount, so the number itself
+# has a little texture rather than reading like a progress bar.
+CAIRN_GROWTH_CM = (2, 3, 4, 5)
+
+# Height read as prose, banded like the hearth's healthy/low/spent -- a felt
+# sense of how tall it's gotten, not a digit to watch climb. Growing this
+# tall takes many, many stones across many, many hands (stones are already
+# rare finds) -- that slowness is the point: nobody who adds one stone will
+# see it grow by much, only the lineage as a whole will.
+CAIRN_BANDS = (
+    (0, "a flat stone set into the ground here -- a good place to start a cairn"),
+    (10, "the first few stones of a cairn, ankle-high"),
+    (40, "a cairn, knee-high now"),
+    (80, "a cairn, waist-high"),
+    (130, "a cairn, shoulder-high -- taller than it has any right to be"),
+    (190, "a cairn taller than anyone who's added to it, stone stacked on stone"),
+)
+
+
+def _cairn_description(height_cm):
+    text = CAIRN_BANDS[0][1]
+    for threshold, line in CAIRN_BANDS:
+        if height_cm >= threshold:
+            text = line
+    return text
+
+
+def ensure_cairn(world):
+    """Add the forest-edge cairn to a world that predates it (fresh build or
+    an older save) -- same backfill role as ensure_shelf."""
+    cairn = world.get(CAIRN_ID)
+    if cairn is None:
+        cairn = world.add(Entity(CAIRN_ID, "cairn", _cairn_description(0),
+                                  location="forest_edge",
+                                  attrs={"height_cm": 0}))
+    return cairn
+
+
+def cmd_stack_stone(world, actor, arg):
+    """stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile."""
+    if actor.location != "forest_edge":
+        return "There's no cairn here -- it's at the forest's edge."
+    item_name = arg.lower().strip() or "stone"
+    if item_name.endswith(" on cairn"):
+        item_name = item_name[:-len(" on cairn")].strip() or "stone"
+    e = find_visible(world, actor, item_name)
+    if not e or e.location != actor.id or "stone" not in e.name.lower():
+        return "You've no stone to add. One might turn up gathering wood, or lingering here."
+    world.entities.pop(e.id, None)
+    cairn = ensure_cairn(world)
+    cairn.attrs["height_cm"] += world.rng.choice(CAIRN_GROWTH_CM)
+    cairn.description = _cairn_description(cairn.attrs["height_cm"])
+    return "You set the stone on the pile. Now: " + cairn.description
 
 
 def cmd_save(world, actor, arg):
@@ -1025,6 +1216,7 @@ VERBS.update({
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
+    "stack": cmd_stack_stone,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
 
@@ -1037,7 +1229,25 @@ FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "re
 # can slip in undocumented.
 # ---------------------------------------------------------------------------
 def _first_line(fn):
+    """The verb summary. Verb docstrings are a single physical line by
+    convention and sometimes deliberately hold two sentences on purpose
+    (`pet cat`'s "Accomplishes nothing; is the entire point." is the whole
+    joke) -- so this must return the line verbatim, never truncate at a
+    sentence boundary."""
     return (fn.__doc__ or "(undocumented)").strip().split("\n")[0]
+
+
+def _first_sentence(fn):
+    """The behavior summary. Unlike verbs, behavior docstrings are wrapped
+    prose -- taking the literal first physical line (as _first_line does)
+    routinely cuts a sentence off mid-clause. Join the lines back into one
+    string and stop at the first sentence-ending period instead, so
+    REFERENCE.md gets one complete thought. Falls back to the whole
+    (whitespace-joined) docstring when there's no internal ". " to split
+    on -- i.e. the docstring is already a single sentence."""
+    doc = " ".join((fn.__doc__ or "(undocumented)").split())
+    end = doc.find(". ")
+    return doc if end == -1 else doc[:end + 1]
 
 
 def generate_reference():
@@ -1064,7 +1274,7 @@ def generate_reference():
     out += ["", "## Autonomous behaviors",
             "*These run on their own every tick, whether or not you act.*", ""]
     for name, fn in BEHAVIORS.items():
-        out.append(f"- **{name}** -- {_first_line(fn)}")
+        out.append(f"- **{name}** -- {_first_sentence(fn)}")
 
     out += ["", "## World rules (from the code's own constants)", "",
             f"- A full day is **{DAY_LENGTH} ticks**; night falls late in that "
@@ -1139,12 +1349,13 @@ def build_world():
         "Rough plank walls, a dirt floor, the smell of old woodsmoke. A cold "
         "hearth waits against one wall. Through the doorway, the yard.",
         exits={"out": "yard"}))
-    w.add(Entity("yard", "The Yard",
+    yard = w.add(Entity("yard", "The Yard",
         "Long grass, wet with evening. A vegetable patch of turned soil runs "
         "along the fence; the dark shape of a well stands near the gate. "
         "Past the fence, a path leads off toward the forest's edge. Overhead, "
         "clouds cross an open sky -- worth a moment, watching them go.",
         exits={"in": "hut", "forest": "forest_edge"}))
+    yard.attach("wildlife_glimpse")
     forest_edge = w.add(Entity("forest_edge", "The Forest's Edge",
         "The yard's small sounds fade out behind you. Trees close ranks "
         "along the path here, though it opens into a narrow clearing before "
@@ -1153,6 +1364,8 @@ def build_world():
         "just to listen.",
         exits={"yard": "yard"}))
     forest_edge.attach("forest_finds")
+    forest_edge.attach("wildlife_glimpse")
+    ensure_cairn(w)
 
     lamp = w.add(Entity("lamp", "lamp", "", location="hut",
         portable=True, attrs={"lit": False, "fuel": 0}))

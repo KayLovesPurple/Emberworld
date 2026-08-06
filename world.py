@@ -98,6 +98,13 @@ class World:
         # episodic (gone the instant a session ends), unlike anything a hand
         # actually carries or changes out there, which persists normally.
         self.forest_depth = 0
+        # Calm-axis session acknowledgment (see content.py's _calm_visit_ack):
+        # how many times THIS hand has chosen a calm act at a given calm spot
+        # this visit, keyed by spot (e.g. "forest_edge"). Same reasoning as
+        # forest_depth above -- deliberately not part of to_data()/from_data();
+        # a hand's own sense of "I've been coming back here" is episodic, not
+        # a fact about the world for the next hand to inherit.
+        self.calm_visits = {}
 
     # --- bookkeeping -------------------------------------------------------
     def add(self, e):
@@ -178,7 +185,7 @@ class World:
         # imports World/Entity from here, making a module-level import back
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in, find_visible
+        from content import _crop_in, _patch_in, find_visible, _is_full_moon
         acts = ["look", "actions", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
@@ -206,7 +213,10 @@ class World:
             acts.append("venture")
             if self.forest_depth > 0:
                 acts.append("return")
-        if room.id in ("yard", "forest_edge") and self.phase() != "night":
+            if any("stone" in e.name.lower() for e in carried):
+                acts.append("stack stone on cairn")
+        if room.id in ("yard", "forest_edge") and (
+                self.phase() != "night" or _is_full_moon(self)):
             acts.append("watch clouds")
         if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
             acts.append("add wood")

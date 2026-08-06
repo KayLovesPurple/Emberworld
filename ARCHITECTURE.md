@@ -108,7 +108,8 @@ than reinventing "which room is this in."
 `gather wood` rarely turns up a small found object (`FOUND_ITEMS` in
 content.py: name, a bare odd-register look_line, and a `cat_reaction` of
 `"plays"` or `"ignores"`). A curio has exactly three fates, and picking one
-forecloses the others:
+forecloses the others (a stone specifically has a fourth — see "The cairn"
+below):
 
 - **Notice** — `look <thing>` shows the odd line, with a cat hint appended
   only for a `"plays"` reaction (`_found_description`). Free, pressure-free;
@@ -316,6 +317,190 @@ and "there's no stone in sight" before either shipped.
 `test_no_forest_fragment_reads_as_a_refusal_marker` in `test_content.py`
 guards this directly, and is worth re-running (or extending) whenever new
 fragments are added in later stages.
+
+## Calm-axis session acknowledgment
+
+`listen` and `watch clouds` grant nothing, ever — that constraint (above)
+must never break. But a real gap turned up in play: for a hand with no
+memory of any visit but this one, "grants nothing" was indistinguishable
+from "didn't happen at all," which quietly defeated the point of a calm
+action in the first place — a human player carries the feeling of a quiet
+moment forward on their own; an LLM hand has nothing to carry it forward
+*with* except what the world itself hands back. The fix has to answer back
+to the same hand, in the same visit, without becoming a reward.
+
+`world.calm_visits` (a plain `dict`, declared next to `forest_depth` in
+`World.__init__`, same episodic treatment — never touches `to_data()`)
+counts how many times *this* hand has chosen a calm act at a given spot this
+session. `_calm_visit_ack(world, spot)` in content.py is the shared counter:
+`listen` and `watch clouds` both call it with `spot="forest_edge"`, so
+mixing the two verbs still reaches the acknowledgment — it's tracking chosen
+*presence*, not mastery of one command, and a future calm verb at the edge
+(a hypothetical `look at flowers`, say) should feed the same counter rather
+than starting its own. On the third calm act at that spot, and only the
+third, the returned line gains one quiet suffix: "You're getting to know
+this stretch of quiet." Never before, never again after — not a running
+status, not a buff, no confirmation of anything beyond that one line, same
+discipline as the verbs it's attached to.
+
+**Forest's edge only, not the yard.** `watch clouds` also works in the
+yard, but the yard is constant through-traffic for chores (wood, water,
+hearth) — counting presence there would mostly count the forced loop, not
+calm choice, so the yard branch of `cmd_watch_clouds` never calls
+`_calm_visit_ack`. The forest's edge is the one calm spot nothing forces a
+hand to visit, which is what makes repeat presence there actually mean
+something.
+
+Tests that call `cmd_listen`/`cmd_watch_clouds` directly and compare exact
+line-pool membership (`test_listen_returns_varied_lines_not_always_the_same_one`)
+had to start stripping `CALM_ACK_LINE` from the result, since the third call
+in that loop now carries the suffix — worth knowing if a similar exact-match
+test gets added near either verb later.
+
+## The cairn — a fourth, collective fate for stones
+
+The shelf (above) is personal and reversible: a hand places a curio there,
+and a later hand can `take` it right back. The cairn, at the forest's edge,
+is the deliberate opposite — permanent and anonymous. `stack stone [on
+cairn]` (`cmd_stack_stone`) consumes a carried stone-named curio outright
+(`world.entities.pop`, not a location change) and adds `world.rng.choice(
+CAIRN_GROWTH_CM)` (2-5, textured rather than fixed) centimeters to the
+`cairn` entity's `height_cm` attr. Once stacked, a stone is nobody's again —
+it's part of something the whole lineage is building, one stone at a time,
+that no single hand owns or can undo. Only stone-named curios qualify (`"
+stone" not in e.name.lower()` refuses anything else); every other curio type
+still only has its original three fates.
+
+`height_cm` reads out as banded prose (`_cairn_description`, `CAIRN_BANDS`),
+the same texture as the hearth's healthy/low/spent read — "ankle-high",
+"waist-high", and so on — rather than a bare number a hand could optimize
+toward. Growing tall takes many, many stones across many, many hands (stones
+are already a rare find on top of it), and that slowness is the point: no
+single visit will see it grow by much, only the lineage as a whole will.
+
+Unlike `forest_depth`/`calm_visits` right above this section, the cairn is
+the opposite kind of state on purpose: it's lineage-scale, not
+session-scale, so it persists through `to_data()`/`from_data()` like any
+other entity, same as the shelf. `ensure_cairn(world)` backfills it onto a
+world (fresh build or a pre-existing save) exactly the way `ensure_shelf`
+already does, and is idempotent — calling it again never resets an existing
+cairn's height. `available_actions` only offers `"stack stone on cairn"`
+when the hand is at `forest_edge` *and* actually carrying something
+stone-named, the same legibility rule `give`/`place` already follow.
+
+## The forest, staged — Stage 3: episodic reset, made explicit
+
+Stage 1 already made `forest_depth` a plain runtime attribute, never written
+into `to_data()`. Stage 3 doesn't change that mechanism — it exists to make
+the rule impossible to break by accident, and to give it a name: **forest
+position is episodic; forest effects are persistent.** Anything a hand
+*does* in the forest that produces a durable object or state change outside
+it (a curio found, wood carried out, a stone later stacked on the cairn) is
+just a normal entity/attr change and persists through the save exactly like
+anything else in the game. Only the "how deep / which way" question —
+`forest_depth`, and `calm_visits` alongside it — resets, because that
+describes *this visit*, not the world.
+
+Two things pin this down as a fact about the engine, not a coincidence of
+the current code:
+
+- `test_to_data_only_ever_contains_the_four_persisted_top_level_fields`
+  (test_world.py) asserts `World.to_data()`'s exact key set. `to_data()` is
+  hand-written to return exactly `{version, time, seq, entities}` — it isn't
+  built by spreading `self.__dict__`, so there's no code path by which a new
+  session-scoped attribute could leak in silently. This test is what makes a
+  future violation fail loudly, in the way `FOREST_SPEC.md` Stage 3 asked
+  for a "session-end hook" to guarantee: given `to_data()`'s hardcoded
+  shape, the real risk isn't a missing teardown step, it's a *future*
+  `to_data()` rewritten to serialize more generically — this test catches
+  that the moment it happens, rather than waiting for a depth value to leak
+  into someone's save.
+- `test_forest_depth_resets_but_committed_effects_survive_a_mid_visit_reload`
+  (test_content.py) is Stage 3's exit criterion made literal: venture eight
+  deep, find a stone, reload — depth comes back at 0, the stone is still in
+  the actor's hands.
+
+## The forest, staged — Stage 4: getting lost
+
+The first thing in the whole game with a real, un-guaranteed outcome. Below
+`SAFE_DEPTH_THRESHOLD` (3), `return` is exactly what it's always been —
+`world.forest_depth -= 1`, no randomness, airtight. That floor matters: a
+short, casual dip into the forest must never be punished, or the risk would
+just be a tax on curiosity rather than a cost of going deep on purpose.
+
+Beyond the threshold, each `return` rolls `OFF_COURSE_CHANCE` (0.18) against
+`world.rng.random()`. On a hit, the landing depth is drawn from every depth
+in `range(depth)` *except* `depth - 1` (the expected landing) — so the
+branch can never silently produce the same result a normal return would,
+which would make it untestable as its own thing. The floor (never negative)
+falls out of `range(depth)` starting at 0 by construction; there's no
+separate clamp to get wrong. Landing exactly on 0 gets its own line (same
+reasoning as `venture`/`return`'s existing depth-0 special case) rather than
+routing through `describe_forest`, which has nothing to describe at the
+edge itself.
+
+No penalty rides along with the mismatch — no damage, no dropped items, no
+extra turn burned. The disorientation *is* the whole cost, per the calm-axis
+invariant's own logic applied to risk instead of reward: the interesting
+thing is the uncertainty itself, not a punishment bolted onto it.
+
+Two test doubles pin the branch down precisely rather than statistically:
+`_AlwaysOffCourse`/`_AlwaysOffCourseHigh` (test_content.py) both force
+`random()` to always trigger, but pick opposite ends of the candidate list
+(`choice` returns `seq[0]` vs `seq[-1]`), which is what lets the tests prove
+the branch can land at the edge (0) *and* mid-forest, not just one or the
+other. `test_return_below_the_safe_depth_threshold_is_always_exact_even_
+under_a_forced_roll` runs the same forced-trigger rng at or below the
+threshold and asserts nothing changes — the safety guarantee has to survive
+an adversarial rng, not just a lucky one.
+
+## The full moon — the one exception to the night withdrawal
+
+`watch clouds` at night has always been a clean withdrawal (`WATCH_CLOUDS_
+NIGHT_MSG`), never a forced line — see the pacing-rebalance section above
+for why that honesty mattered. The full moon is the single exception, and
+it's built to still honor that reasoning rather than undercut it:
+`_is_full_moon(world)` is `world.day() % MOON_CYCLE_DAYS == 0` (29) — a real
+clock keyed to the day count, not a dice roll and not anything session-
+scoped, so it's the one place a hand can actually *witness* the world
+running on a schedule bigger than any single visit, rather than just being
+told that's true. `available_actions` offers `"watch clouds"` at night only
+on these nights (`world.py` imports `_is_full_moon` the same deferred way it
+already imports `_crop_in`/`_patch_in`/`find_visible`, for the same
+circular-import reason).
+
+Deliberately inert beyond the text: the moon must never light the room (no
+free lamp-substitute — `test_moon_line_touches_no_world_state` asserts
+`w.is_dark("yard")` stays true right after the call) or touch state in any
+other way. Same never-break constraint as `listen`/`watch_clouds` by day,
+just gated by date instead of a probability roll.
+
+## Ambient wildlife — glimpsed, not met
+
+`wildlife_glimpse` is a room behavior, same shape as `forest_finds`
+(actor-presence check, then a per-tick chance roll), attached to `yard` and
+`forest_edge` in `build_world`. The one real difference from its cousin:
+this never touches `world.entities` — no curio, nothing to carry, nothing a
+`give`/`place` could ever act on. It only calls `world.announce`, which is
+what `test_wildlife_glimpse_never_creates_or_removes_an_entity` pins down
+directly (asserts `world.entities.keys()` is unchanged, not just that the
+result "looks right").
+
+`WILDLIFE_LINES` is keyed two levels deep — room, then `world.phase()` — and
+a room/phase combination with no entry (the yard at midday, say) means the
+behavior fires nothing at all rather than falling back to some generic
+line; a fox belongs at dusk, not noon, and forcing a line to exist
+everywhere would flatten that. Same composition-order reasoning the forest
+Stage 6 spec already calls for applies here for free: `wildlife_glimpse`
+only ever calls `world.announce`, and `world.act`'s existing "verb result
+first, then whatever got announced this tick" ordering (see `heard` in
+`World.act`) already puts it in the right place without any special-casing.
+
+`test_no_forest_fragment_reads_as_a_refusal_marker` was widened to scan
+`MOON_LINES`, `OFF_COURSE_LINES`, and every `WILDLIFE_LINES` entry alongside
+the forest fragments it already checked — any of them landing in a driver
+result string could, in principle, trip the LLM driver's refusal-detection
+the same way a forest fragment already once did.
 
 ## What keeps it from breaking
 

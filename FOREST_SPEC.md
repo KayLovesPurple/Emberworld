@@ -18,6 +18,11 @@ ARCHITECTURE.md: observe → diagnose → write tight spec with tests → implem
 4. Nothing here may become a forced maintenance loop (calm-axis invariant).
    No new hunger, no new decay, no new "must tend" object.
 
+*Note: the cairn (`stack stone on cairn`, ARCHITECTURE.md) lives at the
+forest's edge but isn't one of the stages below — it's a standalone
+calm-axis feature (a collective, permanent fourth fate for found stones,
+alongside the shelf) that didn't need to wait on forest texture or depth.*
+
 ---
 
 ## Stage 1 — Skeleton: depth model, no texture, no risk
@@ -89,6 +94,14 @@ repeated plays, and depth still doesn't persist across sessions.
 
 ## Stage 3 — Episodic reset (the load-bearing stage)
 
+**Status: ✅ done.** See ARCHITECTURE.md's "Stage 3" section for how this
+landed: rather than a literal "session-end hook" (unnecessary given
+`to_data()`'s hardcoded shape — see below), the rule is pinned by a
+structural test on `to_data()` itself plus a full mid-visit
+save/reload regression test. `calm_visits` (added after this spec was
+written, alongside the calm-axis acknowledgment feature) gets the identical
+treatment as `forest_depth` throughout.
+
 **Goal:** formalize "effects persist, position doesn't" — this is the actual
 fix for the "next guy starts lost" problem, and it should be a named,
 tested rule, not an implicit side effect of Stage 1's data model.
@@ -124,6 +137,11 @@ they *made* while there is still in the world.
 ---
 
 ## Stage 4 — Getting lost: a bounded, opt-in risk
+
+**Status: ✅ done.** `SAFE_DEPTH_THRESHOLD` (3) and `OFF_COURSE_CHANCE`
+(0.18) in content.py, both applied inside `cmd_return`. See
+ARCHITECTURE.md's "Stage 4" section for the landed shape, including how the
+off-course depth is chosen (never the expected depth-1, never negative).
 
 **Goal:** make "no map" cost something real, but only for a visitor who
 chooses to push past a safe default — never a chore, never forced.

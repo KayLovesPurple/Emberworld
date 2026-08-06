@@ -90,6 +90,26 @@ def test_existing_shelf_receives_the_clearer_purpose_text_on_load():
         assert "curio shelf" in w.get("shelf").description
 
 
+def test_existing_save_is_given_the_forest_edge_cairn():
+    """A live lineage from before the cairn existed should gain it without
+    needing a fresh world, same reasoning as the shelf backfill above."""
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        data = fresh()[0].to_data()
+        data["entities"] = [e for e in data["entities"] if e["id"] != "cairn"]
+        with open(save_path, "w") as f:
+            json.dump(data, f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            w, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        cairn = w.get("cairn")
+        assert cairn is not None and cairn.location == "forest_edge"
+        assert cairn.attrs["height_cm"] == 0
+
+
 def test_existing_found_item_is_tagged_as_a_curio_on_load():
     with tempfile.TemporaryDirectory() as d:
         save_path = os.path.join(d, "emberworld_save.json")

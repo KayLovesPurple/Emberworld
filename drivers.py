@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
+from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
 from cat import CAT_MEOW_THRESHOLD
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -78,6 +78,7 @@ def load_or_build(quiet=False):
         try:
             w = World.load(SAVE)
             ensure_shelf(w)
+            ensure_cairn(w)
             actor = w.get("you")
             if actor:
                 if not quiet:

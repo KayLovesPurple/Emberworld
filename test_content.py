@@ -11,16 +11,22 @@ Run it either way:
 import json
 import random
 
-from world import World, Entity, check_world
+from world import World, Entity, check_world, DAY_LENGTH
 from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
     FOUND_ITEM_CHANCE, FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
     WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
+    CALM_ACK_AT, CALM_ACK_LINE,
+    CAIRN_ID, CAIRN_GROWTH_CM, CAIRN_BANDS, _cairn_description,
+    ensure_cairn, cmd_stack_stone,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
-    FOREST_FRAGMENTS, _forest_band, describe_forest,
+    FOREST_FRAGMENTS, _forest_band, describe_forest, cmd_return,
+    SAFE_DEPTH_THRESHOLD, OFF_COURSE_CHANCE, OFF_COURSE_LINES,
+    MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
+    WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -1350,7 +1356,10 @@ def test_listen_returns_varied_lines_not_always_the_same_one():
     w.rng = _Unlucky()
     run(w, actor, "go out", "go forest")
     w.rng = Cycle()
-    seen = {cmd_listen(w, actor, "") for _ in range(len(LISTEN_LINES))}
+    # strip the calm-axis ack: the 3rd call in this run carries it (see
+    # CALM_ACK_AT), which would otherwise break the exact-line comparison.
+    seen = {cmd_listen(w, actor, "").replace(CALM_ACK_LINE, "")
+            for _ in range(len(LISTEN_LINES))}
     assert seen == set(LISTEN_LINES), "listen should draw from its full line pool"
 
 
@@ -1453,6 +1462,312 @@ def test_watch_clouds_is_withdrawn_at_night():
 
 
 # ===========================================================================
+# THE FULL MOON -- the one exception to the night withdrawal above. A real,
+# uncontrollable clock (MOON_CYCLE_DAYS, keyed off world.day(), not tied to
+# any session-scoped state) rather than a dice roll, so it's the one case a
+# hand can actually witness the world running on a schedule bigger than any
+# single visit. Purely descriptive -- same never-break constraint as every
+# other calm-axis verb.
+# ===========================================================================
+def _set_to_full_moon_night(world):
+    """Jump straight to a full-moon night without ticking hundreds of turns
+    through world.act (which would also run every other tick behavior)."""
+    day_index = MOON_CYCLE_DAYS - 1          # world.day() is 1-based
+    world.time = day_index * DAY_LENGTH + 20  # hour 20 -> phase() == "night"
+
+
+def test_full_moon_recurs_every_moon_cycle_days():
+    w, actor = fresh()
+    assert not _is_full_moon(w)             # day 1 is never a full moon
+    _set_to_full_moon_night(w)
+    assert w.phase() == "night"
+    assert _is_full_moon(w)
+    w.time += DAY_LENGTH * MOON_CYCLE_DAYS   # exactly one cycle later
+    assert _is_full_moon(w)
+    w.time += DAY_LENGTH                     # one day past that
+    assert not _is_full_moon(w)
+
+
+def test_watch_clouds_returns_a_moon_line_on_a_full_moon_night():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    _set_to_full_moon_night(w)
+    assert "watch clouds" in w.available_actions(actor)
+    result = cmd_watch_clouds(w, actor, "")
+    assert result in MOON_LINES
+    assert result != WATCH_CLOUDS_NIGHT_MSG
+
+
+def test_watch_clouds_still_refuses_on_an_ordinary_night():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    assert not _is_full_moon(w), "day 1 must not coincide with a full moon"
+    assert "watch clouds" not in w.available_actions(actor)
+    assert cmd_watch_clouds(w, actor, "") == WATCH_CLOUDS_NIGHT_MSG
+
+
+def test_moon_line_touches_no_world_state():
+    """Same never-break constraint as listen/watch_clouds by day: the moon
+    line must not light the room, advance anything, or change state -- it's
+    a rarer gate on the exact same no-op, not a new kind of grant."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    _set_to_full_moon_night(w)
+    before = w.to_data()
+    cmd_watch_clouds(w, actor, "")
+    after = w.to_data()
+    assert before == after, "the full-moon line must not change anything, ever"
+    assert w.is_dark("yard"), "moonlight must not substitute for a lit lamp"
+
+
+def test_moon_calm_ack_still_applies_at_the_forest_edge():
+    """The calm-axis acknowledgment doesn't care which pool the line came
+    from -- a full-moon night at the forest's edge should still count
+    toward it, same as any other watch_clouds/listen call there."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    _set_to_full_moon_night(w)
+    cmd_watch_clouds(w, actor, "")
+    cmd_watch_clouds(w, actor, "")
+    third = cmd_watch_clouds(w, actor, "")
+    assert CALM_ACK_LINE in third
+
+
+# ===========================================================================
+# AMBIENT WILDLIFE -- glimpsed, not met. No verb triggers it, no verb
+# resolves it, same restraint as the statue: it's texture that exists
+# whether or not a hand notices, phase-keyed per room, and it never adds
+# anything to a pack (unlike forest_finds, its cousin).
+# ===========================================================================
+class _AlwaysGlimpse:
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+def test_wildlife_glimpse_is_silent_when_no_pool_matches_the_room_and_phase():
+    w, actor = fresh()
+    run(w, actor, "go out")            # yard, no "day" entry in WILDLIFE_LINES
+    assert w.phase() == "dawn" or w.phase() == "day"
+    w.rng = _AlwaysGlimpse()
+    room = w.get("yard")
+    before = w.to_data()
+    wildlife_glimpse(w, room)
+    assert w.to_data() == before, "no matching pool means nothing should fire"
+
+
+def test_wildlife_glimpse_is_silent_when_the_actor_is_elsewhere():
+    w, actor = fresh()
+    room = w.get("yard")
+    w.rng = _AlwaysGlimpse()
+    # actor starts in the hut, not the yard
+    before = w.to_data()
+    wildlife_glimpse(w, room)
+    assert w.to_data() == before, "nothing should fire for an empty room"
+
+
+def test_wildlife_glimpse_announces_a_matching_line_when_present_and_rolled():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    while w.phase() != "dusk":
+        w.act(actor, "wait")
+    room = w.get("yard")
+    w.rng = _AlwaysGlimpse()
+    wildlife_glimpse(w, room)
+    heard = [m for (m, where) in w.log if where in (None, "yard")]
+    assert any(m in WILDLIFE_LINES["yard"]["dusk"] for m in heard)
+
+
+def test_wildlife_glimpse_never_creates_or_removes_an_entity():
+    """The one real difference from forest_finds: this is pure texture, not
+    a find -- it must never touch world.entities, only world.log."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    while w.phase() != "dusk":
+        w.act(actor, "wait")
+    room = w.get("yard")
+    w.rng = _AlwaysGlimpse()
+    entities_before = set(w.entities.keys())
+    wildlife_glimpse(w, room)
+    assert set(w.entities.keys()) == entities_before
+
+
+# ===========================================================================
+# CALM-AXIS SESSION ACKNOWLEDGMENT -- listen and watch_clouds share one
+# session-scoped counter at the forest's edge (world.calm_visits), so a hand
+# who keeps choosing to pause there gets a single, quiet acknowledgment on the
+# third calm act -- never a running status, never a buff, and only at the
+# edge, since it's the one calm spot nothing forces a hand to visit.
+# ===========================================================================
+def test_calm_ack_is_silent_for_the_first_two_calm_acts_at_the_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    assert CALM_ACK_LINE not in cmd_listen(w, actor, "")
+    assert CALM_ACK_LINE not in cmd_watch_clouds(w, actor, "")
+
+
+def test_calm_ack_fires_once_on_the_third_calm_act_and_never_again():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(CALM_ACK_AT - 1):
+        cmd_listen(w, actor, "")
+    third = cmd_listen(w, actor, "")
+    assert CALM_ACK_LINE in third
+    fourth = cmd_listen(w, actor, "")
+    assert CALM_ACK_LINE not in fourth
+
+
+def test_calm_ack_counter_is_shared_between_listen_and_watch_clouds():
+    """It's tracking chosen presence at the spot, not mastery of one verb --
+    mixing the two verbs should still reach the third-act acknowledgment."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    cmd_listen(w, actor, "")
+    cmd_watch_clouds(w, actor, "")
+    third = cmd_listen(w, actor, "")
+    assert CALM_ACK_LINE in third
+
+
+def test_calm_ack_never_fires_for_watch_clouds_in_the_yard():
+    """The yard is constant through-traffic for chores -- counting visits
+    there would count the forced loop, not calm, so it's excluded outright."""
+    w, actor = fresh()
+    result = ""
+    for _ in range(CALM_ACK_AT + 2):
+        result = cmd_watch_clouds(w, actor, "")
+    assert CALM_ACK_LINE not in result
+    assert w.calm_visits.get("yard", 0) == 0
+
+
+def test_calm_visits_is_episodic_like_forest_depth():
+    """Session-scoped, not part of the save -- a hand's own sense of having
+    lingered doesn't carry over to whoever loads the world next."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    cmd_listen(w, actor, "")
+    assert w.calm_visits["forest_edge"] == 1
+    assert "calm_visits" not in w.to_data()
+
+
+# ===========================================================================
+# THE CAIRN -- a collective, permanent counterpart to the hut's shelf. Unlike
+# the shelf, a stacked stone can never be taken back: it stops being anyone's
+# the moment it joins the pile. Height only ever grows, and (unlike
+# forest_depth/calm_visits) DOES persist through save/load, since this is
+# lineage-scale state, not a single hand's session.
+# ===========================================================================
+def _give_stone(world, actor):
+    return world.add(Entity(world.fresh_id("found"), "a smooth grey stone",
+                             "river-worn, a pale band round its middle.",
+                             location=actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "ignores"}))
+
+
+def test_fresh_world_has_an_empty_cairn_at_the_forest_edge():
+    w, actor = fresh()
+    cairn = w.get(CAIRN_ID)
+    assert cairn is not None
+    assert cairn.location == "forest_edge"
+    assert cairn.attrs["height_cm"] == 0
+    assert cairn.description == CAIRN_BANDS[0][1]
+
+
+def test_stacking_a_stone_requires_being_at_the_forest_edge():
+    w, actor = fresh()
+    _give_stone(w, actor)
+    result = cmd_stack_stone(w, actor, "")
+    assert "forest's edge" in result
+    assert w.get(CAIRN_ID).attrs["height_cm"] == 0
+
+
+def test_stacking_a_stone_requires_carrying_one():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    result = cmd_stack_stone(w, actor, "")
+    assert "no stone" in result.lower()
+    assert w.get(CAIRN_ID).attrs["height_cm"] == 0
+
+
+def test_stacking_a_non_stone_curio_is_refused():
+    """The default arg only ever matches something actually named 'stone' --
+    carrying some other curio and typing plain 'stack' must not silently
+    consume it."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    pinecone = w.add(Entity(w.fresh_id("found"), "a pinecone",
+                             "tight and resinous, one scale broken — the cat "
+                             "might bat at it.", location=actor.id,
+                             portable=True, attrs={"curio": True, "cat_reaction": "plays"}))
+    result = cmd_stack_stone(w, actor, "pinecone")
+    assert "no stone" in result.lower()
+    assert w.get(pinecone.id) is not None, "a non-stone curio must not be consumed"
+    assert w.get(CAIRN_ID).attrs["height_cm"] == 0
+
+
+def test_stacking_a_stone_consumes_it_and_raises_the_cairns_height():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    stone = _give_stone(w, actor)
+    result = cmd_stack_stone(w, actor, "")
+    assert w.get(stone.id) is None, "the stone must be consumed, not just moved"
+    height = w.get(CAIRN_ID).attrs["height_cm"]
+    assert height in CAIRN_GROWTH_CM
+    assert w.get(CAIRN_ID).description in result
+
+
+def test_cairn_description_bands_match_height():
+    for threshold, line in CAIRN_BANDS:
+        assert _cairn_description(threshold) == line
+    just_below = CAIRN_BANDS[1][0] - 1
+    assert _cairn_description(just_below) == CAIRN_BANDS[0][1]
+
+
+def test_cairn_height_and_description_persist_through_save_load_roundtrip():
+    """Unlike forest_depth/calm_visits, the cairn is lineage-scale: it must
+    survive a reload, the opposite guarantee from the session-scoped state
+    right above it in this file."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    _give_stone(w, actor)
+    cmd_stack_stone(w, actor, "")
+    height_before = w.get(CAIRN_ID).attrs["height_cm"]
+    desc_before = w.get(CAIRN_ID).description
+    reloaded = World.from_data(w.to_data())
+    cairn_after = reloaded.get(CAIRN_ID)
+    assert cairn_after.attrs["height_cm"] == height_before
+    assert cairn_after.description == desc_before
+
+
+def test_stack_stone_action_is_offered_only_when_carrying_a_stone_at_the_forest_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    assert "stack stone on cairn" not in w.available_actions(actor)
+    _give_stone(w, actor)
+    assert "stack stone on cairn" in w.available_actions(actor)
+
+
+def test_ensure_cairn_is_idempotent_and_does_not_reset_an_existing_cairns_height():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    _give_stone(w, actor)
+    cmd_stack_stone(w, actor, "")
+    height = w.get(CAIRN_ID).attrs["height_cm"]
+    ensure_cairn(w)
+    assert w.get(CAIRN_ID).attrs["height_cm"] == height
+
+
+# ===========================================================================
 # 9. FOREST DEPTH SKELETON (FOREST_SPEC.md Stage 1) -- venture/return give a
 #    hand something to push into past the edge, tracked by a plain depth
 #    counter that lives on the World itself (like world.rng, world.hand_name)
@@ -1533,6 +1848,25 @@ def test_forest_depth_does_not_survive_a_save_load_roundtrip():
     assert "forest_depth" not in w.to_data(), "forest_depth must never be persisted"
     w2 = World.from_data(json.loads(json.dumps(w.to_data())))
     assert w2.forest_depth == 0, "a reloaded world must start a fresh visitor at depth 0"
+
+
+def test_forest_depth_resets_but_committed_effects_survive_a_mid_visit_reload():
+    """FOREST_SPEC.md Stage 3's exit criterion, made literal: end a visit
+    deep in the forest, reload, and the next visitor starts at the edge with
+    no memory of that depth -- while anything actually committed to the save
+    while there (here: a found stone, since it's portable and easy to
+    trace) is still in the world exactly where it was left."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture",
+        "venture", "venture", "venture", "venture", "venture")
+    assert w.forest_depth == 8
+    stone = _give_stone(w, actor)
+    reloaded = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert reloaded.forest_depth == 0, "position is episodic"
+    found = reloaded.get(stone.id)
+    assert found is not None and found.location == actor.id, \
+        "an effect committed mid-visit must survive, unlike position"
 
 
 def test_invariant_checker_passes_with_forest_depth_at_any_value():
@@ -1622,18 +1956,124 @@ def test_returning_all_the_way_gives_a_distinct_back_at_the_edge_line():
         f"depth 0 shouldn't show forest-interior texture: {result!r}"
 
 
+# ===========================================================================
+# FOREST_SPEC.md Stage 4 -- getting lost: a bounded, opt-in risk. Below
+# SAFE_DEPTH_THRESHOLD, `return` must be airtight-exact no matter what the
+# rng says. Beyond it, a small chance can land a hand off-course -- never
+# negative, never at the expected depth (or it wouldn't read as off-course).
+# ===========================================================================
+class _AlwaysOffCourse:
+    """Forces the off-course branch every time (random() below any real
+    threshold) and always picks the first candidate depth -- used to prove
+    the branch can land exactly at 0 (the edge)."""
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+class _AlwaysOffCourseHigh:
+    """Same forced trigger, but picks the last (highest) candidate depth --
+    used to prove the branch can also land mid-forest, not just at 0."""
+    def random(self): return 0.0
+    def choice(self, seq): return seq[-1]
+
+
+def test_return_below_the_safe_depth_threshold_is_always_exact_even_under_a_forced_roll():
+    """The safety guarantee for a short, casual dip in: even an rng rigged
+    to always trigger the off-course branch must not move the needle at or
+    below SAFE_DEPTH_THRESHOLD, because the depth > threshold guard comes
+    first."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD):
+        w.act(actor, "venture")
+    assert w.forest_depth == SAFE_DEPTH_THRESHOLD
+    w.rng = _AlwaysOffCourse()
+    for expected in range(SAFE_DEPTH_THRESHOLD - 1, -1, -1):
+        cmd_return(w, actor, "")
+        assert w.forest_depth == expected, \
+            "return must stay exact at or below the safe threshold"
+
+
+def test_return_above_the_safe_depth_threshold_can_land_off_course_at_the_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 1):
+        w.act(actor, "venture")
+    depth_before = w.forest_depth
+    w.rng = _AlwaysOffCourse()
+    result = cmd_return(w, actor, "")
+    assert w.forest_depth == 0, "the lowest candidate should be picked"
+    assert w.forest_depth != depth_before - 1
+    assert "edge" in result.lower()
+
+
+def test_return_above_the_safe_depth_threshold_can_land_off_course_mid_forest():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 2):
+        w.act(actor, "venture")
+    depth_before = w.forest_depth
+    expected = depth_before - 1
+    w.rng = _AlwaysOffCourseHigh()
+    cmd_return(w, actor, "")
+    assert 0 <= w.forest_depth < depth_before
+    assert w.forest_depth != expected
+
+
+def test_return_above_the_safe_depth_threshold_still_usually_stays_exact():
+    """The off-course branch is a CHANCE, not a certainty -- an unlucky-for-
+    disorientation rng (never rolls below OFF_COURSE_CHANCE) must still
+    behave exactly like the pre-Stage-4 return, even deep in the forest."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 3):
+        w.act(actor, "venture")
+    depth_before = w.forest_depth
+    cmd_return(w, actor, "")
+    assert w.forest_depth == depth_before - 1
+
+
+def test_off_course_never_produces_a_negative_or_repeated_depth():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 4):
+        w.act(actor, "venture")
+    for stub in (_AlwaysOffCourse(), _AlwaysOffCourseHigh()):
+        w2, actor2 = fresh()
+        w2.rng = _Unlucky()
+        run(w2, actor2, "go out", "go forest")
+        for _ in range(SAFE_DEPTH_THRESHOLD + 4):
+            w2.act(actor2, "venture")
+        depth_before = w2.forest_depth
+        w2.rng = stub
+        cmd_return(w2, actor2, "")
+        assert w2.forest_depth >= 0
+        assert w2.forest_depth != depth_before - 1
+
+
 def test_no_forest_fragment_reads_as_a_refusal_marker():
     """The LLM driver's _looks_like_refusal scans for substrings like "can't"
     to tell a real refusal from a landed action -- a forest fragment that
     happens to contain one would make a successful venture misread as a
-    no-op in the visit's grounded `did` list. Guard it here directly."""
+    no-op in the visit's grounded `did` list. Guard it here, and every other
+    generated-text pool that can land in a driver result string alongside
+    it -- the moon lines, off-course lines, and wildlife glimpses are all
+    new enough not to have been checked against this yet."""
     from drivers import _REFUSAL_MARKERS
-    for band in FOREST_FRAGMENTS.values():
-        for pool in band.values():
-            for frag in pool:
-                low = frag.lower()
-                assert not any(m in low for m in _REFUSAL_MARKERS), \
-                    f"fragment reads as a refusal marker: {frag!r}"
+    all_fragments = [frag for band in FOREST_FRAGMENTS.values()
+                      for pool in band.values() for frag in pool]
+    all_fragments += list(MOON_LINES) + list(OFF_COURSE_LINES)
+    all_fragments += [line for room in WILDLIFE_LINES.values()
+                       for pool in room.values() for line in pool]
+    for frag in all_fragments:
+        low = frag.lower()
+        assert not any(m in low for m in _REFUSAL_MARKERS), \
+            f"fragment reads as a refusal marker: {frag!r}"
 
 
 # ===========================================================================

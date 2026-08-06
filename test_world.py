@@ -212,6 +212,17 @@ def test_checker_actually_catches_corruption():
 # ===========================================================================
 # 3. PERSISTENCE -- save/load round-trips exactly; bad saves are refused.
 # ===========================================================================
+def test_to_data_only_ever_contains_the_four_persisted_top_level_fields():
+    """Structural guard for the episodic-reset rule (FOREST_SPEC.md Stage 3):
+    to_data()'s shape is hardcoded to exactly these four keys. Session-scoped
+    state (forest_depth, calm_visits, rng, strict...) must never leak in --
+    if a future refactor ever spreads world.__dict__ into it instead, this
+    fails immediately rather than quietly leaking a hand's own session into
+    the next visitor's world."""
+    w, actor = fresh()
+    assert set(w.to_data().keys()) == {"version", "time", "seq", "entities"}
+
+
 def test_save_load_roundtrip_is_identical():
     w, actor = fresh()
     run(w, actor, "go out", "take potato", "plant potato", "wait", "wait")

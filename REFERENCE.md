@@ -29,26 +29,28 @@
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
-- `watch` -- watch clouds -- pause under open sky and watch the clouds move; a chosen, unpressured turn that changes nothing (yard or the forest's edge, daylight only).
+- `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
-- `return` -- return -- fall back toward the forest's edge from wherever you've ventured.
+- `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
+- `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
 
-- **cat_wander** -- Autonomous: the cat drifts between the hut and the yard, drawn toward
-- **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it
-- **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle
+- **cat_wander** -- Autonomous: the cat drifts between the hut and the yard, drawn toward a lit hearth.
+- **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it in its own description once hungry, and occasionally meows to be fed.
+- **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle cat-thing -- purely cosmetic ambient life, never while it's hungry.
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
-- **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice
-- **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in
-- **patch_volunteer** -- Autonomous: if the patch stays continuously empty for
+- **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice as fast on any tick it spends a unit of stored water.
+- **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it, including whether it was just watered.
+- **patch_volunteer** -- Autonomous: if the patch stays continuously empty for PATCH_VOLUNTEER_TURNS turns, one volunteer potato plant sprouts on its own -- deterministic, self-healing ground so a lineage can never be permanently seedless.
 - **bucket_state** -- Autonomous: the bucket describes itself by how much water it's holding.
-- **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's
+- **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's dying low on fuel or burning steady, so a hand can see it needs wood before it goes dark, not just be told after the fact.
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
-- **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it
-- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or
+- **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it is -- carried or set down -- warning inline as it runs low and again when it finally goes dark.
+- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there), each turn has a small chance of turning up a curio underfoot -- the same find table `gather wood` draws from.
+- **wildlife_glimpse** -- Autonomous: while a hand is present, a small independent chance per tick of glimpsing something living and entirely unrelated to whatever the hand is doing -- see WILDLIFE_LINES/WILDLIFE_CHANCE above.
 
 ## World rules (from the code's own constants)
 

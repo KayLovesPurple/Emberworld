@@ -87,16 +87,44 @@ yard's own incidental luck now — a pacing-rebalance round two cut it further
 after real play showed lingering there still turned up curios too fast). A
 curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark), or
-set on the hut's shelf for whoever comes next. The forest's edge also has
+set on the hut's shelf for whoever comes next. A found stone has one more
+option, instead of the shelf: `stack stone on cairn` adds it, permanently
+and anonymously, to a cairn growing at the forest's edge — unlike the
+shelf, nobody can take it back, and the cairn belongs to the whole lineage,
+not to whoever placed a given stone. It only ever grows, one stone at a
+time, and growing tall takes many hands. The forest's edge also has
 its own `listen`: a chosen, unpressured turn that just returns a bit of
 atmosphere and changes nothing — no reward, ever, on purpose. The yard (and
 the forest's edge) offer `watch clouds` in the same spirit, reading the sky
 instead of the trees — it steps back at night, when there's nothing up
-there to see. From the forest's edge you can also `venture` a little further
-in and `return` toward the edge again — for now that's just a depth counter
-(no map, no texture, no risk yet), reset fresh at the start of every
-session, since where you got to in the forest is episodic even though
-anything you carry out of it isn't.
+there to see. At the forest's edge specifically (not the yard, which is
+too full of chores for this to mean anything), the third time in one visit
+you choose `listen` or `watch clouds` there, the world quietly notices —
+"You're getting to know this stretch of quiet" — once, never repeated, gone
+again once the visit ends; not a reward, just an acknowledgment that a hand
+with no memory of any other visit still deserves *something* to carry a
+chosen quiet moment forward with. From the forest's edge you can also
+`venture` a little further in and `return` toward the edge again — a depth
+counter, reset fresh at the start of every session, since where you got to
+in the forest is episodic even though anything you carry out of it isn't.
+Venturing past a safe depth (3 steps in) makes `return` a real gamble, not
+just a formality: within those first 3 steps it's always exact, but go
+deeper and each `return` carries a small chance of coming out somewhere
+other than where you meant to — never past the edge, never a penalty beyond
+the disorientation itself, just a genuinely uncertain outcome on a choice
+you made. It's the first thing in the game with real stakes rather than
+only chores or atmosphere.
+
+Two more things happen without any verb at all. Once in a long while
+(roughly every 29 days — the world's own clock, unrelated to anyone's
+visits) the night sky is worth a second look: `watch clouds` normally
+withdraws entirely after dark, but on a full moon it shows you the moon
+itself instead, purely to look at — it lights nothing and changes nothing.
+And rarely, in the yard or at the forest's edge, something living crosses
+your path uninvited — a fox at dusk, an owl heard once at night, a deer at
+dawn — gone by the time you're sure you saw it, with no verb to chase it
+and nothing it adds to your pack. Both are pure texture: proof, now and
+then, that the world holds more than the hand currently walking through it.
 
 Only one potato grows at a time, and that cap is important: it flattens
 the efficiency gradient that would otherwise pull the world toward
@@ -208,6 +236,30 @@ hunger* in the standing perception, the way the cat's hunger already shows in it
 description. Agents feed every potato to the loud, legible cat and never cook for
 themselves because their own hunger is silent. Make it visible and a hand will
 likely finally cook and eat — closing a loop it currently always skips.
+
+**A mystery seed — a bloom, not a crop** *(calm-axis, standalone — no dependency on
+the forest or anything else, ready whenever)*. The potato's whole arc is
+instrumental: grow it to eat it. This is its deliberate opposite. A "mystery
+seed" is a rare find, same shape as any other found curio (not bought, not
+guaranteed, something that turns up). Planting it doesn't touch the patch —
+that stays potato-only, protecting the one-crop-at-a-time rule — it's just
+its own entity, planted in the yard, with a grow timer and, on purpose, no
+watering and no way to speed it up. Time passes; it blooms when it blooms.
+The tending loop is deliberately absent, because the whole point is that
+this isn't instrumental — there's nothing to optimize toward.
+
+The interesting part: what it becomes is rolled and fixed the moment it's
+planted, but not revealed until it blooms. Until then the description stays
+vague on purpose — "something is coming up, its shape not yet clear" — so
+there's real anticipation, then a specific, described payoff (colour, shape,
+scent, composed the way a forest fragment is) at the end. Once bloomed, it
+can be picked like any curio and set on the shelf — reusing that system
+outright, no new mechanic needed — or left standing as garden decoration.
+Picking it doesn't feed anyone, cook, or sell; it exists to be pretty and
+yours to keep or leave. One growing at a time to start, mirroring the
+potato's own restraint — less because it competes with anything (it
+doesn't) and more for legibility: one anticipation arc per visit, not a
+flowerbed to manage.
 
 ### The wishing-statue — a wish-sink (lives in the forest, built with it)
 
