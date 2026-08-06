@@ -483,21 +483,37 @@ def cmd_drop(world, actor, arg):
     return f"You set down {_the(e.name)}."
 
 
+# The shelf is deliberately capped, unlike the cairn. The cairn already is
+# the "everything, forever, anonymous" answer to what to do with a found
+# curio -- a second unlimited container doing the same job would be
+# redundant. Capping the shelf turns it into the cairn's opposite: personal
+# and curated rather than collective and boundless. Nothing decays and
+# nothing's punished for being full -- a hand just has to decide whether a
+# new find is worth a spot, the same kind of small, real, freely-chosen
+# choice as everything else on the calm axis. `take` (already existing,
+# no new mechanic) is how a hand makes room.
+SHELF_CAPACITY = 10
+
+
 def _shelf_description(world, shelf):
     """Describe the shelf as a small, visible record of what hands kept."""
     items = world.contents(shelf.id)
     if not items:
         return "a narrow curio shelf, empty but for a little dust"
-    return ("a narrow curio shelf, holding: "
+    full = ", full up" if len(items) >= SHELF_CAPACITY else ""
+    return (f"a narrow curio shelf{full}, holding: "
             + ", ".join(e.name for e in items))
 
 
 def cmd_place(world, actor, arg):
-    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf."""
+    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once)."""
     shelf = next((e for e in world.contents(actor.location)
                   if e.attrs.get("display_surface")), None)
     if not shelf:
         return "There's nowhere here to set that out. The shelf is in the hut."
+    if len(world.contents(shelf.id)) >= SHELF_CAPACITY:
+        return ("The shelf's full -- ten small things already set out. Take "
+                "something back if you want room for this one.")
     item_name = arg.lower().strip()
     if item_name.endswith(" on shelf"):
         item_name = item_name[:-len(" on shelf")].strip()
@@ -1302,6 +1318,9 @@ def generate_reference():
             f"- If the vegetable patch stays empty for **{PATCH_VOLUNTEER_TURNS}** "
             "turns straight, one volunteer potato plant sprouts on its own -- a "
             "floor against a seedless lineage, not a routine source.",
+            f"- The hut's curio shelf holds up to **{SHELF_CAPACITY}** things "
+            "at once -- personal and curated, unlike the forest-edge cairn, "
+            "which is collective and never full.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "

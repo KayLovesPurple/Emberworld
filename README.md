@@ -87,7 +87,12 @@ yard's own incidental luck now — a pacing-rebalance round two cut it further
 after real play showed lingering there still turned up curios too fast). A
 curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark), or
-set on the hut's shelf for whoever comes next. A found stone has one more
+set on the hut's shelf for whoever comes next — the shelf holds up to 10 at
+once, on purpose: personal and curated rather than the cairn's collective
+and boundless, so a hand who finds an 11th has to actually decide whether
+it's worth a spot, the same way `take`ing something back off the shelf
+always has (nothing decays or is punished at capacity, it's just full).
+A found stone has one more
 option, instead of the shelf: `stack stone on cairn` adds it, permanently
 and anonymously, to a cairn growing at the forest's edge — unlike the
 shelf, nobody can take it back, and the cairn belongs to the whole lineage,

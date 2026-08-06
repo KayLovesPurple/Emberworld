@@ -185,7 +185,7 @@ class World:
         # imports World/Entity from here, making a module-level import back
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in, find_visible, _is_full_moon
+        from content import _crop_in, _patch_in, find_visible, _is_full_moon, SHELF_CAPACITY
         acts = ["look", "actions", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
@@ -224,8 +224,9 @@ class World:
             acts.append(f"drop {e.name}")
         shelf = next((e for e in here if e.attrs.get("display_surface")), None)
         if shelf:
-            for e in carried:
-                acts.append(f"place {e.name} on shelf")
+            if len(self.contents(shelf.id)) < SHELF_CAPACITY:
+                for e in carried:
+                    acts.append(f"place {e.name} on shelf")
             for e in self.contents(shelf.id):
                 acts.append(f"take {e.name}")
         for e in here + carried:

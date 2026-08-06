@@ -144,6 +144,21 @@ against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
 entity from a save predating this feature, the same way it already
 backfilled the `curio` tag itself.
 
+**The shelf is capped at `SHELF_CAPACITY` (10), the cairn deliberately
+isn't.** The cairn already is the "everything, forever, anonymous" answer to
+what happens to a found curio over the life of a lineage — a second
+unlimited container doing the same job would be redundant. Capping the
+shelf instead makes it the cairn's opposite: personal and curated rather
+than collective and boundless. `cmd_place` refuses outright at capacity
+("The shelf's full...") rather than bumping something off automatically —
+no silent loss, and no forced choice either, since a hand can simply not
+place a new find if the shelf feels full to them. `take` (already existing,
+no new mechanic) is how room gets made. `available_actions` stops offering
+`place <thing> on shelf` once the shelf is full, same legibility rule as
+`give`/`place` only appearing when there's something to act on.
+`_shelf_description` adds ", full up" only exactly at capacity, mirroring
+the hearth's healthy/low read rather than exposing a bare count.
+
 ## The forest's edge — v1, a doorway not the forest
 
 One new room (`forest_edge` in `build_world`), reachable from the yard via

@@ -27,6 +27,7 @@ from content import (
     SAFE_DEPTH_THRESHOLD, OFF_COURSE_CHANCE, OFF_COURSE_LINES,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
+    SHELF_CAPACITY, _shelf_description,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -667,6 +668,59 @@ def test_putting_a_curio_on_the_shelf_via_the_put_alias():
     result = w.act(actor, "put bone button on shelf")
     assert "shelf" in result.lower()
     assert any(e.name == "a bone button" for e in w.contents("shelf"))
+
+
+# ===========================================================================
+# SHELF CAPACITY -- the shelf's deliberate contrast with the cairn: personal
+# and curated (capped, reversible) rather than collective and boundless
+# (unlimited, permanent). Nothing decays or is punished at capacity -- a
+# hand just has to choose whether a new find is worth a spot.
+# ===========================================================================
+def _fill_shelf(world, actor):
+    """Place SHELF_CAPACITY curios on the shelf directly (bypassing the
+    verb, since we don't care about the placing turn-by-turn here)."""
+    shelf = world.get("shelf")
+    for _ in range(SHELF_CAPACITY):
+        e = _add_curio(world, actor, "a pinecone")
+        e.location = shelf.id
+    shelf.description = _shelf_description(world, shelf)
+    return shelf
+
+
+def test_shelf_refuses_placement_once_it_holds_shelf_capacity_items():
+    w, actor = fresh()
+    _fill_shelf(w, actor)
+    _add_curio(w, actor, "a bone button")
+    result = w.act(actor, "place bone button on shelf")
+    assert "full" in result.lower()
+    assert not any(e.name == "a bone button" for e in w.contents("shelf"))
+
+
+def test_shelf_accepts_a_placement_again_after_making_room():
+    w, actor = fresh()
+    _fill_shelf(w, actor)
+    taken = w.contents("shelf")[0]
+    w.act(actor, f"take {taken.name}")
+    _add_curio(w, actor, "a bone button")
+    result = w.act(actor, "place bone button on shelf")
+    assert "full" not in result.lower()
+    assert any(e.name == "a bone button" for e in w.contents("shelf"))
+
+
+def test_shelf_description_reads_full_up_only_at_capacity():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "place pinecone on shelf")
+    assert "full up" not in w.get("shelf").description
+    shelf = _fill_shelf(w, actor)
+    assert "full up" in shelf.description
+
+
+def test_place_is_not_offered_once_the_shelf_is_full():
+    w, actor = fresh()
+    _fill_shelf(w, actor)
+    _add_curio(w, actor, "a bone button")
+    assert not any(a.startswith("place ") for a in w.available_actions(actor))
 
 
 def test_gather_can_still_yield_a_find_after_giving_one_away():

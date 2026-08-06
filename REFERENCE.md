@@ -25,7 +25,7 @@
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
-- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf.
+- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once).
 - `gather` -- gather wood -- forage the yard's long grass and fallen branches for firewood (and, sometimes, something else).
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
@@ -63,6 +63,7 @@
 - Gathering wood yields **3**; feeding one unit into the hearth restores **60** fuel -- a full night's burn, and enough to revive a spent hearth.
 - A found curio turns up **15%** of the time on a lucky gather, and **8%** of the time on any turn spent at the forest's edge -- a somewhat better bet, never a guarantee either way.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
+- The hut's curio shelf holds up to **10** things at once -- personal and curated, unlike the forest-edge cairn, which is collective and never full.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.
 
