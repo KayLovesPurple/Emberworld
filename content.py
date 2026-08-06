@@ -476,7 +476,7 @@ def cmd_take(world, actor, arg):
 
 def cmd_drop(world, actor, arg):
     """drop <thing> -- set down something you're carrying."""
-    e = find_visible(world, actor, arg)
+    e = find_visible(world, actor, arg, prefer=lambda x: _carrying(world, actor, x))
     if not e or e.location != actor.id:
         return f"You aren't carrying any '{arg}'."
     e.location = actor.location
@@ -501,7 +501,7 @@ def cmd_place(world, actor, arg):
     item_name = arg.lower().strip()
     if item_name.endswith(" on shelf"):
         item_name = item_name[:-len(" on shelf")].strip()
-    e = find_visible(world, actor, item_name)
+    e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
     if not e or e.location != actor.id:
         return f"You aren't carrying any '{arg}'."
     e.location = shelf.id
@@ -534,7 +534,7 @@ def cmd_give(world, actor, arg):
     item_name = arg.lower().strip()
     if " to " in item_name:
         item_name = item_name.split(" to ", 1)[0].strip()
-    e = find_visible(world, actor, item_name)
+    e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
     if not e or e.location != actor.id:
         return f"You aren't carrying any '{arg}'."
     if not e.attrs.get("curio"):
@@ -1183,7 +1183,7 @@ def cmd_stack_stone(world, actor, arg):
     item_name = arg.lower().strip() or "stone"
     if item_name.endswith(" on cairn"):
         item_name = item_name[:-len(" on cairn")].strip() or "stone"
-    e = find_visible(world, actor, item_name)
+    e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
     if not e or e.location != actor.id or "stone" not in e.name.lower():
         return "You've no stone to add. One might turn up gathering wood, or lingering here."
     world.entities.pop(e.id, None)

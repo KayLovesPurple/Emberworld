@@ -595,6 +595,64 @@ def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():
     assert "given to the cat and roundly ignored" in w.perceive(actor)
 
 
+# ===========================================================================
+# BUG WE HIT (real lineage transcript): a hand carrying two pinecones could
+# never place OR give either one, turn after turn, because an earlier hand
+# had already given a pinecone to the cat -- which leaves a permanent,
+# non-portable trace behind in the room, still named "a pinecone". find_
+# visible's default search order is room-contents-first, so that trace
+# always matched before either carried pinecone, and cmd_place/cmd_give saw
+# e.location != actor.id and refused -- forever, since the trace never goes
+# away. Fixed by passing prefer=lambda e: _carrying(...) at every call site
+# that requires a CARRIED match (place, give, drop, stack_stone) -- find_
+# visible already had a `prefer` param built for exactly this. cmd_take is
+# deliberately untouched: it SHOULD prefer a room item over one you already
+# hold, so picking up a second copy still works.
+# ===========================================================================
+def test_place_finds_a_carried_curio_even_when_a_same_named_trace_is_in_the_room():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")          # given away, becomes a trace
+    _add_curio(w, actor, "a pinecone")          # the one still carried
+    w.act(actor, "give pinecone to cat")
+    result = w.act(actor, "place pinecone on shelf")
+    assert result.splitlines()[0] == "You set the pinecone on the shelf."
+
+
+def test_give_finds_a_carried_curio_even_when_a_same_named_trace_is_in_the_room():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    result = w.act(actor, "give pinecone to cat")
+    assert "aren't carrying" not in result.lower()
+
+
+def test_drop_finds_a_carried_item_even_when_a_same_named_one_already_lies_in_the_room():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone", location=actor.location)   # already on the ground
+    _add_curio(w, actor, "a pinecone")                            # the carried one
+    result = w.act(actor, "drop pinecone")
+    assert result.splitlines()[0] == "You set down the pinecone."
+
+
+def test_stack_stone_finds_a_carried_stone_even_when_a_same_named_item_lies_in_the_room():
+    """The cat never reaches the forest's edge, so a give-to-cat trace can't
+    land here the way it does for place/give/drop in the hut/yard -- but any
+    non-carried, same-named item lying in the room is the same class of bug,
+    however it got there."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.add(Entity(w.fresh_id("found"), "a smooth grey stone",
+                 "a smooth grey stone, left behind by someone else",
+                 location="forest_edge", portable=False,
+                 attrs={"curio": True, "cat_reaction": "ignores"}))
+    _add_curio(w, actor, "a smooth grey stone")   # the one actually carried
+    result = cmd_stack_stone(w, actor, "")
+    assert "no stone" not in result.lower()
+    assert w.get(CAIRN_ID).attrs["height_cm"] > 0
+
+
 def test_give_trace_persists_across_a_save_load_roundtrip():
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
