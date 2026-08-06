@@ -32,6 +32,7 @@
 - `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
 - `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
+- `mark` -- mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 

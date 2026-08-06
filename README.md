@@ -120,7 +120,13 @@ deeper and each `return` carries a small chance of coming out somewhere
 other than where you meant to — never past the edge, never a penalty beyond
 the disorientation itself, just a genuinely uncertain outcome on a choice
 you made. It's the first thing in the game with real stakes rather than
-only chores or atmosphere.
+only chores or atmosphere. `mark trail` gives that risk a lever: mark your
+current depth and it becomes a new safe checkpoint, so `return` only risks
+landing off-course beyond the mark, not the whole way back to the edge.
+Marking never lowers an existing, deeper mark — there's no way to mark
+yourself into more danger — and it's most useful marked as you go, since
+one step past your last mark is still real risk by design; the danger
+lives specifically in the ground gained since you last checked in.
 
 Two more things happen without any verb at all. Once in a long while
 (roughly every 29 days — the world's own clock, unrelated to anyone's

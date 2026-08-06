@@ -1058,7 +1058,11 @@ def cmd_return(world, actor, arg):
     depth = world.forest_depth
     if depth <= 0:
         return "You're already back at the edge."
-    if depth > SAFE_DEPTH_THRESHOLD and world.rng.random() < OFF_COURSE_CHANCE:
+    # FOREST_SPEC.md Stage 5: a marked trail raises the safe floor above the
+    # flat SAFE_DEPTH_THRESHOLD, up to the deepest depth marked this session
+    # -- see cmd_mark_trail below.
+    safe_to = max(SAFE_DEPTH_THRESHOLD, world.forest_mark_depth)
+    if depth > safe_to and world.rng.random() < OFF_COURSE_CHANCE:
         expected = depth - 1
         new_depth = world.rng.choice([d for d in range(depth) if d != expected])
         world.forest_depth = new_depth
@@ -1072,6 +1076,24 @@ def cmd_return(world, actor, arg):
     if world.forest_depth == 0:
         return "You retrace your steps and come back out at the forest's edge, the yard's quiet within reach again."
     return "You fall back a step. " + describe_forest(world.forest_depth, world.rng)
+
+
+# FOREST_SPEC.md Stage 5: trail-marking, a freely-chosen mitigation for
+# Stage 4's risk -- so getting lost reads as a choice a hand can manage,
+# not just a dice roll happening to them. Costs a turn like any real
+# action, needs nothing consumable (no new resource dependency), and only
+# ever raises the safe floor, never lowers it -- marking shallower than an
+# existing mark is a harmless no-op, not a way to undo one.
+def cmd_mark_trail(world, actor, arg):
+    """mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back."""
+    if actor.location != "forest_edge":
+        return "There's nowhere to mark a trail from here -- try the forest's edge."
+    if world.forest_depth <= 0:
+        return "There's nothing to mark at the edge itself."
+    if world.forest_depth <= world.forest_mark_depth:
+        return "You've already marked at least this deep."
+    world.forest_mark_depth = world.forest_depth
+    return "You mark this spot -- you'll know it again, however deep you go from here."
 
 
 # listen's sibling -- the yard's (and forest's edge's) calm affordance, same
@@ -1229,6 +1251,7 @@ VERBS.update({
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
     "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
     "watch": cmd_watch_clouds, "venture": cmd_venture, "return": cmd_return,
+    "mark": cmd_mark_trail,
     # not "feed": that verb key is already cmd_feed (feeds the cat, in cat.py),
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,

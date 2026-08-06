@@ -175,6 +175,11 @@ straight back out.
 
 ## Stage 5 — Trail-marking (optional mitigation, freely chosen)
 
+**Status: ✅ done.** `mark trail` (`cmd_mark_trail` in content.py) and
+`world.forest_mark_depth` (session-scoped, alongside `forest_depth` and
+`calm_visits`). See ARCHITECTURE.md's "Stage 5" section for the landed
+shape, including how it composes with Stage 4's off-course roll.
+
 **Goal:** give the risk in Stage 4 a player-facing lever, so it reads as a
 choice rather than a dice roll happening to you.
 

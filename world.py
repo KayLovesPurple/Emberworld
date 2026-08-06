@@ -98,6 +98,13 @@ class World:
         # episodic (gone the instant a session ends), unlike anything a hand
         # actually carries or changes out there, which persists normally.
         self.forest_depth = 0
+        # FOREST_SPEC.md Stage 5: the deepest depth marked this session via
+        # `mark trail` (content.py's cmd_mark_trail) -- extends how far
+        # cmd_return's Stage 4 off-course roll considers "safe" beyond the
+        # flat SAFE_DEPTH_THRESHOLD. Session-scoped like forest_depth right
+        # above, for the identical reason: a trail marked this visit means
+        # nothing to the next, memoryless hand.
+        self.forest_mark_depth = 0
         # Calm-axis session acknowledgment (see content.py's _calm_visit_ack):
         # how many times THIS hand has chosen a calm act at a given calm spot
         # this visit, keyed by spot (e.g. "forest_edge"). Same reasoning as
@@ -213,6 +220,8 @@ class World:
             acts.append("venture")
             if self.forest_depth > 0:
                 acts.append("return")
+                if self.forest_depth > self.forest_mark_depth:
+                    acts.append("mark trail")
             if any("stone" in e.name.lower() for e in carried):
                 acts.append("stack stone on cairn")
         if room.id in ("yard", "forest_edge") and (

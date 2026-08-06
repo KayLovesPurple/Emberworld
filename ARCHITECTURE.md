@@ -493,6 +493,38 @@ under_a_forced_roll` runs the same forced-trigger rng at or below the
 threshold and asserts nothing changes — the safety guarantee has to survive
 an adversarial rng, not just a lucky one.
 
+## The forest, staged — Stage 5: trail-marking
+
+Stage 4's risk needed a player-facing lever, or it just reads as a dice
+roll happening *to* a hand rather than something they can manage. `mark
+trail` (`cmd_mark_trail`) does exactly one thing: `world.forest_mark_depth
+= max(world.forest_mark_depth, world.forest_depth)` — session-scoped,
+declared in `World.__init__` right alongside `forest_depth`/`calm_visits`,
+for the identical reason: a trail marked this visit means nothing to the
+next, memoryless hand.
+
+The mechanism is a single line in `cmd_return`: `safe_to = max(
+SAFE_DEPTH_THRESHOLD, world.forest_mark_depth)`, then the existing Stage 4
+check becomes `depth > safe_to` instead of `depth > SAFE_DEPTH_THRESHOLD`.
+That's the whole integration — Stage 4's branch didn't need to change
+shape, only the number it compares against. One easy misreading worth
+heading off: marking depth 6 does **not** make a return *from* depth 7
+exact — it raises the floor, it doesn't open a corridor for ground gained
+since the last mark. Returning *from* the marked depth itself (6, in this
+example) is exact, precisely because 6 is no longer greater than the
+(now-raised) safe floor; one step further than your last mark is still
+real risk, by design — the risk lives specifically in the gap between
+where you last marked and how far you've pushed since, which is what
+makes marking-as-you-go a meaningful habit rather than a one-time flag to
+set and forget.
+
+Never lowers an existing mark (marking shallower than a prior mark is a
+harmless no-op, refused with a distinct message rather than silently
+succeeding) — there's no way to mark yourself back into more danger.
+Costs a turn like any real action, needs nothing consumable, and is gated
+out of `available_actions` once redundant (depth 0, or already marked at
+the current depth) — same legibility rule as everywhere else in the game.
+
 ## The full moon — the one exception to the night withdrawal
 
 `watch clouds` at night has always been a clean withdrawal (`WATCH_CLOUDS_

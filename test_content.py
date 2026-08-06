@@ -23,7 +23,7 @@ from content import (
     ensure_cairn, cmd_stack_stone,
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
-    FOREST_FRAGMENTS, _forest_band, describe_forest, cmd_return,
+    FOREST_FRAGMENTS, _forest_band, describe_forest, cmd_return, cmd_mark_trail,
     SAFE_DEPTH_THRESHOLD, OFF_COURSE_CHANCE, OFF_COURSE_LINES,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
@@ -2166,6 +2166,119 @@ def test_off_course_never_produces_a_negative_or_repeated_depth():
         cmd_return(w2, actor2, "")
         assert w2.forest_depth >= 0
         assert w2.forest_depth != depth_before - 1
+
+
+# ===========================================================================
+# FOREST_SPEC.md Stage 5 -- trail-marking: a freely-chosen mitigation for
+# Stage 4's risk. `mark trail` raises the safe floor for `return`'s
+# off-course roll up to the deepest depth marked this session, so a hand
+# who marks as it goes can push arbitrarily deep with bounded risk.
+# ===========================================================================
+def test_marking_below_the_original_threshold_does_nothing_return_still_risks():
+    """Marking at depth 2 (below SAFE_DEPTH_THRESHOLD, which already covers
+    it) shouldn't raise the floor past what depth 2 already grants -- deeper
+    pushes still risk the original threshold, not an artificially lowered one."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture")
+    assert w.forest_depth == 2
+    result = cmd_mark_trail(w, actor, "")
+    assert "mark" in result.lower()
+    assert w.forest_mark_depth == 2
+    for _ in range(SAFE_DEPTH_THRESHOLD + 2):
+        w.act(actor, "venture")
+    depth_before = w.forest_depth
+    assert depth_before > SAFE_DEPTH_THRESHOLD
+    w.rng = _AlwaysOffCourse()
+    cmd_return(w, actor, "")
+    assert w.forest_depth != depth_before - 1, \
+        "still beyond the flat threshold, so off-course should still be reachable"
+
+
+def test_marking_past_the_threshold_extends_the_safe_zone():
+    """The mark raises the safe FLOOR (depth > safe_to triggers off-course),
+    it doesn't create a magic corridor for ground gained since the last
+    mark -- returning FROM the marked depth itself is exact, even forced
+    off-course, precisely because that depth is no longer > the (now
+    raised) safe floor. Without the mark this same depth would have been
+    well past SAFE_DEPTH_THRESHOLD and at real risk."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(SAFE_DEPTH_THRESHOLD + 3):
+        w.act(actor, "venture")
+    mark_depth = w.forest_depth
+    assert mark_depth > SAFE_DEPTH_THRESHOLD
+    cmd_mark_trail(w, actor, "")
+    assert w.forest_mark_depth == mark_depth
+    w.rng = _AlwaysOffCourse()
+    cmd_return(w, actor, "")
+    assert w.forest_depth == mark_depth - 1, \
+        "returning from the marked depth itself should be exact, even forced off-course"
+
+
+def test_marking_requires_being_at_the_forest_edge():
+    w, actor = fresh()
+    result = cmd_mark_trail(w, actor, "")
+    assert "forest's edge" in result
+    assert w.forest_mark_depth == 0
+
+
+def test_marking_at_the_edge_itself_is_refused():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    result = cmd_mark_trail(w, actor, "")
+    assert "nothing to mark" in result.lower()
+    assert w.forest_mark_depth == 0
+
+
+def test_marking_never_lowers_an_existing_deeper_mark():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture",
+        "venture", "venture")
+    cmd_mark_trail(w, actor, "")
+    assert w.forest_mark_depth == 5
+    w.act(actor, "return")
+    assert w.forest_depth == 4
+    result = cmd_mark_trail(w, actor, "")
+    assert "already marked" in result.lower()
+    assert w.forest_mark_depth == 5, "marking shallower must not lower an existing mark"
+
+
+def test_forest_mark_depth_does_not_survive_a_save_load_roundtrip():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture", "venture")
+    cmd_mark_trail(w, actor, "")
+    assert w.forest_mark_depth == 4
+    assert "forest_mark_depth" not in w.to_data()
+    w2 = World.from_data(json.loads(json.dumps(w.to_data())))
+    assert w2.forest_mark_depth == 0
+
+
+def test_mark_trail_costs_a_turn_through_the_normal_dispatch():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture")
+    t0 = w.time
+    w.act(actor, "mark trail")
+    assert w.time == t0 + 1
+
+
+def test_mark_trail_is_offered_only_at_the_forest_edge_past_depth_zero_and_not_yet_marked():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out")
+    assert "mark trail" not in w.available_actions(actor)
+    run(w, actor, "go forest")
+    assert "mark trail" not in w.available_actions(actor), "nothing to mark at depth 0"
+    w.act(actor, "venture")
+    assert "mark trail" in w.available_actions(actor)
+    w.act(actor, "mark trail")
+    assert "mark trail" not in w.available_actions(actor), \
+        "already marked at the current depth -- offering it again would be a no-op"
 
 
 def test_no_forest_fragment_reads_as_a_refusal_marker():
