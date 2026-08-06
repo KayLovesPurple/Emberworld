@@ -117,7 +117,9 @@ below):
 - **Give to the cat** (`give <thing> to cat`, `cmd_give`) — consumes it from
   the pack, fires a reaction message, and turns the item into a fixed,
   non-portable trace in the room description (`_CAT_GIVE_REACTIONS` /
-  `_CAT_GIVE_TRACES`, keyed by `cat_reaction`).
+  `_CAT_GIVE_TRACES`, keyed by `cat_reaction`). A `"plays"` trace isn't done
+  once it's given, either: `cat_replay` (cat.py) rarely bats at it again if
+  it's still lying in the cat's current room — see "Cat replay" below.
 - **Leave on the shelf** (`place`/`put <thing> on shelf`, `cmd_place`) —
   consumes it from the pack onto the hut's display-surface shelf, listed in
   `_shelf_description`; persists for whoever visits next.
@@ -158,6 +160,28 @@ no new mechanic) is how room gets made. `available_actions` stops offering
 `give`/`place` only appearing when there's something to act on.
 `_shelf_description` adds ", full up" only exactly at capacity, mirroring
 the hearth's healthy/low read rather than exposing a bare count.
+
+## Cat replay
+
+Before this, a `"plays"` curio only ever got played with once — at the
+instant of `give`, then never again, even though the battered trace sits
+in the room forever after. `cat_replay` (cat.py, one of the cat's four
+autonomous behaviors) closes that gap: each tick, it looks for entities in
+the cat's current room where `not e.portable and e.attrs.get("cat_reaction")
+== "plays"` — which only ever matches a post-give trace, never a
+still-carried, still-portable curio that hasn't been given yet (the
+`portable` check is what tells the two apart) — and, rarely
+(`CAT_REPLAY_CHANCE`, 0.05), announces one more small line of the cat
+batting at it. Same hunger gate as `cat_idle`: a hungry cat is preoccupied,
+not playing. Purely cosmetic, same as every other ambient behavior in this
+codebase — no state change on the cat, the trace, or anything else, just
+`world.announce`.
+
+Backward compatibility: `ensure_cat_replay` (cat.py) attaches the behavior
+to a cat loaded from a save that predates it, checking `behavior_names`
+first since `Entity.attach` isn't itself idempotent — calling it twice
+would double the effective chance rather than being a no-op. Wired into
+`drivers.load_or_build` alongside `ensure_shelf`/`ensure_cairn`.
 
 ## The forest's edge — v1, a doorway not the forest
 

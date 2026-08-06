@@ -9,8 +9,9 @@ Run it either way:
 
 import json
 
-from world import World, check_world
-from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, cat_wander, cat_hunger, cat_idle
+from world import World, Entity, check_world
+from cat import (CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, cat_wander, cat_hunger,
+                  cat_idle, cat_replay, ensure_cat_replay)
 from _test_helpers import fresh, run
 
 
@@ -295,6 +296,114 @@ def test_cat_idle_is_purely_cosmetic():
     cat_idle(w, cat)
     assert cat.attrs == before_attrs, "idle behaviour mutated an attr"
     assert cat.location == before_location, "idle behaviour moved the cat"
+
+
+# ===========================================================================
+# CAT REPLAY -- rarely, the cat bats again at a curio it's already been
+# given and played with (a "plays"-reaction trace left behind by cmd_give
+# in content.py), if that trace is lying in its current room.
+# ===========================================================================
+def _played_trace(world, room, reaction="plays"):
+    return world.add(Entity(world.fresh_id("found"), "a pinecone",
+                             "a pinecone, well-battered after a game with the cat",
+                             location=room, portable=False,
+                             attrs={"curio": True, "cat_reaction": reaction}))
+
+
+class _AlwaysReplay:
+    def random(self): return 0.0
+    def choice(self, seq): return seq[0]
+
+
+def test_cat_replay_fires_when_a_played_trace_shares_its_room():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    _played_trace(w, "yard")
+    w.rng = _AlwaysReplay()
+    w.log = []
+    cat_replay(w, cat)
+    assert w.log, "a played trace in the room should have triggered a replay line"
+
+
+def test_cat_replay_is_silent_with_no_trace_present():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    w.rng = _AlwaysReplay()
+    w.log = []
+    cat_replay(w, cat)
+    assert w.log == []
+
+
+def test_cat_replay_is_silent_for_an_ignored_trace():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    _played_trace(w, "yard", reaction="ignores")
+    w.rng = _AlwaysReplay()
+    w.log = []
+    cat_replay(w, cat)
+    assert w.log == [], "an ignored curio was never played with in the first place"
+
+
+def test_cat_replay_is_silent_for_a_still_portable_curio():
+    """A freshly-found, not-yet-given curio is portable and hasn't been
+    played with yet -- only the non-portable post-give trace should fire."""
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    w.add(Entity(w.fresh_id("found"), "a pinecone", "tight and resinous.",
+                 location="yard", portable=True,
+                 attrs={"curio": True, "cat_reaction": "plays"}))
+    w.rng = _AlwaysReplay()
+    w.log = []
+    cat_replay(w, cat)
+    assert w.log == []
+
+
+def test_cat_replay_is_silent_while_hungry():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    cat.attrs["hunger"] = CAT_MEOW_THRESHOLD
+    _played_trace(w, "yard")
+    w.rng = _AlwaysReplay()
+    w.log = []
+    cat_replay(w, cat)
+    assert w.log == []
+
+
+def test_cat_replay_is_purely_cosmetic():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.location = "yard"
+    trace = _played_trace(w, "yard")
+    before_attrs = dict(cat.attrs)
+    before_trace_attrs = dict(trace.attrs)
+    w.rng = _AlwaysReplay()
+    cat_replay(w, cat)
+    assert cat.attrs == before_attrs
+    assert trace.attrs == before_trace_attrs
+    assert trace.location == "yard", "the trace itself must not move or vanish"
+
+
+def test_ensure_cat_replay_backfills_an_old_save():
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.behavior_names.remove("cat_replay")
+    cat.behaviors = [b for b in cat.behaviors if b is not cat_replay]
+    ensure_cat_replay(w)
+    assert "cat_replay" in cat.behavior_names
+    assert cat.behavior_names.count("cat_replay") == 1
+
+
+def test_ensure_cat_replay_is_idempotent():
+    w, actor = fresh()
+    cat = w.get("cat")
+    ensure_cat_replay(w)
+    ensure_cat_replay(w)
+    assert cat.behavior_names.count("cat_replay") == 1
 
 
 # ---------------------------------------------------------------------------

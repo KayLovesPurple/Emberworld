@@ -86,7 +86,9 @@ of its own — the same find, rarer than a guarantee (rarer, in fact, than the
 yard's own incidental luck now — a pacing-rebalance round two cut it further
 after real play showed lingering there still turned up curios too fast). A
 curio can be carried, given to the cat
-(some it plays with, some it ignores, but either way it leaves its mark), or
+(some it plays with, some it ignores, but either way it leaves its mark —
+and rarely, if a played-with one is still lying around, the cat will bat
+at it again), or
 set on the hut's shelf for whoever comes next — the shelf holds up to 10 at
 once, on purpose: personal and curated rather than the cairn's collective
 and boundless, so a hand who finds an 11th has to actually decide whether

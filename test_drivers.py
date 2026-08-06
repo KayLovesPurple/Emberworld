@@ -652,6 +652,51 @@ def test_ask_for_name_denylist_check_is_case_insensitive():
     assert drv._ask_for_name(c, drv.LLM_MODEL, think=False) == "Cindergate"
 
 
+def test_ask_for_name_does_not_reroll_on_a_derivative_of_an_overused_name():
+    """"Marrowlight" turned up in a real session, distinct from the bare
+    "Marrow" that was the actual complaint -- a one-off derivative is a
+    fine name, not the problem. Substring matching was tried (round six)
+    and deliberately reverted: it wasn't solving anything the exact-match
+    check didn't already handle for the thing that actually mattered."""
+    c = _SequencedClient(["Marrowlight"])
+    name = drv._ask_for_name(c, drv.LLM_MODEL, think=False)
+    assert name == "Marrowlight"
+    assert c.calls == 1
+
+
+def test_is_overused_matches_the_exact_name_only_not_derivatives():
+    assert drv._is_overused("Marrow")
+    assert drv._is_overused("marrow")
+    assert not drv._is_overused("Marrowlight")
+    assert not drv._is_overused("Marrowbone")
+    assert not drv._is_overused("Cindergate")
+    assert not drv._is_overused(None)
+    assert not drv._is_overused("")
+
+
+class _RecordingSequencedClient(_SequencedClient):
+    """_SequencedClient, but also records every prompt sent -- needed to
+    check the reroll's actual wording, not just its outcome."""
+    def __init__(self, replies):
+        super().__init__(replies)
+        self.prompts = []
+
+    def create(self, **kw):
+        self.prompts.append(kw["messages"][0]["content"])
+        return super().create(**kw)
+
+
+def test_ask_for_name_reroll_names_the_rejected_name_explicitly():
+    """BUG WE HIT (round six): the reroll used to just re-ask the same
+    generic prompt, hoping for different luck -- but Marrow was never a
+    reaction to the shown examples in the first place, so a blind re-ask
+    reliably landed on it again. The retry now names the actual rejected
+    name in the prompt, so it's real feedback, not a coin-flip."""
+    c = _RecordingSequencedClient(["Marrow", "Birchwind"])
+    drv._ask_for_name(c, drv.LLM_MODEL, think=False)
+    assert "Marrow" in c.prompts[1]
+
+
 def test_ask_for_name_keeps_the_name_if_the_reroll_lands_on_it_again():
     """One reroll is a nudge toward something else, not a veto: if the
     second, deliberate answer is the same tired default again, it's kept

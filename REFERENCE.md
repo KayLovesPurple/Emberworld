@@ -41,6 +41,7 @@
 - **cat_wander** -- Autonomous: the cat drifts between the hut and the yard, drawn toward a lit hearth.
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it in its own description once hungry, and occasionally meows to be fed.
 - **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle cat-thing -- purely cosmetic ambient life, never while it's hungry.
+- **cat_replay** -- Autonomous: rarely, if something the cat has already played with (a curio previously given away, see cmd_give's "plays" reaction) is lying in its current room, the cat bats at it again.
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice as fast on any tick it spends a unit of stored water.
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it, including whether it was just watered.

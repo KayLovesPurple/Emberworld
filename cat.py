@@ -117,8 +117,43 @@ def cat_idle(world, cat):
         world.announce(line, cat.location)
 
 
+# A curio given away with a "plays" reaction (cmd_give in content.py)
+# leaves a permanent, non-portable, well-battered trace behind in whatever
+# room the gesture happened in -- but until now the cat only ever played
+# with it once, at the moment of giving, and never again. Rarely, if such a
+# trace is lying in the cat's current room, it gets batted at again -- pure
+# ambient texture, same restraint as cat_idle: no state change, no second
+# "give", nothing consumed or created, just a small delight for a hand who
+# happens to be there to see it.
+CAT_REPLAY_CHANCE = 0.05
+
+CAT_REPLAY_LINES = (
+    "{cat} pounces on {toy} again, just for a moment, then loses interest once more.",
+    "{cat} bats {toy} across the floor and chases it half-heartedly.",
+    "{cat} noses {toy}, remembers, and gives it one more half-hearted swat.",
+)
+
+
+def cat_replay(world, cat):
+    """Autonomous: rarely, if something the cat has already played with (a
+    curio previously given away, see cmd_give's "plays" reaction) is lying
+    in its current room, the cat bats at it again. Same hunger gate as
+    cat_idle -- a hungry cat is preoccupied, not playing."""
+    if cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
+        return
+    toys = [e for e in world.contents(cat.location)
+            if not e.portable and e.attrs.get("cat_reaction") == "plays"]
+    if not toys or world.rng.random() >= CAT_REPLAY_CHANCE:
+        return
+    from content import _the   # deferred to dodge a cat<->content cycle
+    toy = world.rng.choice(toys)
+    line = world.rng.choice(CAT_REPLAY_LINES).format(
+        cat=_cat_cap(cat), toy=_the(toy.name))
+    world.announce(line, cat.location)
+
+
 BEHAVIORS.update({"cat_wander": cat_wander, "cat_hunger": cat_hunger,
-                   "cat_idle": cat_idle})
+                   "cat_idle": cat_idle, "cat_replay": cat_replay})
 
 
 def cmd_feed(world, actor, arg):
@@ -170,7 +205,7 @@ VERBS.update({
 
 
 def build_cat(world):
-    """Add the cat to a freshly-assembled world, in the hut, with its three
+    """Add the cat to a freshly-assembled world, in the hut, with its four
     autonomous behaviors attached."""
     cat = world.add(Entity("cat", "cat",
         "a small cat, watching you with mild interest, tail curled",
@@ -178,4 +213,16 @@ def build_cat(world):
     cat.attach("cat_hunger")
     cat.attach("cat_wander")
     cat.attach("cat_idle")
+    cat.attach("cat_replay")
+    return cat
+
+
+def ensure_cat_replay(world):
+    """Attach cat_replay to a cat from a save that predates this behavior --
+    same backfill role as content.py's ensure_shelf/ensure_cairn. attach()
+    itself isn't idempotent (it'd double the effective chance on a second
+    call), so this checks behavior_names first."""
+    cat = world.get("cat")
+    if cat is not None and "cat_replay" not in cat.behavior_names:
+        cat.attach("cat_replay")
     return cat

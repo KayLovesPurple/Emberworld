@@ -19,7 +19,7 @@ from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
 from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
-from cat import CAT_MEOW_THRESHOLD
+from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
@@ -79,6 +79,7 @@ def load_or_build(quiet=False):
             w = World.load(SAVE)
             ensure_shelf(w)
             ensure_cairn(w)
+            ensure_cat_replay(w)
             actor = w.get("you")
             if actor:
                 if not quiet:
@@ -420,7 +421,29 @@ def _sanitize_name(raw):
 # only lever left is rerolling the actual output. Kept as a small, hand-
 # curated denylist of names *observed* to recur, not a preemptive guess at
 # what might -- same restraint as the pools themselves.
+#
+# BUG WE HIT (round six): real lineage transcripts kept coming back
+# "Marrow" anyway -- 10 of ~20 real sessions. The actual complaint was
+# never a derivative turning up now and then (a one-off "Marrowlight" is
+# fine); it was the bare word itself dominating almost every reply. So the
+# check stays exact-match, not substring -- widening it to catch
+# derivatives was tried and deliberately reverted; it wasn't solving the
+# actual problem. What WAS the gap: the reroll itself was generic, a fresh
+# call to the same prompt hoping for different luck. Since Marrow was
+# never a reaction to what's SHOWN in the first place, a blind re-ask
+# reliably landed on it again. Fixed by naming the actual rejected name
+# explicitly in the retry, instead of just hoping -- turns the reroll from
+# a coin-flip into real, targeted feedback.
 _OVERUSED_NAMES = {"marrow"}
+
+
+def _is_overused(name):
+    """Exact match, not substring -- a derivative like "Marrowlight" is a
+    fine, one-off name; what needs catching is the bare word itself
+    recurring so often. See the round-six comment above _OVERUSED_NAMES."""
+    if not name:
+        return False
+    return name.lower() in _OVERUSED_NAMES
 
 
 def _ask_for_name(client, model, think, rng=None):
@@ -432,11 +455,15 @@ def _ask_for_name(client, model, think, rng=None):
     shows; pass world.rng from a caller that already has a World in scope.
 
     Rerolls once (see _OVERUSED_NAMES above) if the sanitized reply is a
-    known-overused default -- but only once, and only as a nudge toward
-    something else, not a veto: if the reroll lands on the same tired name
-    again, that's kept rather than discarded. A hand's second, deliberate
-    answer is still its answer; naming just isn't allowed to loop forever
-    chasing a "better" one."""
+    known-overused default (exact match, see _is_overused -- a derivative
+    is a fine, one-off name) -- but only once, and only as a nudge toward
+    something else, not a veto:
+    if the reroll lands on the same tired name again, that's kept rather
+    than discarded. A hand's second, deliberate answer is still its
+    answer; naming just isn't allowed to loop forever chasing a "better"
+    one. The reroll names the actual rejected name explicitly (round six)
+    rather than just re-asking blind, since a generic re-ask reliably
+    landed on the same default again."""
     rng = rng or random.Random()
     system = ("You're about to spend some time as a character living in a "
               "small persistent text world.")
@@ -445,10 +472,14 @@ def _ask_for_name(client, model, think, rng=None):
     except Exception:
         return None
     name = _sanitize_name(reply)
-    if name is None or name.lower() not in _OVERUSED_NAMES:
+    if not _is_overused(name):
         return name
+    retry_prompt = _naming_prompt(rng) + (
+        f' Not "{name}" either, or anything built from it -- something '
+        "else entirely."
+    )
     try:
-        reply = _ask_claude(client, system, _naming_prompt(rng), model, think)
+        reply = _ask_claude(client, system, retry_prompt, model, think)
     except Exception:
         return None
     return _sanitize_name(reply)
