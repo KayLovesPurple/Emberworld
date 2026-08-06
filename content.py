@@ -288,6 +288,42 @@ def _sow(world, patch):
 # ---------------------------------------------------------------------------
 # Verbs -- the actions. Growing the game = adding entries here.
 # ---------------------------------------------------------------------------
+def _room_here(world, actor, room):
+    """The entities actually present in `room` right now -- ordinarily just
+    world.contents(room.id), EXCEPT the forest's edge doubles as every
+    forest depth (venturing is a session-scoped counter, not a real room
+    change -- actor.location never actually leaves "forest_edge"), so a
+    flat content list would make two things visible/reachable from
+    anywhere in the whole forest, not just where they actually belong:
+
+    BUG WE HIT: once discovered, the statue appeared in the forest_edge
+    room description forever after for the rest of the session -- even
+    back at depth 0, right at the edge, contradicting its own "resists the
+    system" design (it should never be a standing fixture you just look
+    around and see). The cairn had the milder version of the same bug: it
+    was reachable (via `look cairn`, even `stack stone on cairn`) from any
+    depth, when it's meant to be a landmark you pass specifically AT the
+    edge.
+
+    So, forest_edge only: the cairn is present only when forest_depth == 0;
+    the statue is present only when _statue_reachable holds (the exact
+    same gate `wish` already uses) -- never unconditionally. Used by
+    cmd_look, available_actions, AND find_visible, so a hand can't reach
+    past either restriction just by typing the object's name directly
+    instead of picking it from the action list."""
+    here = world.contents(room.id)
+    if room.id != "forest_edge":
+        return here
+    here = [e for e in here if e.id != "statue"]
+    if world.forest_depth > 0:
+        here = [e for e in here if e.id != "cairn"]
+    if _statue_reachable(world, actor):
+        statue = world.get("statue")
+        if statue is not None:
+            here = here + [statue]
+    return here
+
+
 def find_visible(world, actor, name, prefer=None):
     """Find the nearest thing matching `name`. When several match (e.g. a
     raw and a broiled potato both contain "potato"), `prefer` -- a
@@ -298,7 +334,8 @@ def find_visible(world, actor, name, prefer=None):
     name = name.lower().strip()
     if not name:
         return None
-    here = world.contents(actor.location)
+    room = world.get(actor.location)
+    here = _room_here(world, actor, room) if room else []
     displayed = [item for surface in here if surface.attrs.get("display_surface")
                  for item in world.contents(surface.id)]
     matches = [e for e in here + world.contents(actor.id) + displayed
@@ -431,7 +468,7 @@ def cmd_look(world, actor, arg):
                 f"wait for dawn. Somewhere out there the world goes on "
                 f"regardless.\n\n{_carried_line(world, actor)}")
     lines = [f"[{stamp}]  {room.name.upper()}", room.description]
-    here = [e for e in world.contents(room.id) if e.id != actor.id]
+    here = [e for e in _room_here(world, actor, room) if e.id != actor.id]
     if here:
         lines += [""] + [f"  - {e.description}" for e in here]
     if room.exits:
@@ -1069,12 +1106,25 @@ def _forest_ambient(rng):
 # from anywhere deep enough, without needing the exact depth it first
 # appeared at.
 STATUE_MIN_DEPTH = 3
-STATUE_DISCOVERY_CHANCE = 0.15
+STATUE_DISCOVERY_CHANCE = 0.25   # was 0.15; real play found the wait too long.
+                                  # STATUE_MIN_DEPTH stays untouched -- that's
+                                  # what keeps it "a deep-visit thing," this is
+                                  # just the odds once you're already there.
 
+# The one deliberate hint that wishing is even possible here -- but framed
+# as something the place itself suggests, not a claim of prior knowledge
+# (a fresh hand hasn't actually "heard" anything) and not an invitation from
+# anyone listening. Same folk-magic register as "a coin tossed in a
+# fountain" already used in README's wishing-statue design notes: other
+# people have done this, for whatever reason people do -- never a promise
+# that doing it here works, or that anything hears you. THE LINE THAT MUST
+# NEVER APPEAR: anything implying the statue listens, grants, or is aware.
 STATUE_DISCOVERY_TEXT = (
     " Between two trunks stands something that isn't a tree -- a weathered "
     "stone figure, worn past recognizing, moss thick in its folds. However "
-    "long it's stood here, it was long before you."
+    "long it's stood here, it was long before you. Something about it makes "
+    "you think people have stood here and wished for things, the way you'd "
+    "toss a coin in a fountain."
 )
 
 # THE CONSTRAINT THAT MUST NEVER BREAK: the statue stays mechanically
@@ -1230,8 +1280,8 @@ WATCH_CLOUD_LINES = {
         "pull slowly apart.",
         "The sky is doing almost nothing, very slowly, and it's enough to "
         "stand and watch it.",
-        "A single cloud crosses the sun; the yard dims and brightens as "
-        "it passes.",
+        "A single cloud crosses the sun, the light dimming and brightening "
+        "as it passes.",
     ),
     "dusk": (
         "The clouds have gone gold underneath, the light draining off the "
@@ -1332,6 +1382,8 @@ def cmd_stack_stone(world, actor, arg):
     """stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile."""
     if actor.location != "forest_edge":
         return "There's no cairn here -- it's at the forest's edge."
+    if world.forest_depth > 0:
+        return "You're too deep in for the cairn -- it's back at the forest's edge."
     item_name = arg.lower().strip() or "stone"
     if item_name.endswith(" on cairn"):
         item_name = item_name[:-len(" on cairn")].strip() or "stone"

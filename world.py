@@ -198,12 +198,12 @@ class World:
         # imports World/Entity from here, making a module-level import back
         # into content.py circular. Importing inside the function, once it's
         # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in, find_visible, _is_full_moon, SHELF_CAPACITY, _statue_reachable
+        from content import _crop_in, _patch_in, find_visible, _is_full_moon, SHELF_CAPACITY, _statue_reachable, _room_here
         acts = ["look", "actions", "wait"]
         room = self.get(actor.location)
         for d in room.exits:
             acts.append(f"go {d}")
-        here = self.contents(room.id)
+        here = _room_here(self, actor, room)
         carried = self.contents(actor.id)
         for e in here:
             if e.id == actor.id:
@@ -227,7 +227,7 @@ class World:
                 acts.append("return")
                 if self.forest_depth > self.forest_mark_depth:
                     acts.append("mark trail")
-            if any("stone" in e.name.lower() for e in carried):
+            if self.forest_depth == 0 and any("stone" in e.name.lower() for e in carried):
                 acts.append("stack stone on cairn")
             if _statue_reachable(self, actor):
                 acts.append("wish <something>")

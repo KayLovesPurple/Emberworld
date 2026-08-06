@@ -579,12 +579,26 @@ ITEM_CHANCE` is retired along with the roll it powered.
 **The statue** is discovered, not placed. `STATUE_MIN_DEPTH` (3) gates it
 out entirely below that depth — a deep-visit thing, never a short-trip
 accident — and beyond it, each `venture` rolls `STATUE_DISCOVERY_CHANCE`
-(0.15) independently. On a hit, `world.statue_found_this_session` (session-
-scoped, declared in `World.__init__` alongside `forest_depth`/`forest_
-mark_depth`/`calm_visits`, for the identical episodic-reset reason) is set
-`True` and the discovery line is appended — composition order per the
-cross-cutting requirement, discovery text before the ambient roll, since
-`venture` has no off-course branch to also consider (that's `return`-only).
+independently (0.15 at first ship, raised to 0.25 after real play found the
+wait too long; `STATUE_MIN_DEPTH` was deliberately left alone in that
+tuning pass — that's what keeps it a deep-visit thing, the chance is just
+the odds once you're already there). On a hit, `world.statue_found_this_
+session` (session-scoped, declared in `World.__init__` alongside `forest_
+depth`/`forest_mark_depth`/`calm_visits`, for the identical episodic-reset
+reason) is set `True` and the discovery line is appended — composition
+order per the cross-cutting requirement, discovery text before the ambient
+roll, since `venture` has no off-course branch to also consider (that's
+`return`-only).
+
+`STATUE_DISCOVERY_TEXT` also carries the one deliberate hint that wishing
+is even possible: a line about people having stood here and wished before,
+"the way you'd toss a coin in a fountain." This walks a specific line the
+comment above it states explicitly — it reports a *custom* (other people
+have done this) rather than an *invitation from an audience* (nothing
+claims the statue listens or grants). That distinction is what keeps it
+compatible with "no god to petition": telling a hand the verb exists is
+fine; implying anyone's listening is the one thing that must never appear
+here.
 Once found, it stays found for the rest of the session; `test_statue_is_
 not_rediscovered_once_found_this_session` pins that the discovery text
 never repeats on a later `venture`.
@@ -622,6 +636,34 @@ tripped `test_no_forest_fragment_reads_as_a_refusal_marker` ("you can't
 tell", then "there's no telling") before landing on wording that avoids
 `_REFUSAL_MARKERS` altogether -- same incident class as Stage 6's ambient
 pool, worth expecting again for any future statue/forest prose.
+
+**BUG WE HIT, worse than the wording one: once found, the statue stayed
+permanently visible in the forest_edge room description for the rest of
+the session — even back at depth 0, right at the edge.** Root cause:
+`actor.location` never actually leaves `"forest_edge"` at any depth
+(venturing is a session-scoped counter, not a real room change), so
+`cmd_look`, `available_actions`, and `find_visible` were all reading a
+flat `world.contents(room.id)` that can't tell depth apart — anything
+placed in that room (the cairn, and once created, the statue) was
+reachable from literally anywhere in the whole forest, not just where it
+actually belongs. The cairn had the milder version of the same bug: `look
+cairn` and even `stack stone on cairn` worked from any depth, when it's
+meant to be a landmark specifically at the edge.
+
+Fixed with one shared helper, `_room_here(world, actor, room)`, used by
+all three call sites instead of the bare `world.contents(room.id)`. For
+any room other than `forest_edge` it's a pass-through; for `forest_edge`
+it filters: the cairn only appears when `forest_depth == 0`, and the
+statue only appears when `_statue_reachable` holds — the exact same gate
+`wish` already used, so "can you see it" and "can you wish at it" now
+agree by construction rather than by two separately-maintained checks.
+Routing `find_visible` through it too (not just the room-listing/action-
+cue call sites) matters as much as the listing fix: hiding something from
+`available_actions` but leaving it reachable by typing its name directly
+would only have fixed the suggestion, not the actual bug.
+`cmd_stack_stone` needed its own explicit depth check on top of this,
+since it never went through `find_visible` to locate the cairn in the
+first place — it grabs it directly via `ensure_cairn`.
 
 ## The full moon — the one exception to the night withdrawal
 

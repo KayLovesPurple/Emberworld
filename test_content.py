@@ -1540,6 +1540,30 @@ def test_watch_clouds_costs_a_turn_through_the_normal_dispatch():
     assert w.time == t0 + 1, "watch clouds should cost exactly one turn"
 
 
+def test_watch_clouds_can_be_used_at_any_forest_depth_not_just_the_edge():
+    """actor.location stays "forest_edge" at any depth (venturing is a
+    counter, not a real room change), so watch clouds/gather wood/listen
+    all already work deep in the forest, not just standing at the edge --
+    this pins that so it can't regress."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert w.forest_depth == 3
+    assert "watch clouds" in w.available_actions(actor)
+    assert "gather wood" in w.available_actions(actor)
+    assert "listen" in w.available_actions(actor)
+
+
+def test_no_watch_cloud_line_names_a_specific_room():
+    """BUG WE HIT: the day pool's "the yard dims and brightens" line was
+    fine when watch clouds only worked in the yard, but it's shared by the
+    yard, the forest's edge, AND every forest depth (see the test above) --
+    a line naming one specific place reads wrong from all the others."""
+    for pool in WATCH_CLOUD_LINES.values():
+        for line in pool:
+            assert "yard" not in line.lower(), f"line names a specific room: {line!r}"
+
+
 def test_watch_clouds_returns_varied_lines_from_the_current_phases_pool():
     class Cycle:                             # walk the line pool in order
         def __init__(self):
@@ -2551,6 +2575,75 @@ def test_wish_action_is_offered_only_when_the_statue_is_reachable():
     w.rng = _AlwaysDiscover()
     w.act(actor, "venture")
     assert any(a.startswith("wish ") for a in w.available_actions(actor))
+
+
+# ===========================================================================
+# BUG WE HIT: actor.location never actually leaves "forest_edge" at any
+# depth (venturing is a session-scoped counter, not a real room change), so
+# a flat world.contents(room.id) made two forest_edge fixtures reachable
+# from everywhere in the whole forest, not just where they belong -- worst
+# of all, the statue appeared in the room description PERMANENTLY once
+# found, even back at depth 0, flatly contradicting its own "never a
+# standing fixture" design. Fixed by _room_here: the cairn only appears
+# (and is only reachable via find_visible) at depth 0; the statue only
+# appears when _statue_reachable holds, the same gate `wish` already uses.
+# ===========================================================================
+def test_cairn_is_not_visible_or_reachable_below_the_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture")
+    assert not any("cairn" in a for a in w.available_actions(actor))
+    result = w.act(actor, "look cairn")
+    assert "don't see" in result.lower()
+
+
+def test_cairn_is_visible_and_reachable_again_back_at_the_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture", "return")
+    assert w.forest_depth == 0
+    assert any("cairn" in a for a in w.available_actions(actor))
+    result = w.act(actor, "look cairn")
+    assert "cairn" in result.lower() or "flat stone" in result.lower()
+
+
+def test_stack_stone_refuses_below_the_edge_even_though_still_at_forest_edge():
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest", "venture")
+    _add_curio(w, actor, "a smooth grey stone")
+    result = cmd_stack_stone(w, actor, "")
+    assert "too deep" in result.lower()
+
+
+def test_statue_never_appears_in_the_room_listing_back_at_the_edge():
+    """The actual bug: once found, the statue used to show up in the
+    standing room description forever after, even at depth 0."""
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert w.statue_found_this_session
+    cmd_wish(w, actor, "a warm winter")   # materializes the statue entity
+    w.rng = _Unlucky()
+    run(w, actor, "return", "return", "return")
+    assert w.forest_depth == 0
+    result = w.act(actor, "look")
+    assert "stone figure" not in result
+    assert not any("statue" in a for a in w.available_actions(actor))
+
+
+def test_statue_is_not_listed_or_wishable_at_a_shallow_depth_even_once_found():
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    assert w.statue_found_this_session
+    cmd_wish(w, actor, "a warm winter")
+    w.rng = _Unlucky()
+    w.act(actor, "return")   # depth 2 -- found this session, but too shallow now
+    assert w.forest_depth < STATUE_MIN_DEPTH
+    assert not any("statue" in a for a in w.available_actions(actor))
+    result = w.act(actor, "look")
+    assert "stone figure" not in result
 
 
 def test_no_forest_fragment_reads_as_a_refusal_marker():
