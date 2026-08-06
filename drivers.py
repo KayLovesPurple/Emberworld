@@ -161,11 +161,16 @@ def play(strict=False):
 # driver -- the exact shape an LLM slots into. No API key needed.
 # ---------------------------------------------------------------------------
 def random_agent(steps=20):
+    """The dumb agent never chooses to `drop` anything -- with no judgment
+    behind its picks, a lamp (or anything else) left wherever chance put it
+    down is a bad time for the next visitor, not an interesting one. The
+    fuzzer (below) deliberately keeps drop in its pool -- exercising every
+    verb, including bad-looking ones, is the whole point of a fuzzer."""
     w, actor = load_or_build(quiet=True)
     print(w.perceive(actor), "\n")
     for _ in range(steps):
         choice = random.choice([a for a in w.available_actions(actor)
-                                if "<" not in a])
+                                if "<" not in a and not a.startswith("drop ")])
         print(f">>> {choice}")
         print(w.act(actor, choice), "\n")
     w.save(SAVE)

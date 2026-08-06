@@ -9,10 +9,12 @@ Run it either way:
 The LLM sign-off tests use fake Anthropic clients -- no network, no key needed.
 """
 
+import io
 import json
 import os
 import random
 import tempfile
+from contextlib import redirect_stdout
 from datetime import datetime
 
 import drivers as drv
@@ -30,6 +32,30 @@ def test_fuzz_seed_0():
 def test_fuzz_several_seeds():
     for seed in range(1, 6):
         assert drv.fuzz_run(steps=1500, seed=seed) == [], f"broke on seed {seed}"
+
+
+# ===========================================================================
+# DUMB AGENT -- random legal play with no judgment behind its picks.
+# ===========================================================================
+def test_random_agent_never_drops_anything():
+    """No judgment behind the dumb agent's choices means a randomly dropped
+    lamp (mid-forest, say) is a bad time for the next visitor, not an
+    interesting one -- see random_agent's own docstring. The fuzzer
+    deliberately keeps drop in ITS pool; only the dumb agent excludes it."""
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                drv.random_agent(steps=200)
+        finally:
+            drv.SAVE = original
+    chosen = [line for line in buf.getvalue().splitlines()
+              if line.startswith(">>> ")]
+    assert chosen, "the agent should have taken some actions"
+    assert not any(line.startswith(">>> drop ") for line in chosen)
 
 
 # ===========================================================================
@@ -108,6 +134,28 @@ def test_existing_save_is_given_the_forest_edge_cairn():
         cairn = w.get("cairn")
         assert cairn is not None and cairn.location == "forest_edge"
         assert cairn.attrs["height_cm"] == 0
+
+
+def test_existing_curl_of_blue_glass_is_renamed_on_load():
+    """"a curl of blue glass" sounded sharp despite its own look_line saying
+    otherwise -- renamed to "a pebble of blue glass". A hand already
+    carrying one under the old name from a prior save should see the new
+    one without needing a fresh world."""
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        w, actor = fresh()
+        w.add(Entity("found_1", "a curl of blue glass", "sea-frosted, edges gone soft.",
+                     location=actor.id, portable=True,
+                     attrs={"curio": True, "cat_reaction": "ignores"}))
+        with open(save_path, "w") as f:
+            json.dump(w.to_data(), f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            loaded, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        assert loaded.get("found_1").name == "a pebble of blue glass"
 
 
 def test_existing_found_item_is_tagged_as_a_curio_on_load():

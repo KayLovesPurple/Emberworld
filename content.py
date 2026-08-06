@@ -691,7 +691,7 @@ FOUND_ITEMS = (
     ("a pinecone", "tight and resinous, one scale broken", "plays"),
     ("a small brown feather", "barred, downy at the quill", "plays"),
     ("a smooth grey stone", "river-worn, a pale band round its middle", "ignores"),
-    ("a curl of blue glass", "sea-frosted, edges gone soft", "ignores"),
+    ("a pebble of blue glass", "sea-frosted, edges gone soft", "ignores"),
     ("a bone button", "four holes, one thread still knotted through", "ignores"),
     ("a jay's feather", "blue-black, sharply barred, one edge gone soft", "plays"),
     ("a knot of bleached twine", "sun-bleached, knotted twice, frayed at both ends", "plays"),
@@ -1314,6 +1314,12 @@ def generate_reference():
 # ---------------------------------------------------------------------------
 _FOUND_ITEM_REACTIONS = {name: reaction for name, _, reaction in FOUND_ITEMS}
 
+# "a curl of blue glass" sounded like it could cut you (or the cat) despite
+# its own look_line saying otherwise ("edges gone soft") -- renamed to "a
+# pebble of blue glass". A rename-in-place rather than a new FOUND_ITEMS
+# entry, since it's the same find under a kinder name, not a new one.
+_RENAMED_FOUND_ITEMS = {"a curl of blue glass": "a pebble of blue glass"}
+
 
 def ensure_shelf(world):
     """Add shelf/curio metadata to an older saved world when needed."""
@@ -1321,6 +1327,8 @@ def ensure_shelf(world):
         # Found items have always used this generated id prefix. Preserve the
         # meaning of curios discovered before the explicit tag was introduced.
         if entity.id.startswith("found_"):
+            if entity.name in _RENAMED_FOUND_ITEMS:
+                entity.name = _RENAMED_FOUND_ITEMS[entity.name]
             entity.attrs.setdefault("curio", True)
             # give-to-cat needs a reaction; a name no longer in the table
             # (renamed or retired since this curio was found) still needs
