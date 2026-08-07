@@ -109,20 +109,16 @@ than reinventing "which room is this in."
 content.py: name, a bare odd-register look_line, and a `cat_reaction` of
 `"plays"` or `"ignores"`). A curio has exactly three fates, and picking one
 forecloses the others (a stone specifically has a fourth — see "The cairn"
-below):
-
-- **Notice** — `look <thing>` shows the odd line, with a cat hint appended
-  only for a `"plays"` reaction (`_found_description`). Free, pressure-free;
-  a hand can just carry it and write about it.
-- **Give to the cat** (`give <thing> to cat`, `cmd_give`) — consumes it from
-  the pack, fires a reaction message, and turns the item into a fixed,
-  non-portable trace in the room description (`_CAT_GIVE_REACTIONS` /
-  `_CAT_GIVE_TRACES`, keyed by `cat_reaction`). A `"plays"` trace isn't done
-  once it's given, either: `cat_replay` (cat.py) rarely bats at it again if
-  it's still lying in the cat's current room — see "Cat replay" below.
-- **Leave on the shelf** (`place`/`put <thing> on shelf`, `cmd_place`) —
-  consumes it from the pack onto the hut's display-surface shelf, listed in
-  `_shelf_description`; persists for whoever visits next.
+below); README has the player-facing version. The code map: **notice** is
+just `look <thing>` (`_found_description`, with a cat hint appended only
+for a `"plays"` reaction) — free, nothing consumed. **Give to the cat**
+(`give <thing> to cat`, `cmd_give`) consumes it from the pack and turns it
+into a fixed, non-portable trace in the room description
+(`_CAT_GIVE_REACTIONS`/`_CAT_GIVE_TRACES`, keyed by `cat_reaction`) — a
+`"plays"` trace isn't done once given, either: `cat_replay` (cat.py) rarely
+bats at it again later, see "Cat replay" below. **Leave on the shelf**
+(`place`/`put <thing> on shelf`, `cmd_place`) consumes it from the pack
+onto the hut's display-surface shelf (`_shelf_description`).
 
 **The invariant, stated once so it doesn't drift**: after any curio action,
 the world must be one thing richer, never reset. Concretely — `give` and
@@ -261,10 +257,9 @@ two without the third.
   This drops it below the yard's `FOUND_ITEM_CHANCE`, retiring the "somewhat
   better bet than the yard" rule — that comparison existed to fix the
   original spawn-starvation complaint, not as a standing design goal.
-- **`listen`, the forest's calm affordance.** A verb, gated to
-  `forest_edge`, that costs a turn (it's not in `FREE_VERBS` — the
-  turn-cost is what makes it a genuine choice, not a freebie) and returns
-  one random line from `LISTEN_LINES`. **The constraint that must never
+- **`listen`, the forest's calm affordance** (README has the player-facing
+  description). Deliberately not in `FREE_VERBS` — the turn-cost is what
+  makes it a genuine choice, not a freebie. **The constraint that must never
   break: `listen` grants nothing, ever** — no curio, no state, no buff, no
   accumulation of any kind. The instant it grants something it becomes a
   chore done for payoff and collapses back into the acquisition loop this
@@ -282,11 +277,11 @@ two without the third.
 
 ## `watch clouds` — listen's sibling in the yard
 
-A follow-up to the pacing rebalance above, same shape as `listen`: a verb
-(`watch`, cued in `available_actions` and room text as "watch clouds") that
-costs a turn and returns one random line from `WATCH_CLOUD_LINES`, available
-in the yard *and* at the forest's edge. Same never-break constraint —
-grants nothing, ever — and the same direct-handler test pattern
+A follow-up to the pacing rebalance above, same shape as `listen` (README
+has the player-facing description) — registered under the verb key
+`"watch"` (`cmd_watch_clouds`), even though it's cued and referred to
+everywhere as "watch clouds." Same never-break constraint — grants
+nothing, ever — and the same direct-handler test pattern
 (`test_watch_clouds_touches_no_world_state` calls `cmd_watch_clouds`
 directly, bypassing `world.act`'s tick, for the same reason `listen`'s does).
 
@@ -376,11 +371,11 @@ session. `_calm_visit_ack(world, spot)` in content.py is the shared counter:
 mixing the two verbs still reaches the acknowledgment — it's tracking chosen
 *presence*, not mastery of one command, and a future calm verb at the edge
 (a hypothetical `look at flowers`, say) should feed the same counter rather
-than starting its own. On the third calm act at that spot, and only the
-third, the returned line gains one quiet suffix: "You're getting to know
-this stretch of quiet." Never before, never again after — not a running
-status, not a buff, no confirmation of anything beyond that one line, same
-discipline as the verbs it's attached to.
+than starting its own. The suffix fires exactly once per visit, on the
+third calm act at that spot (README has the player-facing line) — never
+before, never again after: not a running status, not a buff, no
+confirmation of anything beyond that one line, same discipline as the
+verbs it's attached to.
 
 **Forest's edge only, not the yard.** `watch clouds` also works in the
 yard, but the yard is constant through-traffic for chores (wood, water,
@@ -398,15 +393,12 @@ test gets added near either verb later.
 
 ## The cairn — a fourth, collective fate for stones
 
-The shelf (above) is personal and reversible: a hand places a curio there,
-and a later hand can `take` it right back. The cairn, at the forest's edge,
-is the deliberate opposite — permanent and anonymous. `stack stone [on
+The shelf/cairn contrast — personal and reversible vs. permanent and
+anonymous — is README's to describe; here's the mechanism: `stack stone [on
 cairn]` (`cmd_stack_stone`) consumes a carried stone-named curio outright
 (`world.entities.pop`, not a location change) and adds `world.rng.choice(
 CAIRN_GROWTH_CM)` (2-5, textured rather than fixed) centimeters to the
-`cairn` entity's `height_cm` attr. Once stacked, a stone is nobody's again —
-it's part of something the whole lineage is building, one stone at a time,
-that no single hand owns or can undo. Only stone-named curios qualify (`"
+`cairn` entity's `height_cm` attr. Only stone-named curios qualify (`"
 stone" not in e.name.lower()` refuses anything else); every other curio type
 still only has its original three fates.
 
@@ -461,11 +453,11 @@ the current code:
 
 ## The forest, staged — Stage 4: getting lost
 
-The first thing in the whole game with a real, un-guaranteed outcome. Below
+README has the player-facing description of the risk itself. Below
 `SAFE_DEPTH_THRESHOLD` (3), `return` is exactly what it's always been —
-`world.forest_depth -= 1`, no randomness, airtight. That floor matters: a
-short, casual dip into the forest must never be punished, or the risk would
-just be a tax on curiosity rather than a cost of going deep on purpose.
+`world.forest_depth -= 1`, no randomness, airtight; that floor is
+deliberate, so a short casual dip is never the thing put at risk, only
+depth gone to on purpose.
 
 Beyond the threshold, each `return` rolls `OFF_COURSE_CHANCE` (0.18) against
 `world.rng.random()`. On a hit, the landing depth is drawn from every depth
@@ -478,10 +470,10 @@ reasoning as `venture`/`return`'s existing depth-0 special case) rather than
 routing through `describe_forest`, which has nothing to describe at the
 edge itself.
 
-No penalty rides along with the mismatch — no damage, no dropped items, no
-extra turn burned. The disorientation *is* the whole cost, per the calm-axis
-invariant's own logic applied to risk instead of reward: the interesting
-thing is the uncertainty itself, not a punishment bolted onto it.
+No penalty rides along with the mismatch beyond the disorientation itself —
+per the calm-axis invariant's own logic applied to risk instead of reward,
+that uncertainty is deliberately the entire cost, not a punishment bolted
+onto it.
 
 Two test doubles pin the branch down precisely rather than statistically:
 `_AlwaysOffCourse`/`_AlwaysOffCourseHigh` (test_content.py) both force
@@ -507,32 +499,24 @@ The mechanism is a single line in `cmd_return`: `safe_to = max(
 SAFE_DEPTH_THRESHOLD, world.forest_mark_depth)`, then the existing Stage 4
 check becomes `depth > safe_to` instead of `depth > SAFE_DEPTH_THRESHOLD`.
 That's the whole integration — Stage 4's branch didn't need to change
-shape, only the number it compares against. One easy misreading worth
-heading off: marking depth 6 does **not** make a return *from* depth 7
-exact — it raises the floor, it doesn't open a corridor for ground gained
-since the last mark. Returning *from* the marked depth itself (6, in this
-example) is exact, precisely because 6 is no longer greater than the
-(now-raised) safe floor; one step further than your last mark is still
-real risk, by design — the risk lives specifically in the gap between
-where you last marked and how far you've pushed since, which is what
-makes marking-as-you-go a meaningful habit rather than a one-time flag to
-set and forget.
+shape, only the number it compares against. (README has the player-facing
+nuance on exactly what a mark does and doesn't extend — worth rereading
+before touching this line, since it's easy to misread `safe_to` as opening
+a corridor rather than just raising a floor.)
 
-Never lowers an existing mark (marking shallower than a prior mark is a
-harmless no-op, refused with a distinct message rather than silently
-succeeding) — there's no way to mark yourself back into more danger.
-Costs a turn like any real action, needs nothing consumable, and is gated
-out of `available_actions` once redundant (depth 0, or already marked at
-the current depth) — same legibility rule as everywhere else in the game.
+Marking shallower than an existing mark is a harmless no-op, refused with
+a distinct message rather than silently succeeding. Costs a turn like any
+real action, needs nothing consumable, and is gated out of
+`available_actions` once redundant (depth 0, or already marked at the
+current depth) — same legibility rule as everywhere else in the game.
 
 ## The forest, staged — Stage 6: ambient, unscripted texture
 
-The "crack in the closedness" the spec asked for: `FOREST_AMBIENT`/
-`_forest_ambient(rng)` is a small independent chance (`FOREST_AMBIENT_
-CHANCE`, 0.12), separate from Stage 2's depth-banded `FOREST_FRAGMENTS`,
-layered on top of whatever `describe_forest` already returned that step —
-never in place of it, and tied to no verb at all. No "investigate" option
-references it; same restraint as the statue, deliberately unexplained.
+The "crack in the closedness" the spec asked for (README has the
+player-facing description): `FOREST_AMBIENT`/`_forest_ambient(rng)` is a
+small independent chance (`FOREST_AMBIENT_CHANCE`, 0.12), separate from
+Stage 2's depth-banded `FOREST_FRAGMENTS`. Same restraint as the statue: no
+"investigate" option references it, deliberately unexplained.
 
 Wired into both branches of `cmd_return` (the normal fall-back and the
 Stage 4 off-course landing) and into `cmd_venture` — but not the depth-0
@@ -607,14 +591,9 @@ roll, since `venture` has no off-course branch to also consider (that's
 `return`-only).
 
 `STATUE_DISCOVERY_TEXT` also carries the one deliberate hint that wishing
-is even possible: a line about people having stood here and wished before,
-"the way you'd toss a coin in a fountain." This walks a specific line the
-comment above it states explicitly — it reports a *custom* (other people
-have done this) rather than an *invitation from an audience* (nothing
-claims the statue listens or grants). That distinction is what keeps it
-compatible with "no god to petition": telling a hand the verb exists is
-fine; implying anyone's listening is the one thing that must never appear
-here.
+is even possible (README states the custom-vs-invitation distinction this
+line has to walk — a comment directly above the constant in content.py
+restates it too, for whoever edits the line next).
 Once found, it stays found for the rest of the session; `test_statue_is_
 not_rediscovered_once_found_this_session` pins that the discovery text
 never repeats on a later `venture`.
@@ -737,11 +716,11 @@ no reading, no seeing what's on the ground). That's also, deliberately,
 almost the entire lever available for how a dark night *feels*. Two things
 followed from that:
 
-`pet cat` and `eat <held food>` were already ungated by darkness — neither
-routes through `cmd_look`'s `is_dark` check (the only place that check
-lives); both go through `find_visible`/`_room_here`, which don't consult
-phase or light at all. A hand can already sit in the dark and pet the cat,
-or eat a held cooked potato. `test_pet_the_cat_works_in_the_dark` and
+`pet cat` and `eat <held food>` were already ungated by darkness (README
+has the player-facing version) — neither routes through `cmd_look`'s
+`is_dark` check (the only place that check lives); both go through
+`find_visible`/`_room_here`, which don't consult phase or light at all.
+`test_pet_the_cat_works_in_the_dark` and
 `test_eat_a_held_cooked_potato_works_in_the_dark` pin this down so it can't
 regress silently the next time the dark-gating logic is touched.
 

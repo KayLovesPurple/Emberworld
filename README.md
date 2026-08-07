@@ -69,54 +69,63 @@ turn. These local transcripts are ignored by Git.
 Type `help` in-game for the verb list, or see `REFERENCE.md` for everything.
 Type `actions` at any point to see the actions currently available to you; it
 is free and does not advance time.
-The essentials: the **hearth** is what cooks; the tin **lamp** is your only
-portable light, kindled (or re-kindled, to top it back up) from a lit hearth.
-Night is pitch dark without the lamp burning — in the dark you can only
-examine what you're holding, though petting the cat and eating something
-you're already holding still work fine either way. Waiting through a dark
-night draws from a small pool of quiet lines instead of repeating itself,
-so it reads as a night passing rather than a wall. A fresh world starts at
-dawn, so there's a full day to find the lamp before the first night falls.
-Potatoes must be planted,
-grown, harvested, and cooked before they'll feed you. There's a cat: it
-wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
-never come to harm** — that's guaranteed in the code and pinned by a test.
-Draw water from the well into the bucket, then water a planted crop to speed
-its growth. A path off the yard leads to the forest's edge, and that's
-where the wood comes from now too: gather fallen branches and deadfall
-there and add them to the hearth to keep the fire going. Any turn spent at
-the edge — gathering included — has a small independent chance of turning
-up something underfoot alongside whatever else you're doing: most often a
+
+**Light and dark.** The **hearth** is what cooks; the tin **lamp** is your
+only portable light, kindled (or re-kindled, to top it back up) from a lit
+hearth. Night is pitch dark without the lamp burning — in the dark you can
+only examine what you're holding, though petting the cat and eating
+something you're already holding still work fine either way. Waiting
+through a dark night draws from a small pool of quiet lines instead of
+repeating itself, so it reads as a night passing rather than a wall. A
+fresh world starts at dawn, so there's a full day to find the lamp before
+the first night falls.
+
+**Food and the cat.** Potatoes must be planted, grown, harvested, and
+cooked before they'll feed you. There's a cat: it wanders, likes the fire
+lit, and can be fed a potato or petted. **The cat can never come to harm**
+— that's guaranteed in the code and pinned by a test. Draw water from the
+well into the bucket, then water a planted crop to speed its growth.
+
+**The forest's edge.** A path off the yard leads there, and that's where
+the wood comes from now too: gather fallen branches and deadfall and add
+them to the hearth to keep the fire going. Any turn spent at the edge —
+gathering included — has a small independent chance of turning up
+something underfoot alongside whatever else you're doing: most often a
 small found curio — a pinecone, a smooth stone, or some other odd little
 thing — and rarer still, a stray piece of wood, no deliberate gathering
 required. Rare on purpose, a delight rather than a per-visit faucet — the
 chance got cut twice over, in real play, after lingering there kept
-turning up curios too fast. A curio can be carried, given to the cat
-(some it plays with, some it ignores, but either way it leaves its mark —
-and rarely, if a played-with one is still lying around, the cat will bat
-at it again), or
-set on the hut's shelf for whoever comes next — the shelf holds up to 10 at
-once, on purpose: personal and curated rather than the cairn's collective
-and boundless, so a hand who finds an 11th has to actually decide whether
-it's worth a spot, the same way `take`ing something back off the shelf
-always has (nothing decays or is punished at capacity, it's just full).
-A found stone has one more
-option, instead of the shelf: `stack stone on cairn` adds it, permanently
-and anonymously, to a cairn growing at the forest's edge — unlike the
-shelf, nobody can take it back, and the cairn belongs to the whole lineage,
-not to whoever placed a given stone. It only ever grows, one stone at a
-time, and growing tall takes many hands. The forest's edge also has
-its own `listen`: a chosen, unpressured turn that just returns a bit of
-atmosphere and changes nothing — no reward, ever, on purpose. The yard (and
-the forest's edge) offer `watch clouds` in the same spirit, reading the sky
-instead of the trees — it steps back at night, when there's nothing up
-there to see. At the forest's edge specifically (not the yard, which is
-too full of chores for this to mean anything), the third time in one visit
-you choose `listen` or `watch clouds` there, the world quietly notices —
-"You're getting to know this stretch of quiet" — once, never repeated, gone
-again once the visit ends; not a reward, just an acknowledgment that a hand
-with no memory of any other visit still deserves *something* to carry a
-chosen quiet moment forward with. From the forest's edge you can also
+turning up curios too fast.
+
+**What a curio becomes.** It can be carried, given to the cat (some it
+plays with, some it ignores, but either way it leaves its mark — and
+rarely, if a played-with one is still lying around, the cat will bat at it
+again), or set on the hut's shelf for whoever comes next — the shelf holds
+up to 10 at once, on purpose: personal and curated rather than the cairn's
+collective and boundless, so a hand who finds an 11th has to actually
+decide whether it's worth a spot, the same way `take`ing something back
+off the shelf always has (nothing decays or is punished at capacity, it's
+just full). A found stone has one more option, instead of the shelf:
+`stack stone on cairn` adds it, permanently and anonymously, to a cairn
+growing at the forest's edge — unlike the shelf, nobody can take it back,
+and the cairn belongs to the whole lineage, not to whoever placed a given
+stone. It only ever grows, one stone at a time, and growing tall takes
+many hands.
+
+**Calm, unpressured turns.** The forest's edge has its own `listen`: a
+chosen, unpressured turn that just returns a bit of atmosphere and changes
+nothing — no reward, ever, on purpose. The yard (and the forest's edge)
+offer `watch clouds` in the same spirit, reading the sky instead of the
+trees — it steps back at night, when there's nothing up there to see. At
+the forest's edge specifically (not the yard, which is too full of chores
+for this to mean anything), the third time in one visit you choose
+`listen` or `watch clouds` there, the world quietly notices — "You're
+getting to know this stretch of quiet" — once, never repeated, gone again
+once the visit ends; not a reward, just an acknowledgment that a hand with
+no memory of any other visit still deserves *something* to carry a chosen
+quiet moment forward with.
+
+**Going deeper — real stakes.** From the forest's edge you can also
 `venture` a little further in and `return` toward the edge again — a depth
 counter, reset fresh at the start of every session, since where you got to
 in the forest is episodic even though anything you carry out of it isn't.
@@ -132,37 +141,37 @@ landing off-course beyond the mark, not the whole way back to the edge.
 Marking never lowers an existing, deeper mark — there's no way to mark
 yourself into more danger — and it's most useful marked as you go, since
 one step past your last mark is still real risk by design; the danger
-lives specifically in the ground gained since you last checked in. Push
-deep enough (past 3 steps in) and, sometimes, a `venture` turns up the
-statue — mossy, unexplained, and mechanically inert: `wish <something>`
-there costs a turn, changes nothing, and returns the same fixed line every
-time, no matter what you ask for or whether anything comes of it. The
-statue's own description hints that wishing here is a thing people do —
-"the way you'd toss a coin in a fountain" — but never that anything is
-listening; that distinction is the whole point. Once
-found, it stays findable again from anywhere deep enough for the rest of
-your visit; a short trip may never reach it at all, which is fine — see
+lives specifically in the ground gained since you last checked in.
+
+**The statue.** Push deep enough (past 3 steps in) and, sometimes, a
+`venture` turns up the statue — mossy, unexplained, and mechanically
+inert: `wish <something>` there costs a turn, changes nothing, and returns
+the same fixed line every time, no matter what you ask for or whether
+anything comes of it. The statue's own description hints that wishing
+here is a thing people do — "the way you'd toss a coin in a fountain" —
+but never that anything is listening; that distinction is the whole point.
+Once found, it stays findable again from anywhere deep enough for the rest
+of your visit; a short trip may never reach it at all, which is fine — see
 "The wishing-statue" below for what that not-finding is actually for.
 
-Two more things happen without any verb at all. Once in a long while
-(roughly every 29 days — the world's own clock, unrelated to anyone's
-visits) the night sky is worth a second look: `watch clouds` normally
-withdraws entirely after dark, but on a full moon it shows you the moon
-itself instead, purely to look at — it lights nothing and changes nothing.
-And rarely, in the yard or at the forest's edge, something living crosses
-your path uninvited — a fox at dusk, an owl heard once at night, a deer at
-dawn — gone by the time you're sure you saw it, with no verb to chase it
-and nothing it adds to your pack. In the forest specifically, every
-`venture` and `return` also carries a small, independent chance of one
-more line — a smell with no source, a bird that stops mid-song, a branch
-that cracks and nothing follows it — layered on top of the usual texture,
-tied to no verb and explaining nothing. All of it is pure texture: proof,
-now and then, that the world holds more than the hand currently walking
-through it.
+**Texture with no verb attached.** Once in a long while (roughly every 29
+days — the world's own clock, unrelated to anyone's visits) the night sky
+is worth a second look: `watch clouds` normally withdraws entirely after
+dark, but on a full moon it shows you the moon itself instead, purely to
+look at — it lights nothing and changes nothing. And rarely, in the yard
+or at the forest's edge, something living crosses your path uninvited — a
+fox at dusk, an owl heard once at night, a deer at dawn — gone by the time
+you're sure you saw it, with no verb to chase it and nothing it adds to
+your pack. In the forest specifically, every `venture` and `return` also
+carries a small, independent chance of one more line — a smell with no
+source, a bird that stops mid-song, a branch that cracks and nothing
+follows it — layered on top of the usual texture, tied to no verb and
+explaining nothing. All of it is pure texture: proof, now and then, that
+the world holds more than the hand currently walking through it.
 
-Only one potato grows at a time, and that cap is important: it flattens
-the efficiency gradient that would otherwise pull the world toward
-farm-optimisation, so think hard before lifting it.
+**One deliberate limit.** Only one potato grows at a time, and that cap is
+important: it flattens the efficiency gradient that would otherwise pull
+the world toward farm-optimisation, so think hard before lifting it.
 
 ## Testing
 
