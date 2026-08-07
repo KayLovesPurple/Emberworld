@@ -16,7 +16,8 @@ from content import (
     VERBS, BEHAVIORS, generate_reference, _crop_in, BUCKET_CAPACITY,
     bucket_state, WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD,
     HEARTH_LOW_FUEL, hearth_state, FOUND_ITEMS, _found_description,
-    FOREST_FIND_CHANCE, LISTEN_LINES, cmd_listen,
+    FOREST_FIND_CHANCE, _STRAY_WOOD_SHARE, WOOD_PER_STRAY_FIND,
+    LISTEN_LINES, cmd_listen,
     WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
     CALM_ACK_AT, CALM_ACK_LINE,
     CAIRN_ID, CAIRN_GROWTH_CM, CAIRN_BANDS, _cairn_description,
@@ -1417,6 +1418,61 @@ def test_forest_found_curio_behaves_like_any_other_curio():
     result = w.act(actor, f"place {found.name} on shelf")
     assert found.location == w.get("shelf").id
     assert "shelf" in result.lower()
+
+
+class _LuckyWood:
+    """Forces the forest-find roll into its wood sub-range specifically --
+    _Lucky's flat 0.0 always lands in the curio sub-range instead (see
+    forest_finds: the wood outcome is carved out of the HIGH end of the
+    existing roll, precisely so 0.0 keeps meaning "curio" for every
+    existing _Lucky-based test above)."""
+    def random(self):
+        threshold = FOREST_FIND_CHANCE * (1 - _STRAY_WOOD_SHARE)
+        return (threshold + FOREST_FIND_CHANCE) / 2
+
+    def choice(self, seq): return seq[0]
+
+
+def test_forest_edge_can_turn_up_a_stray_piece_of_wood_unprompted():
+    """The ask: wood should sometimes turn up while exploring the forest --
+    waiting, venturing, returning -- even on a turn that was never
+    `gather wood`."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    assert actor.attrs.get("wood", 0) == 0, "setup should start carrying no wood"
+    w.rng = _LuckyWood()
+    result = w.act(actor, "wait")
+    assert actor.attrs.get("wood", 0) == WOOD_PER_STRAY_FIND
+    assert "wood" in result.lower()
+
+
+def test_stray_wood_find_does_not_also_add_a_curio():
+    """One roll, one outcome -- a stray-wood turn isn't a bonus curio too."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = _LuckyWood()
+    run(w, actor, "wait")
+    assert [e for e in w.contents(actor.id) if e.attrs.get("curio")] == []
+
+
+def test_stray_wood_find_works_on_a_venture_turn_not_just_wait():
+    """The whole point: it shouldn't matter which verb burned the turn --
+    venture/return never move actor.location off forest_edge, so the same
+    roll that already covers `wait` covers exploring deeper too."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = _LuckyWood()
+    w.act(actor, "venture")
+    assert actor.attrs.get("wood", 0) == WOOD_PER_STRAY_FIND
+
+
+def test_stray_wood_find_is_a_smaller_haul_than_deliberate_gathering():
+    """An ambient trickle, not a substitute for `gather wood` -- the
+    deliberate action must still be the better haul."""
+    assert WOOD_PER_STRAY_FIND < WOOD_PER_GATHER
 
 
 def test_forest_edge_has_no_further_exit_into_the_woods():

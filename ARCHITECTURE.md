@@ -576,6 +576,22 @@ exactly where wood-gathering now happens, which is precisely the
 "moved, not intensified" constraint the spec states outright. `FOUND_
 ITEM_CHANCE` is retired along with the roll it powered.
 
+**Later addendum: ambient wood, still one roll.** A hand asked to
+occasionally stumble onto loose wood while exploring — waiting, venturing,
+returning — not only via a deliberate `gather wood`. Rather than revisit
+the no-second-roll decision above, `forest_finds` now carves a slice
+(`_STRAY_WOOD_SHARE`, 0.15) out of the *existing* `FOREST_FIND_CHANCE`
+roll: most of the time that roll still resolves to a curio, but sometimes
+it resolves to `WOOD_PER_STRAY_FIND` (1, well under `WOOD_PER_GATHER`'s
+3) of wood instead. The overall odds of *something* happening on a given
+tick are unchanged — the same "moved, not intensified" spirit, just
+applied to what the one roll can produce rather than how many rolls fire.
+The split point sits at the *high* end of the roll's range (`roll >=
+FOREST_FIND_CHANCE * (1 - _STRAY_WOOD_SHARE)` is wood, everything below
+is curio) specifically so a roll of exactly `0.0` — what every `_Lucky`
+test fixture already returns — keeps meaning "curio," leaving every
+existing curio-find test's assumptions intact.
+
 **The statue** is discovered, not placed. `STATUE_MIN_DEPTH` (3) gates it
 out entirely below that depth — a deep-visit thing, never a short-trip
 accident — and beyond it, each `venture` rolls `STATUE_DISCOVERY_CHANCE`

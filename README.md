@@ -82,11 +82,12 @@ its growth. A path off the yard leads to the forest's edge, and that's
 where the wood comes from now too: gather fallen branches and deadfall
 there and add them to the hearth to keep the fire going. Any turn spent at
 the edge — gathering included — has a small independent chance of turning
-up a small found curio underfoot alongside whatever else you're doing: a
-pinecone, a smooth stone, or some other odd little thing. Rare on purpose,
-a delight rather than a per-visit faucet — the chance got cut twice over,
-in real play, after lingering there kept turning up curios too fast. A
-curio can be carried, given to the cat
+up something underfoot alongside whatever else you're doing: most often a
+small found curio — a pinecone, a smooth stone, or some other odd little
+thing — and rarer still, a stray piece of wood, no deliberate gathering
+required. Rare on purpose, a delight rather than a per-visit faucet — the
+chance got cut twice over, in real play, after lingering there kept
+turning up curios too fast. A curio can be carried, given to the cat
 (some it plays with, some it ignores, but either way it leaves its mark —
 and rarely, if a played-with one is still lying around, the cat will bat
 at it again), or

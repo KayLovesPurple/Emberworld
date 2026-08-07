@@ -186,12 +186,26 @@ FOREST_FIND_CHANCE = 0.08   # pacing rebalance, round two: was 0.2. BUG WE HIT:
                             # its "somewhat better bet than the yard" framing
                             # are retired along with the yard roll itself.
 
+# A hand asked to also stumble onto loose wood while exploring, not just via
+# the deliberate `gather wood` turn. Carved out of the EXISTING roll above
+# rather than an independent one stacked alongside it -- an independent
+# roll would double the chance of anything happening on a given tick,
+# exactly the intensification already ruled out once (see cmd_gather's
+# comment). This share of an already-rare roll landing on wood keeps the
+# overall per-tick odds unchanged at FOREST_FIND_CHANCE; it just
+# occasionally spends that same roll on wood instead of a curio.
+_STRAY_WOOD_SHARE = 0.15
+WOOD_PER_STRAY_FIND = 1     # well under WOOD_PER_GATHER's deliberate haul --
+                            # a nice-to-notice, not a replacement for foraging.
+
 
 def forest_finds(world, room):
     """Autonomous: while a hand lingers at the forest's edge (arriving, or
-    spending any later turn there), each turn has a small chance of turning
-    up a curio underfoot -- the one and only find-roll here, including on a
-    `gather wood` turn now that gathering has relocated to this room too.
+    spending any later turn there -- venture/return included, since neither
+    verb actually moves `actor.location` off this room), each turn has a
+    small chance of turning up something underfoot: usually a curio, and a
+    slice of that same chance a stray piece of wood instead, no `gather
+    wood` required. One roll, not two -- see _STRAY_WOOD_SHARE above.
     Deliberately rare, not a guaranteed per-visit faucet: a find should stay a
     delight, not fill out a pack on autopilot -- and the chance is a per-tick
     roll, so more turns spent here always means more chances, however they're
@@ -200,14 +214,22 @@ def forest_finds(world, room):
     actor = world.get("you")
     if actor is None or actor.location != room.id:
         return
-    if world.rng.random() < FOREST_FIND_CHANCE:
-        name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
-        world.add(Entity(world.fresh_id("found"), name,
-                          _found_description(look_line, reaction),
-                          location=actor.id, portable=True,
-                          attrs={"curio": True, "cat_reaction": reaction}))
-        world.announce(f"Half-buried by the path, {name} — you pocket it.",
-                       room.id)
+    roll = world.rng.random()
+    if roll >= FOREST_FIND_CHANCE:
+        return
+    if roll >= FOREST_FIND_CHANCE * (1 - _STRAY_WOOD_SHARE):
+        actor.attrs["wood"] = actor.attrs.get("wood", 0) + WOOD_PER_STRAY_FIND
+        world.announce(
+            f"A stray branch, dry enough to burn — you add it to your wood. "
+            f"You now have {actor.attrs['wood']} wood.", room.id)
+        return
+    name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
+    world.add(Entity(world.fresh_id("found"), name,
+                      _found_description(look_line, reaction),
+                      location=actor.id, portable=True,
+                      attrs={"curio": True, "cat_reaction": reaction}))
+    world.announce(f"Half-buried by the path, {name} — you pocket it.",
+                   room.id)
 
 
 # Ambient wildlife -- glimpsed, not met. No verb triggers it, no verb

@@ -52,7 +52,7 @@
 - **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's dying low on fuel or burning steady, so a hand can see it needs wood before it goes dark, not just be told after the fact.
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it is -- carried or set down -- warning inline as it runs low and again when it finally goes dark.
-- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there), each turn has a small chance of turning up a curio underfoot -- the one and only find-roll here, including on a `gather wood` turn now that gathering has relocated to this room too.
+- **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there -- venture/return included, since neither verb actually moves `actor.location` off this room), each turn has a small chance of turning up something underfoot: usually a curio, and a slice of that same chance a stray piece of wood instead, no `gather wood` required.
 - **wildlife_glimpse** -- Autonomous: while a hand is present, a small independent chance per tick of glimpsing something living and entirely unrelated to whatever the hand is doing -- see WILDLIFE_LINES/WILDLIFE_CHANCE above.
 
 ## World rules (from the code's own constants)
