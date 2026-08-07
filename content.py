@@ -1099,8 +1099,15 @@ def cmd_write(world, actor, arg):
     return "You write in the journal. The ink dries slowly. It will keep."
 
 
+# A lineage's journal only ever grows -- showing the whole thing on every
+# read turns a quick catch-up into an ever-longer wall of past visits. The
+# full history is never lost (still all in entries, and cmd_write always
+# appends to it); only what a single `read journal` shows is capped.
+JOURNAL_READ_LIMIT = 7
+
+
 def cmd_read(world, actor, arg):
-    """read journal -- read the journal (needs light unless you're holding it)."""
+    """read journal -- read the journal (needs light unless you're holding it); shows only the most recent entries."""
     journal = find_visible(world, actor, arg or "journal")
     if not journal or "entries" not in journal.attrs:
         return "There's nothing written there."
@@ -1109,7 +1116,12 @@ def cmd_read(world, actor, arg):
     entries = journal.attrs["entries"]
     if not entries:
         return "The journal is blank, waiting for someone's first entry."
-    return "The journal reads:\n" + "\n".join(f"  {ln}" for ln in entries)
+    shown = entries[-JOURNAL_READ_LIMIT:]
+    header = "The journal reads:"
+    if len(shown) < len(entries):
+        header = (f"The journal reads (last {JOURNAL_READ_LIMIT} of "
+                   f"{len(entries)} entries):")
+    return header + "\n" + "\n".join(f"  {ln}" for ln in shown)
 
 
 

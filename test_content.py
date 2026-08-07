@@ -36,6 +36,7 @@ from content import (
     WAIT_DARK_LINES, WAIT_DARK_HUT_LINES, WAIT_DARK_CAT_LINE, _wait_dark_lines,
     SEED_NAME, BLOOM_TICKS, BLOOM_SHOWING_AT, BLOOM_BUDDING_AT, BLOOM_BANDS,
     BLOOM_KINDS, _seed_in_world, _mystery_plant, _bloom_description,
+    JOURNAL_READ_LIMIT,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -1346,6 +1347,39 @@ def test_seed_journal_has_no_sign_off_tic():
         f"a seed entry still models a manual sign-off: {entries!r}"
     assert "lamp" in entries[0].lower() and "kindle" in entries[0].lower(), \
         f"day 1 should point at the lamp and kindling: {entries[0]!r}"
+
+
+def test_read_journal_shows_only_the_last_JOURNAL_READ_LIMIT_entries():
+    # zero-padded so no entry's marker is a substring of another's
+    # ("entry 1" would otherwise also match inside "entry 10")
+    w, actor = fresh()
+    for i in range(JOURNAL_READ_LIMIT + 5):
+        w.act(actor, f"write entry {i:03d}")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == 1 + JOURNAL_READ_LIMIT + 5, "the full history must still be kept"
+    result = w.act(actor, "read journal")
+    for i in range(5):        # the oldest, dropped-from-view entries
+        assert f"entry {i:03d}" not in result
+    for i in range(5, JOURNAL_READ_LIMIT + 5):    # the shown tail
+        assert f"entry {i:03d}" in result
+
+
+def test_read_journal_shows_everything_when_within_the_limit():
+    w, actor = fresh()
+    w.act(actor, "write a second entry")
+    result = w.act(actor, "read journal")
+    assert "entry" in result.lower()
+    assert "of" not in result.split(":")[0], \
+        "no truncation note should appear when nothing was actually cut"
+
+
+def test_read_journal_notes_how_much_was_cut():
+    w, actor = fresh()
+    for i in range(JOURNAL_READ_LIMIT + 3):
+        w.act(actor, f"write entry {i}")
+    total = len(w.get("journal").attrs["entries"])
+    result = w.act(actor, "read journal")
+    assert str(JOURNAL_READ_LIMIT) in result and str(total) in result
 
 
 # ===========================================================================

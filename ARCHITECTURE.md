@@ -973,7 +973,12 @@ exists (each fixed a real failure we watched happen):
   it, it won't change"). Without this the agent re-read the journal ~15 times a
   run — each fresh instance re-deciding to "understand its situation." But the
   full journal grows without bound across many visits, so what's shown is
-  capped to the seed entry plus the last ~5.
+  capped to the seed entry plus the last ~5. This is a *separate* cap from
+  `cmd_read`'s own `JOURNAL_READ_LIMIT` (content.py, 7) — that one shortens
+  what a live `read journal` call returns to any hand, human or LLM, for
+  the same "grows without bound" reason, but always shows a plain tail (no
+  seed-entry-plus-gap shape, since a human rereading isn't paying per-token
+  the way a prompt is) and is unrelated to prompt-building specifically.
 - **Turns remaining**: shown every turn, so the agent spends a finite budget
   deliberately rather than squandering free actions.
 - **Stuck detection** (`_looks_stuck`): flags the same **free** verb repeated 3×

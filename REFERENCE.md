@@ -21,7 +21,7 @@
 - `cook` / `broil` -- cook potato -- broil a potato at a lit cooking fire, making it edible.
 - `eat` -- eat <thing> -- eat cooked food to ease your hunger.
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
-- `read` -- read journal -- read the journal (needs light unless you're holding it).  _(free -- costs no time)_
+- `read` -- read journal -- read the journal (needs light unless you're holding it); shows only the most recent entries.  _(free -- costs no time)_
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
