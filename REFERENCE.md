@@ -7,7 +7,7 @@
 - `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
 - `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
-- `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold).  _(free -- costs no time)_
+- `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions".  _(free -- costs no time)_
 - `go` / `move` -- go <exit> -- move through a named exit (you can also just type the exit name; "inside" works anywhere "in" does).
 - `take` / `get` / `grab` -- take <thing> -- pick up a portable object.
 - `drop` -- drop <thing> -- set down something you're carrying.

@@ -1269,6 +1269,19 @@ def test_every_behavior_is_documented():
     assert not undocumented, f"behaviors missing a docstring: {undocumented}"
 
 
+def test_every_verb_docstring_is_a_single_physical_line():
+    """BUG WE HIT: cmd_look grew a wrapped, multi-line docstring (explaining
+    the "look actions" alias) -- _first_line only reads the docstring's
+    literal first physical line, by convention documented on _first_line
+    itself, so REFERENCE.md silently rendered a mid-sentence-truncated
+    summary ("...dark hides" with no closing thought). Explanatory detail
+    belongs in a regular comment above the function, not stuffed into the
+    docstring past its first line."""
+    wrapped = sorted({fn.__name__ for fn in {*VERBS.values()}
+                      if fn.__doc__ and fn.__doc__.strip().count("\n") > 0})
+    assert not wrapped, f"verb docstrings must be a single physical line: {wrapped}"
+
+
 def test_reference_generates_and_mentions_key_things():
     ref = generate_reference()
     assert "## Verbs" in ref and "## Autonomous behaviors" in ref
@@ -2689,6 +2702,39 @@ def test_inside_only_works_where_an_in_exit_actually_exists():
     result = w.act(actor, "go inside")
     assert actor.location == "hut", "shouldn't move at all -- no 'in' exit from the hut"
     assert "can't go" in result.lower()
+
+
+# ===========================================================================
+# 12. LOOK ACTIONS ALIAS -- an LLM hand playing the world reached for
+#    "look actions" more than once (observed on Haiku 4.5, which has no
+#    thinking to reason its way out of it), presumably pattern-matching
+#    "look <thing>" onto the word "actions" from its own system prompt.
+#    "actions" is already a real, free verb (cmd_actions) -- rather than
+#    fight the guess, honor it: "look actions" behaves exactly like
+#    "actions".
+# ===========================================================================
+def test_look_actions_behaves_the_same_as_actions():
+    w, actor = fresh()
+    before = w.time
+    result = w.act(actor, "look actions")
+    assert w.time == before, "the alias must stay free, like actions itself"
+    assert "Available actions:" in result and "go out" in result
+
+
+def test_look_actions_is_case_and_whitespace_insensitive():
+    w, actor = fresh()
+    assert "Available actions:" in w.act(actor, "look Actions")
+    assert "Available actions:" in w.act(actor, "look   actions  ")
+
+
+def test_look_still_examines_a_real_thing_named_actions_free_of_the_alias():
+    """The alias is a narrow special-case on the literal argument "actions"
+    -- it must not swallow a legitimate look at some other target that
+    merely contains that substring."""
+    w, actor = fresh()
+    result = w.act(actor, "look actionsy")
+    assert "Available actions:" not in result
+    assert "you don't see any" in result.lower()
 
 
 # ---------------------------------------------------------------------------

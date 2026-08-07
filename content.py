@@ -450,8 +450,14 @@ def _exit_label(room_id, direction):
     return _EXIT_LABELS.get(room_id, {}).get(direction, direction)
 
 
+# An LLM hand reached for "look actions" more than once -- a plausible-
+# sounding guess, since there's no entity named "actions" to find; the word
+# is just its own free verb (cmd_actions). Honoring the guess is simpler
+# than fighting it.
 def cmd_look(world, actor, arg):
-    """look [thing] -- describe the room, or examine one thing (dark hides all but what you hold)."""
+    """look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions"."""
+    if arg and arg.strip().lower() == "actions":
+        return cmd_actions(world, actor, "")
     room = world.get(actor.location)
     if arg:
         target = find_visible(world, actor, arg)
