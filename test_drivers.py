@@ -381,6 +381,88 @@ def test_ask_claude_can_return_the_thinking():
     assert drv._ask_claude(C(), "s", "u", drv.LLM_MODEL) == "wait"
 
 
+class _FakeModel:
+    def __init__(self, adaptive_supported):
+        self.capabilities = {
+            "thinking": {"types": {"adaptive": {"supported": adaptive_supported}}}
+        }
+
+
+class _ModelsClient:
+    """A client whose only job is answering client.models.retrieve(model) --
+    used to test the adaptive-thinking capability check without touching
+    _ask_claude/messages.create at all."""
+    def __init__(self, adaptive_supported):
+        self.models = self
+        self._adaptive_supported = adaptive_supported
+
+    def retrieve(self, model):
+        return _FakeModel(self._adaptive_supported)
+
+
+def test_model_supports_adaptive_thinking_reads_the_capability_flag():
+    assert drv._model_supports_adaptive_thinking(_ModelsClient(True), "claude-sonnet-5")
+    assert not drv._model_supports_adaptive_thinking(_ModelsClient(False), "claude-haiku-4-5")
+
+
+def test_model_supports_adaptive_thinking_defaults_true_when_the_check_fails():
+    """BUG WE HIT: llm_agent unconditionally requested adaptive-thinking's
+    summarized display every turn, which 400s outright on models like Haiku
+    4.5 that don't support adaptive thinking at all -- silently burning a
+    turn (see llm_agent's `except Exception` -> "a turn slipped away").
+    The capability check itself must never introduce a NEW way to lose a
+    turn, so any failure to determine support (network hiccup, retrieve()
+    missing, unexpected response shape) falls back to today's behavior:
+    assume support, exactly as before this check existed."""
+    class Boom:
+        def __init__(self):
+            self.models = self
+
+        def retrieve(self, model):
+            raise RuntimeError("no network")
+
+    assert drv._model_supports_adaptive_thinking(Boom(), "claude-sonnet-5")
+
+
+def test_model_supports_adaptive_thinking_defaults_true_on_unexpected_shape():
+    class Weird:
+        def __init__(self):
+            self.models = self
+
+        def retrieve(self, model):
+            return type("M", (), {"capabilities": {}})()
+
+    assert drv._model_supports_adaptive_thinking(Weird(), "claude-sonnet-5")
+
+
+def test_resolve_thinking_capability_skips_the_check_entirely_under_no_think():
+    """think=False (--no-think) already means no thinking is requested at
+    all -- the capability check is irrelevant and must not run (and
+    definitely must not print a note about it)."""
+    can_think_aloud, note = drv._resolve_thinking_capability(
+        _ModelsClient(False), "claude-haiku-4-5", think=False)
+    assert can_think_aloud is False
+    assert note is None
+
+
+def test_resolve_thinking_capability_is_silent_on_a_supporting_model():
+    can_think_aloud, note = drv._resolve_thinking_capability(
+        _ModelsClient(True), "claude-sonnet-5", think=True)
+    assert can_think_aloud is True
+    assert note is None
+
+
+def test_resolve_thinking_capability_skips_and_notes_once_on_an_unsupported_model():
+    """The actual fix: instead of discovering the 400 mid-turn (and losing
+    that turn), check capability up front and degrade gracefully -- no
+    thinking requested, and a single note explaining why, not a per-turn
+    one."""
+    can_think_aloud, note = drv._resolve_thinking_capability(
+        _ModelsClient(False), "claude-haiku-4-5", think=True)
+    assert can_think_aloud is False
+    assert note is not None and "claude-haiku-4-5" in note
+
+
 def test_paint_only_colors_when_enabled():
     assert drv._paint("hi", "90", False) == "hi", "must be plain when color is off"
     painted = drv._paint("hi", "90", True)

@@ -231,6 +231,43 @@ def _ask_claude(client, system, user, model=LLM_MODEL, think=True, return_thinki
     return text
 
 
+def _model_supports_adaptive_thinking(client, model):
+    """Adaptive thinking isn't universal -- pre-4.6-family models like Haiku
+    4.5 reject `thinking: {"type": "adaptive", ...}` outright with a 400 (see
+    _resolve_thinking_capability below for where that bit llm_agent). Checked
+    via the Models API rather than by trying and catching the error, so an
+    unsupported model is known before the turn loop starts, not discovered by
+    losing a turn to a live failure.
+
+    Any failure to determine support -- network hiccup, an older SDK without
+    `.models`, a capabilities shape that doesn't match what's expected here --
+    falls back to True: assume support, exactly as the code behaved before
+    this check existed. The check must never become a NEW way to lose a
+    turn; if it can't tell, let the existing call (and its existing
+    exception handling) be the judge."""
+    try:
+        caps = client.models.retrieve(model).capabilities
+        return bool(caps["thinking"]["types"]["adaptive"]["supported"])
+    except Exception:
+        return True
+
+
+def _resolve_thinking_capability(client, model, think):
+    """Whether this visit can request the summarized reasoning display for
+    `model`, and the one-time note to print if it can't. `think=False`
+    (--no-think) already means no thinking is wanted, so the capability
+    check is skipped entirely -- nothing to check, nothing to note.
+    Otherwise: on a model that supports adaptive thinking, business as
+    usual. On one that doesn't (e.g. Haiku 4.5), skip the request rather
+    than let every turn 400, and explain once why -- not once per turn."""
+    if not think:
+        return False, None
+    if _model_supports_adaptive_thinking(client, model):
+        return True, None
+    return False, (f"(reasoning isn't visible on {model} -- this visit will "
+                    "run without a thinking summary.)\n")
+
+
 def _paint(text, code, on):
     return f"\033[{code}m{text}\033[0m" if on else text
 
@@ -565,7 +602,10 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
     color = color and sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
     if show_thoughts and not think:
         print("(--show-thoughts has nothing to show with --no-think.)")
-    think_note = "thinking" if think else "no-think"
+    can_think_aloud, thinking_note = _resolve_thinking_capability(client, model, think)
+    if thinking_note:
+        print(thinking_note)
+    think_note = "thinking" if can_think_aloud else "no-think"
     w.hand_name = _ask_for_name(client, model, think, w.rng)   # optional; None if declined/unusable
     who = w.hand_name or "Someone"
     session_path, session_log = _start_session_log(who, model, w.day(), turns)
@@ -599,7 +639,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                       + "\n".join(actions) + "\n\nYour command:")
             try:
                 thoughts = ""
-                if think:
+                if can_think_aloud:
                     thoughts, reply = _ask_claude(client, system, prompt, model,
                                                   think, return_thinking=True)
                     if show_thoughts and thoughts:
