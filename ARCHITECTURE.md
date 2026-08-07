@@ -729,6 +729,43 @@ the forest fragments it already checked — any of them landing in a driver
 result string could, in principle, trip the LLM driver's refusal-detection
 the same way a forest fragment already once did.
 
+## A dark night — varied `wait`, and confirming what already worked
+
+A dark night is mostly `wait` — there's little else safe to do out there,
+and that's correct (see the lamp/hearth mechanic itself for why: no light,
+no reading, no seeing what's on the ground). That's also, deliberately,
+almost the entire lever available for how a dark night *feels*. Two things
+followed from that:
+
+`pet cat` and `eat <held food>` were already ungated by darkness — neither
+routes through `cmd_look`'s `is_dark` check (the only place that check
+lives); both go through `find_visible`/`_room_here`, which don't consult
+phase or light at all. A hand can already sit in the dark and pet the cat,
+or eat a held cooked potato. `test_pet_the_cat_works_in_the_dark` and
+`test_eat_a_held_cooked_potato_works_in_the_dark` pin this down so it can't
+regress silently the next time the dark-gating logic is touched.
+
+`cmd_wait` itself, though, said the identical `"You wait. Time passes."`
+every single call, dark or not — and since a dark night is *mostly* `wait`,
+that flat line was the entire felt texture of getting through one. Fixed
+by drawing from `WAIT_DARK_LINES` (a small pool of quiet, ambient lines)
+whenever `world.is_dark(actor.location)`, daytime `wait` left untouched.
+Two refinements, same "don't say something that isn't there" instinct
+`_room_here` above is built on:
+
+- `WAIT_DARK_HUT_LINES` (the cold through the floor, the hearth ticking)
+  only enters the pool indoors — said in the yard or at the forest's edge,
+  they'd describe hut furniture that isn't there.
+- The line naming the cat only enters the pool when the cat is actually in
+  the room to be heard, and runs its name through `_cat_cap` so a named cat
+  is named and an unnamed one reads as "the cat" — same convention every
+  other cat-adjacent line already follows.
+
+One line in the base pool (`"...Not yet, but coming."`) is a deliberate
+vague hint that dawn is on its way, without claiming a specific tick count
+— the point is turning the wait from an open-ended void into a night that's
+being gotten through, not a promise about exactly how many turns are left.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

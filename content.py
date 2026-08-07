@@ -656,8 +656,46 @@ def cmd_actions(world, actor, arg):
         f"  - {action}" for action in world.available_actions(actor))
 
 
+# A dark night is mostly `wait` -- there's little else safe to do out there,
+# and that's correct. But a flat "You wait. Time passes." said turn after
+# turn reads as a lockout, when the mechanics underneath are just an
+# ordinary quiet stretch. A small pool of quiet lines -- drawn only once
+# it's actually dark -- makes the identical night atmospheric instead of
+# blank. The last line hints dawn is on its way, so the wait reads as a
+# night being gotten through, not an open-ended void.
+WAIT_DARK_LINES = (
+    "You wait. Far off, one sound, then nothing. The dark keeps to itself.",
+    "You wait. The cold settles in properly. Nothing else moves.",
+    "You wait. The dark feels a shade thinner than it did. Not yet, but coming.",
+)
+
+# Only true indoors, where there's a hearth and a doorway to feel the cold
+# come up through the floor from -- said outside, at the yard or the
+# forest's edge, it would describe furniture that isn't there.
+WAIT_DARK_HUT_LINES = (
+    "You wait. The cold comes up through the floor; the doorway is a faint grey square.",
+    "You wait. The hearth ticks as the last of its warmth leaves it.",
+)
+
+# Only when the cat is actually in the room to be heard -- {cat} follows
+# _cat_cap's given-name-or-"The cat" convention, so a named cat gets named.
+WAIT_DARK_CAT_LINE = "You wait. Somewhere in the dark, {cat} shifts and resettles."
+
+
+def _wait_dark_lines(world, actor):
+    lines = list(WAIT_DARK_LINES)
+    if actor.location == "hut":
+        lines += WAIT_DARK_HUT_LINES
+    cat = world.get("cat")
+    if cat is not None and cat.location == actor.location:
+        lines.append(WAIT_DARK_CAT_LINE.format(cat=_cat_cap(cat)))
+    return lines
+
+
 def cmd_wait(world, actor, arg):
     """wait -- let one tick pass while you do nothing."""
+    if world.is_dark(actor.location):
+        return world.rng.choice(_wait_dark_lines(world, actor))
     return "You wait. Time passes."
 
 

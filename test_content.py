@@ -32,6 +32,7 @@ from content import (
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
     SHELF_CAPACITY, _shelf_description,
+    WAIT_DARK_LINES, WAIT_DARK_HUT_LINES, WAIT_DARK_CAT_LINE, _wait_dark_lines,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -981,6 +982,95 @@ def test_fresh_world_starts_in_early_morning_with_light():
         f"fresh world should start in daylight, not {w.phase()}"
     result = w.act(actor, "go out")
     assert "pitch dark" not in result.lower(), "the yard should be visible on a fresh morning"
+
+
+def _wait_to_night(w, actor):
+    while w.phase() != "night":
+        w.act(actor, "wait")
+
+
+def test_pet_the_cat_works_in_the_dark():
+    w, actor = fresh()
+    _wait_to_night(w, actor)
+    w.get("cat").location = actor.location    # the cat wanders on its own; pin it here
+    result = w.act(actor, "pet cat")
+    assert "purrs" in result.lower(), \
+        f"a hand should be able to pet the cat in the dark: {result!r}"
+
+
+def test_eat_a_held_cooked_potato_works_in_the_dark():
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "go in", "light hearth", "cook potato",
+        "snuff hearth")
+    _wait_to_night(w, actor)
+    result = w.act(actor, "eat broiled potato")
+    assert "you eat" in result.lower(), \
+        f"a hand should be able to eat held food in the dark: {result!r}"
+
+
+def test_wait_in_the_dark_gives_a_quiet_line_not_the_daytime_stock_phrase():
+    # world.act may append other rooms' ambient announcements (e.g. the cat
+    # wandering) after the wait line itself, so compare only the first line.
+    w, actor = fresh()
+    _wait_to_night(w, actor)
+    result = w.act(actor, "wait").splitlines()[0]
+    assert result != "You wait. Time passes.", \
+        "a dark wait should read differently from a daylight one"
+    assert result in _wait_dark_lines(w, actor), \
+        f"unexpected dark-wait line: {result!r}"
+
+
+def test_wait_lines_vary_across_a_dark_stretch():
+    # Repeated calls straight to the handler, not world.act -- world.act's
+    # own tick would march time (and the phase) forward each call, and
+    # night is only a handful of ticks long before it rolls into dawn.
+    w, actor = fresh()
+    _wait_to_night(w, actor)
+    seen = {VERBS["wait"](w, actor, "") for _ in range(40)}
+    assert len(seen) > 1, "40 dark waits should surface more than one line"
+
+
+def test_wait_in_daylight_is_unaffected():
+    w, actor = fresh()
+    assert w.act(actor, "wait").splitlines()[0] == "You wait. Time passes."
+
+
+def test_dark_wait_pool_includes_hut_only_lines_in_the_hut():
+    w, actor = fresh()
+    _wait_to_night(w, actor)
+    assert actor.location == "hut"
+    for line in WAIT_DARK_HUT_LINES:
+        assert line in _wait_dark_lines(w, actor)
+
+
+def test_dark_wait_pool_excludes_hut_only_lines_outside_the_hut():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    _wait_to_night(w, actor)
+    assert actor.location == "yard"
+    pool = _wait_dark_lines(w, actor)
+    for line in WAIT_DARK_HUT_LINES:
+        assert line not in pool, "yard shouldn't get hut furniture in its wait lines"
+
+
+def test_dark_wait_pool_includes_the_cat_line_only_when_the_cat_is_present():
+    w, actor = fresh()
+    _wait_to_night(w, actor)
+    w.get("cat").location = actor.location    # the cat wanders on its own; pin it here
+    assert WAIT_DARK_CAT_LINE.format(cat="The cat") in _wait_dark_lines(w, actor)
+
+    w.get("cat").location = "yard"            # send it elsewhere
+    pool = _wait_dark_lines(w, actor)
+    assert WAIT_DARK_CAT_LINE.format(cat="The cat") not in pool, \
+        "the cat shouldn't be heard from a room it isn't in"
+
+
+def test_dark_wait_cat_line_uses_a_given_name_once_the_cat_has_one():
+    w, actor = fresh()
+    run(w, actor, "name cat Ember")
+    _wait_to_night(w, actor)
+    w.get("cat").location = actor.location    # the cat wanders on its own; pin it here
+    assert WAIT_DARK_CAT_LINE.format(cat="Ember") in _wait_dark_lines(w, actor)
 
 
 # ===========================================================================

@@ -72,8 +72,12 @@ is free and does not advance time.
 The essentials: the **hearth** is what cooks; the tin **lamp** is your only
 portable light, kindled (or re-kindled, to top it back up) from a lit hearth.
 Night is pitch dark without the lamp burning — in the dark you can only
-examine what you're holding. A fresh world starts at dawn, so there's a full
-day to find the lamp before the first night falls. Potatoes must be planted,
+examine what you're holding, though petting the cat and eating something
+you're already holding still work fine either way. Waiting through a dark
+night draws from a small pool of quiet lines instead of repeating itself,
+so it reads as a night passing rather than a wall. A fresh world starts at
+dawn, so there's a full day to find the lamp before the first night falls.
+Potatoes must be planted,
 grown, harvested, and cooked before they'll feed you. There's a cat: it
 wanders, likes the fire lit, and can be fed a potato or petted. **The cat can
 never come to harm** — that's guaranteed in the code and pinned by a test.
