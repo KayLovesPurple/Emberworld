@@ -747,8 +747,10 @@ def cmd_snuff(world, actor, arg):
 
 
 def cmd_plant(world, actor, arg):
-    """plant potato -- press a raw potato into the vegetable patch to grow it."""
+    """plant <potato|seed> -- press a raw potato into the vegetable patch, or set the seed you found in the ground by the fence."""
     e = find_visible(world, actor, arg or "potato", prefer=_is_raw)
+    if e is not None and e.attrs.get("seed") and _carrying(world, actor, e):
+        return _plant_seed(world, actor, e)
     if not e or e.location != actor.id or "potato" not in e.name \
             or e.attrs.get("food", 0) > 0:
         return "You need a raw potato in hand to plant."
@@ -760,6 +762,28 @@ def cmd_plant(world, actor, arg):
     world.entities.pop(e.id, None)
     _sow(world, patch)
     return "You press the potato into the soil and firm it down. Now: time."
+
+
+def _plant_seed(world, actor, seed):
+    """The mystery seed's own planting path -- entirely independent of the
+    patch and its one-crop-at-a-time rule (that rule is load-bearing and
+    the seed must never touch it; this creates a freestanding entity in the
+    yard, never anything inside the patch). One mystery plant at a time,
+    mirroring the potato's own restraint -- one anticipation arc per
+    lineage, not a flowerbed to manage."""
+    if actor.location != "yard":
+        return "The seed wants proper ground -- plant it in the yard."
+    if _mystery_plant(world) is not None:
+        return "Something's already coming up by the fence. Let it finish first."
+    world.entities.pop(seed.id, None)
+    kind = world.rng.choice(BLOOM_KINDS)
+    plant = world.add(Entity(world.fresh_id("bloom"), "seedling",
+        _bloom_description(0), location="yard", portable=False,
+        attrs={"growth": 0, "blooms_at": BLOOM_TICKS,
+               "bloom_name": kind[0], "bloom_look": kind[1],
+               "bloom_reaction": kind[2]}))
+    plant.attach("blooming")
+    return "You press the seed into the ground by the fence. It will take what it takes."
 
 
 def cmd_harvest(world, actor, arg):
@@ -836,6 +860,144 @@ def _found_description(look_line, reaction):
     if reaction == "plays":
         return f"{look_line} — the cat might bat at it."
     return f"{look_line}."
+
+
+# ---------------------------------------------------------------------------
+# The mystery seed -- the first thing in Emberworld where one hand changes
+# what a LATER hand can do, rather than what they can read about. A seed
+# found at the forest's edge, planted in the yard, that takes longer to
+# bloom than any one visit lasts and opens for whoever happens to be around
+# when it does -- planter or stranger. Adds no new verbs: `plant` learns a
+# second thing to plant, and once bloomed the flower is just an ordinary
+# portable/curio, picked up and shelved by the verbs that already exist.
+SEED_NAME = "a seed you don't recognise"
+
+# The core decision, pinned by test_a_bloom_outlives_a_single_visit so a
+# future "this feels slow" edit has to argue with an assertion, not just a
+# comment: this must exceed a visit (~30 turns), or the planter starts
+# seeing their own bloom and the whole multi-visit point collapses into a
+# slow potato. 120 ticks is 5 world-days, ~4 visits -- comfortably past one
+# visit, short enough that a dozen-visit lineage sees several open. If this
+# ever drops below ~72 ticks, re-read this comment before touching it.
+BLOOM_TICKS = 120
+BLOOM_SHOWING_AT = 30       # growth at which anything is visible above ground
+BLOOM_BUDDING_AT = 84       # growth at which it's clearly about to be something
+
+# Mid-arc description, banded like CAIRN_BANDS/_cairn_description -- most
+# hands who meet this thing meet it here, not at either end, so the middle
+# bands matter as much as the payoff.
+BLOOM_BANDS = (
+    (0, "a patch of turned earth by the fence, nothing showing yet"),
+    (BLOOM_SHOWING_AT, "something is coming up by the fence, its shape not clear yet"),
+    (BLOOM_BUDDING_AT, "a green stalk by the fence, a bud closed tight at the top of it"),
+)
+
+
+def _bloom_description(growth):
+    text = BLOOM_BANDS[0][1]
+    for threshold, line in BLOOM_BANDS:
+        if growth >= threshold:
+            text = line
+    return text
+
+
+# What it becomes -- fixed the instant it's planted, hidden until it opens.
+# Shaped exactly like FOUND_ITEMS (name, look_line, cat_reaction) for the
+# same reason: the look_line feeds _found_description, and cat_reaction is
+# set explicitly on the bloom at open time rather than left to
+# ensure_shelf's FOUND_ITEMS-only backfill (which only ever touches
+# "found_"-prefixed entities and would silently default any of these to
+# "ignores"). A FIXED tuple, deliberately not composed from pools the way a
+# forest fragment is: fragments are composed because they fire every step
+# and need combinatorial depth to survive repetition; a bloom opens roughly
+# once every four visits and gets read closely when it does. A handful of
+# flowers that each read like a real specific thing beats a mad-libs
+# generator with more permutations -- composition is the right tool for
+# texture that repeats, not for a payoff that doesn't.
+BLOOM_KINDS = (
+    ("a tall white flower", "taller than it should be, six narrow petals, "
+     "and a scent like cold water", "plays"),
+    ("a low blue flower", "close to the ground, the blue so dark it reads "
+     "black at the centre", "ignores"),
+    ("a rust-red flower", "ragged-edged petals, the colour of old iron left "
+     "out in rain", "ignores"),
+    ("a papery yellow flower", "thin as a moth's wing, rattling faintly "
+     "when the wind moves it", "plays"),
+    ("a single black bloom", "glossy, almost wet-looking, and colder to the "
+     "touch than it has any business being", "ignores"),
+    ("a spray of small pink flowers", "a dozen tiny blooms crowded on one "
+     "stem, each one barely open", "plays"),
+    ("a green-throated flower", "white on the outside, a deep green flare "
+     "hidden at the centre", "ignores"),
+    ("a striped orange flower", "bold bands of colour, the kind of thing "
+     "that looks painted on", "plays"),
+)
+
+
+def _seed_in_world(world):
+    """The one still-unplanted seed, if one exists anywhere -- carried,
+    shelved, or lying on the ground. Used by seedfall to decide whether the
+    forest's edge has anything left to offer."""
+    return next((e for e in world.entities.values() if e.attrs.get("seed")), None)
+
+
+def _mystery_plant(world):
+    """The one mystery-seed plant, growing or already bloomed, if one
+    exists -- or None. `blooms_at` is unique to this plant kind (the
+    potato plant's own growth attrs are `ripe_at`), so this is a plain
+    attrs check, the same shape as _crop_in's patch-containment check,
+    not an id-prefix guess."""
+    return next((e for e in world.entities.values() if "blooms_at" in e.attrs), None)
+
+
+def seedfall(world, room):
+    """Autonomous: while nothing of the seed's arc is in play anywhere in
+    the world -- no seed carried, shelved, or lying about, and no mystery
+    plant growing or bloomed in the yard -- the forest's edge offers one to
+    the next hand who stands here. Deterministic, like patch_volunteer,
+    not a dice roll: the arc is already slow (a multi-visit bloom), and
+    stacking a rare find on top of a multi-visit wait compounds two long
+    odds into content that mostly doesn't happen. The floor is
+    self-limiting on its own -- the world holds one token of the arc at a
+    time, so no second seed appears until the first one's arc completes."""
+    actor = world.get("you")
+    if actor is None or actor.location != room.id:
+        return
+    if _seed_in_world(world) is not None or _mystery_plant(world) is not None:
+        return
+    world.add(Entity(world.fresh_id("seed"), SEED_NAME,
+                      "small, dark, and ridged — not a potato, and not "
+                      "anything else you can name.",
+                      location="forest_edge", portable=True,
+                      attrs={"seed": True}))
+    world.announce("Something small and hard is half-buried at the "
+                    "treeline — not anything you planted.", room.id)
+
+
+def blooming(world, plant):
+    """Autonomous: a planted seed comes up on its own schedule and
+    eventually opens. Deliberately NOT `growing`: there is no
+    watered/boosted branch and there must never be one -- the whole point
+    of this arc is that a hand cannot hurry it, so the absent water path
+    is the feature, not an oversight. Do not unify these two behaviors."""
+    if plant.attrs.get("ready"):
+        return
+    plant.attrs["growth"] = plant.attrs.get("growth", 0) + 1
+    if plant.attrs["growth"] >= plant.attrs["blooms_at"]:
+        plant.attrs["ready"] = True
+        plant.name = plant.attrs["bloom_name"]
+        plant.portable = True
+        plant.attrs["curio"] = True
+        plant.attrs["cat_reaction"] = plant.attrs["bloom_reaction"]
+        plant.description = _found_description(plant.attrs["bloom_look"],
+                                                plant.attrs["bloom_reaction"])
+        world.announce(f"By the fence, {plant.name} has opened.",
+                       world.room_of(plant))
+    else:
+        plant.description = _bloom_description(plant.attrs["growth"])
+
+
+BEHAVIORS.update({"seedfall": seedfall, "blooming": blooming})
 
 
 # FOREST_SPEC.md Stage 7: wood-gathering relocated here from the yard (the
@@ -1369,26 +1531,84 @@ WATCH_CLOUDS_NIGHT_MSG = "The sky's gone to black -- nothing up there to watch f
 # a dice roll.
 MOON_CYCLE_DAYS = 29
 
+# BUG WE HIT: unoffset, a fresh world's day 0 is a new moon by construction
+# (day() % MOON_CYCLE_DAYS == 0 only on day 29), so a brand-new lineage was
+# guaranteed roughly 23 blank visits before the moon was ever reachable at
+# all -- and even after that first sighting, only one night in 29 ever
+# showed anything. MOON_PHASE_OFFSET fixes the cold start (a real moon has
+# an arbitrary phase at any given epoch; day 1 being a new moon was just an
+# unexamined accident of counting from 0), and MOON_NEAR_NIGHTS fixes the
+# narrow window (a few nights either side of full are still worth a look,
+# not just the exact peak). Fixing only one of the two leaves it broken --
+# see ARCHITECTURE.md's "visits, not days" note for the general shape of
+# this class of bug.
+MOON_NEAR_NIGHTS = 3
+MOON_PHASE_OFFSET = 22   # first full moon lands on day 7 (visible from day
+                         # 4, ~visit 3) instead of day 29 (~visit 23); chosen
+                         # so day 1 sits at phase-distance 6, safely outside
+                         # the near-window -- see test_watch_clouds_still_
+                         # refuses_on_an_ordinary_night.
+
 MOON_LINES = (
     "The moon stands full and close tonight, bright enough to throw a shadow.",
     "A full moon rides high, and for once the dark has an edge to it, silvered.",
     "Everything under the full moon reads in greys, sharp and unfamiliar.",
 )
 
+# The near-full nights either side of the peak -- their own weather, never a
+# consolation prize for missing the full moon. A line that reads as a
+# near-miss notification would make the widened window worse, not better:
+# the rare thing would stop being rare, and what replaced it would just be
+# a "not quite" notice. Nothing here references the full moon or implies
+# anything was missed.
+MOON_VIEW_LINES = {
+    "waxing": (
+        "The moon hangs half-built tonight, filling in night by night, not "
+        "there yet.",
+        "A fat, lopsided moon climbs the sky, close to round but not quite.",
+        "The moon's got real shape tonight, though one edge still hasn't "
+        "caught up.",
+    ),
+    "waning": (
+        "The moon's started shrinking from one side, still bright but "
+        "plainly less than it was.",
+        "A moon well past its roundest rises late and sets early, thinner "
+        "at the edge every night.",
+        "The moon looks bitten into tonight, one flank gone dark, the rest "
+        "still silver.",
+    ),
+}
+
+
+def _moon_view(world):
+    """Which moon, if any, is worth looking up at tonight: "full", "waxing",
+    "waning", or None. Widened from a single full-moon night because one
+    night in 29 -- of which a hand must also be outdoors, awake, and
+    choosing to look -- is content that in practice never happens; see the
+    comment above MOON_NEAR_NIGHTS/MOON_PHASE_OFFSET for the two separate
+    faults this fixes."""
+    n = (world.day() + MOON_PHASE_OFFSET) % MOON_CYCLE_DAYS
+    if n == 0:
+        return "full"
+    if min(n, MOON_CYCLE_DAYS - n) > MOON_NEAR_NIGHTS:
+        return None
+    return "waning" if n <= MOON_NEAR_NIGHTS else "waxing"
+
 
 def _is_full_moon(world):
-    return world.day() % MOON_CYCLE_DAYS == 0
+    return _moon_view(world) == "full"
 
 
 def cmd_watch_clouds(world, actor, arg):
-    """watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing."""
+    """watch clouds -- pause under open sky and watch the clouds (or, on a full or near-full moon night, the moon itself) move; a chosen, unpressured turn that changes nothing."""
     if actor.location not in ("yard", "forest_edge"):
         return "There's no open sky to watch here."
     phase = world.phase()
     if phase == "night":
-        if not _is_full_moon(world):
+        view = _moon_view(world)
+        if view is None:
             return WATCH_CLOUDS_NIGHT_MSG
-        line = world.rng.choice(MOON_LINES)
+        line = world.rng.choice(MOON_LINES if view == "full" else MOON_VIEW_LINES[view])
     else:
         line = world.rng.choice(WATCH_CLOUD_LINES[phase])
     if actor.location == "forest_edge":
@@ -1551,6 +1771,11 @@ def generate_reference():
             f"- A full day is **{DAY_LENGTH} ticks**; night falls late in that "
             "cycle and is pitch dark without a lit flame. A fresh world starts "
             "at dawn, giving a full day's light before the first night falls.",
+            f"- The moon is a real clock, independent of anyone's visits: "
+            f"**{2 * MOON_NEAR_NIGHTS + 1}** nights out of every "
+            f"**{MOON_CYCLE_DAYS}** show something at night instead of "
+            "nothing (full, or near enough), offset so a fresh lineage "
+            "reaches one within its first week rather than its first month.",
             "- The tin lamp is the only portable light, kindled from a lit "
             "hearth; the **hearth** is what cooks.",
             f"- The lamp holds **{LAMP_FUEL_START}** fuel once kindled and "
@@ -1575,6 +1800,12 @@ def generate_reference():
             f"- The hut's curio shelf holds up to **{SHELF_CAPACITY}** things "
             "at once -- personal and curated, unlike the forest-edge cairn, "
             "which is collective and never full.",
+            f"- A found seed turns up at the forest's edge whenever none is "
+            "in play (carried, shelved, or growing) -- deterministic, not a "
+            f"roll. Planted in the yard, it takes **{BLOOM_TICKS} ticks** "
+            "(longer than any one visit) to bloom into one of a handful of "
+            "flowers, fixed the moment it's planted but hidden until it "
+            "opens -- and water never speeds it up.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "
@@ -1646,6 +1877,7 @@ def build_world():
         exits={"yard": "yard"}))
     forest_edge.attach("forest_finds")
     forest_edge.attach("wildlife_glimpse")
+    forest_edge.attach("seedfall")
     ensure_cairn(w)
 
     lamp = w.add(Entity("lamp", "lamp", "", location="hut",

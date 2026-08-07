@@ -30,9 +30,12 @@ from content import (
     STATUE_MIN_DEPTH, STATUE_DISCOVERY_CHANCE, STATUE_DISCOVERY_TEXT,
     STATUE_WISH_LINE, ensure_statue, _statue_reachable, cmd_wish,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
+    MOON_NEAR_NIGHTS, MOON_PHASE_OFFSET, MOON_VIEW_LINES, _moon_view,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
     SHELF_CAPACITY, _shelf_description,
     WAIT_DARK_LINES, WAIT_DARK_HUT_LINES, WAIT_DARK_CAT_LINE, _wait_dark_lines,
+    SEED_NAME, BLOOM_TICKS, BLOOM_SHOWING_AT, BLOOM_BUDDING_AT, BLOOM_BANDS,
+    BLOOM_KINDS, _seed_in_world, _mystery_plant, _bloom_description,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -1377,7 +1380,7 @@ def test_reference_generates_and_mentions_key_things():
     ref = generate_reference()
     assert "## Verbs" in ref and "## Autonomous behaviors" in ref
     # a few anchors so a totally broken generator is caught
-    for anchor in ("plant potato", "feed cat", "burning", "cat_wander"):
+    for anchor in ("plant <potato|seed>", "feed cat", "burning", "cat_wander"):
         assert anchor in ref, f"reference missing '{anchor}'"
     assert str(CAT_HUNGER_CAP) in ref, "numeric rules didn't render"
 
@@ -1784,9 +1787,23 @@ def test_watch_clouds_is_withdrawn_at_night():
 # ===========================================================================
 def _set_to_full_moon_night(world):
     """Jump straight to a full-moon night without ticking hundreds of turns
-    through world.act (which would also run every other tick behavior)."""
-    day_index = MOON_CYCLE_DAYS - 1          # world.day() is 1-based
-    world.time = day_index * DAY_LENGTH + 20  # hour 20 -> phase() == "night"
+    through world.act (which would also run every other tick behavior).
+    Finds the actual day satisfying the phase-offset formula rather than
+    assuming day MOON_CYCLE_DAYS -- MOON_PHASE_OFFSET means the first full
+    moon isn't on day MOON_CYCLE_DAYS at all (see _moon_view)."""
+    day = next(d for d in range(1, MOON_CYCLE_DAYS * 2)
+               if (d + MOON_PHASE_OFFSET) % MOON_CYCLE_DAYS == 0)
+    world.time = (day - 1) * DAY_LENGTH + 20  # hour 20 -> phase() == "night"
+
+
+def _moon_view_on_day(d):
+    """Test-only stand-in: _moon_view only ever calls world.day(), so a
+    bare object with that one method is enough to probe the whole
+    29-day schedule without constructing or ticking a real World."""
+    class _Day:
+        def day(self):
+            return d
+    return _moon_view(_Day())
 
 
 def test_full_moon_recurs_every_moon_cycle_days():
@@ -1816,7 +1833,8 @@ def test_watch_clouds_still_refuses_on_an_ordinary_night():
     run(w, actor, "go out")
     while w.phase() != "night":
         w.act(actor, "wait")
-    assert not _is_full_moon(w), "day 1 must not coincide with a full moon"
+    assert _moon_view(w) is None, \
+        "day 1 must fall outside the near-full window, not just off the exact full night"
     assert "watch clouds" not in w.available_actions(actor)
     assert cmd_watch_clouds(w, actor, "") == WATCH_CLOUDS_NIGHT_MSG
 
@@ -1846,6 +1864,48 @@ def test_moon_calm_ack_still_applies_at_the_forest_edge():
     cmd_watch_clouds(w, actor, "")
     third = cmd_watch_clouds(w, actor, "")
     assert CALM_ACK_LINE in third
+
+
+def test_a_fresh_world_reaches_a_visible_moon_within_a_few_days():
+    """BUG: unoffset, a fresh world's first full moon lands on day
+    MOON_CYCLE_DAYS (29) -- roughly 23 visits of blank, withdrawn nights
+    before there is ever anything to see. MOON_PHASE_OFFSET exists
+    specifically so a new lineage doesn't start in that dead zone; this is
+    the assertion that makes the fix durable, not just the constant."""
+    first_visible = next(d for d in range(1, MOON_CYCLE_DAYS + 1)
+                         if _moon_view_on_day(d) is not None)
+    assert first_visible <= 7
+
+
+def test_the_moon_is_visible_on_a_minority_of_nights():
+    """The window was widened to fix a dead feature, not to make the moon
+    the default night sky -- most nights must still show nothing, or
+    "watch clouds" at night stops being a rare thing worth choosing."""
+    visible = [d for d in range(1, MOON_CYCLE_DAYS + 1)
+              if _moon_view_on_day(d) is not None]
+    assert 5 <= len(visible) <= 9
+
+
+def test_waxing_and_waning_lines_touch_no_world_state():
+    """Same never-break constraint as the full-moon line: a wider window
+    must not become a lamp-substitute on more nights than before."""
+    w, actor = fresh()
+    run(w, actor, "go out")
+    day = next(d for d in range(1, MOON_CYCLE_DAYS * 2)
+              if _moon_view_on_day(d) in ("waxing", "waning"))
+    w.time = (day - 1) * DAY_LENGTH + 20
+    before = w.to_data()
+    cmd_watch_clouds(w, actor, "")
+    after = w.to_data()
+    assert before == after, "a near-full line must not change anything, ever"
+    assert w.is_dark("yard"), "moonlight must not substitute for a lit lamp"
+
+
+def test_near_full_lines_are_their_own_pool():
+    waxing, waning = MOON_VIEW_LINES["waxing"], MOON_VIEW_LINES["waning"]
+    assert waxing and waning
+    assert not (set(waxing) & set(waning))
+    assert not (set(waxing) | set(waning)) & set(MOON_LINES)
 
 
 # ===========================================================================
@@ -2817,6 +2877,9 @@ def test_no_forest_fragment_reads_as_a_refusal_marker():
     all_fragments = [frag for band in FOREST_FRAGMENTS.values()
                       for pool in band.values() for frag in pool]
     all_fragments += list(MOON_LINES) + list(OFF_COURSE_LINES) + list(FOREST_AMBIENT)
+    all_fragments += list(MOON_VIEW_LINES["waxing"]) + list(MOON_VIEW_LINES["waning"])
+    all_fragments += [look for _, look, _ in BLOOM_KINDS]
+    all_fragments += [line for _, line in BLOOM_BANDS]
     all_fragments += [STATUE_DISCOVERY_TEXT, STATUE_WISH_LINE]
     all_fragments += [line for room in WILDLIFE_LINES.values()
                        for pool in room.values() for line in pool]
@@ -2881,6 +2944,159 @@ def test_look_still_examines_a_real_thing_named_actions_free_of_the_alias():
     result = w.act(actor, "look actionsy")
     assert "Available actions:" not in result
     assert "you don't see any" in result.lower()
+
+
+# ===========================================================================
+# 13. THE MYSTERY SEED -- a seed found at the forest's edge, planted in the
+#     yard, that blooms on its own multi-visit schedule and opens for
+#     whoever happens to be around when it does. The first thing where one
+#     hand changes what a LATER hand can do, not just what they can read.
+# ===========================================================================
+def _seed_count(w):
+    return len([e for e in w.entities.values() if e.attrs.get("seed")])
+
+
+def test_a_seed_turns_up_at_the_forest_edge_when_none_exists():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    seed = _seed_in_world(w)
+    assert seed is not None
+    assert seed.name == SEED_NAME
+    assert seed.location == "forest_edge", \
+        "the seed should be on the ground, not pocketed automatically"
+
+
+def test_no_second_seed_while_one_is_carried_shelved_or_growing():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    assert _seed_count(w) == 1
+
+    # carried: still at the edge, holding the only seed -- no second appears
+    run(w, actor, "take seed")
+    w.act(actor, "wait")
+    assert _seed_count(w) == 1
+
+    # shelved: off at the hut, not even carried -- still no second
+    run(w, actor, "go yard", "go in", "place seed on shelf")
+    run(w, actor, "go out", "go forest")
+    w.act(actor, "wait")
+    assert _seed_count(w) == 1
+
+    # growing: planted and off the board entirely -- still no second
+    run(w, actor, "go yard", "go in", "take seed", "go out", "plant seed")
+    assert _seed_count(w) == 0
+    assert _mystery_plant(w) is not None
+    run(w, actor, "go forest")
+    w.act(actor, "wait")
+    assert _seed_count(w) == 0
+
+
+def test_planting_a_seed_does_not_touch_the_vegetable_patch():
+    """The one-crop-at-a-time rule belongs to the patch alone -- a seed
+    planted in the yard must never compete with, consume, or otherwise
+    touch it."""
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "plant potato")
+    patch = w.get("patch")
+    crop_id_before = w.contents(patch.id)[0].id
+    run(w, actor, "go forest", "take seed", "go yard", "plant seed")
+    assert [e.id for e in w.contents(patch.id)] == [crop_id_before], \
+        "the seed must never enter or disturb the patch"
+    assert _mystery_plant(w) is not None
+
+
+def test_the_seed_cannot_be_planted_in_the_patch_itself():
+    """Planting only ever succeeds in the yard at large -- there is no path
+    that routes a seed into the patch entity the way a potato does."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "take seed", "go yard")
+    from content import _plant_seed
+    patch = w.get("patch")
+    seed = next(e for e in w.contents(actor.id) if e.attrs.get("seed"))
+    _plant_seed(w, actor, seed)
+    assert w.contents(patch.id) == [], "the patch must stay empty"
+    assert _mystery_plant(w).location == "yard"
+
+
+def test_a_planted_seed_ignores_water_entirely():
+    """Deliberately NOT `growing`'s water-boost path -- see blooming's
+    docstring. cmd_water only ever targets a crop inside the patch, so a
+    freestanding mystery plant was never even a reachable target for it;
+    this pins the observable growth rate directly (always +1 per tick)
+    rather than just the missing code path."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "take seed", "go yard", "plant seed")
+    plant = _mystery_plant(w)
+    run(w, actor, "draw water")
+    before = plant.attrs["growth"]
+    w.act(actor, "water crop")
+    after = plant.attrs["growth"]
+    assert after == before + 1, "growth must advance by exactly one tick, never boosted"
+
+
+def test_a_bloom_outlives_a_single_visit():
+    """The core design decision, made unbreakable: BLOOM_TICKS must exceed
+    a typical visit (~30 turns), or a planter starts seeing their own
+    bloom and the whole multi-visit point collapses into a slow potato."""
+    assert BLOOM_TICKS > 30
+
+
+def test_what_it_becomes_is_fixed_at_planting_and_hidden_until_it_opens():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "take seed", "go yard", "plant seed")
+    plant = _mystery_plant(w)
+    assert plant.attrs.get("bloom_name") in [k[0] for k in BLOOM_KINDS]
+    assert not plant.attrs.get("ready")
+    assert plant.attrs["bloom_name"] not in plant.description
+    assert plant.name != plant.attrs["bloom_name"]
+
+
+def test_a_bloom_becomes_takeable_and_shelvable():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "take seed", "go yard", "plant seed")
+    plant = _mystery_plant(w)
+    plant.attrs["growth"] = BLOOM_TICKS - 1
+    w.act(actor, "wait")
+    assert plant.attrs["ready"]
+    assert plant.portable
+    assert plant.attrs["curio"]
+    assert plant.name in [k[0] for k in BLOOM_KINDS]
+    w.act(actor, f"take {plant.name}")
+    assert plant.location == actor.id
+    run(w, actor, "go in")
+    w.act(actor, f"place {plant.name} on shelf")
+    assert plant.location == "shelf"
+
+
+def test_planting_a_seed_touches_no_maintenance_resource():
+    """Same invariant as give/place: planting is a real, deliberate state
+    change (a seed becomes a growing plant), but must never touch a
+    maintenance resource or advance the clock itself -- the tick that
+    grows crops/fire/hunger belongs to world.act's dispatcher, not to any
+    individual handler. Calling the handler directly isolates that from
+    the ambient ticking any non-free verb also triggers."""
+    from content import _plant_seed
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest", "take seed", "go yard")
+    cat = w.get("cat")
+    cat.location = actor.location
+    cat.attrs["hunger"] = 5
+    hearth = w.get("hearth")
+    hearth.attrs["lit"] = True
+    hearth.attrs["fuel"] = 10
+    actor.attrs["wood"] = 4
+    w.get("bucket").attrs["water"] = 2
+    time_before, day_before = w.time, w.day()
+
+    seed = next(e for e in w.contents(actor.id) if e.attrs.get("seed"))
+    _plant_seed(w, actor, seed)
+
+    assert cat.attrs["hunger"] == 5, "planting must not touch cat hunger"
+    assert w.get("bucket").attrs["water"] == 2, "must not touch the bucket"
+    assert actor.attrs["wood"] == 4, "must not touch firewood"
+    assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10, "must not touch fire-life"
+    assert w.time == time_before, "the handler itself must not advance the clock"
+    assert w.day() == day_before
 
 
 # ---------------------------------------------------------------------------

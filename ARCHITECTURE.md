@@ -664,22 +664,76 @@ first place — it grabs it directly via `ensure_cairn`.
 
 `watch clouds` at night has always been a clean withdrawal (`WATCH_CLOUDS_
 NIGHT_MSG`), never a forced line — see the pacing-rebalance section above
-for why that honesty mattered. The full moon is the single exception, and
-it's built to still honor that reasoning rather than undercut it:
-`_is_full_moon(world)` is `world.day() % MOON_CYCLE_DAYS == 0` (29) — a real
-clock keyed to the day count, not a dice roll and not anything session-
-scoped, so it's the one place a hand can actually *witness* the world
-running on a schedule bigger than any single visit, rather than just being
-told that's true. `available_actions` offers `"watch clouds"` at night only
-on these nights (`world.py` imports `_is_full_moon` the same deferred way it
-already imports `_crop_in`/`_patch_in`/`find_visible`, for the same
-circular-import reason).
+for why that honesty mattered. The moon is the exception, and it's built to
+still honor that reasoning rather than undercut it: `_moon_view(world)` is a
+real clock keyed to `world.day()`, not a dice roll and not anything
+session-scoped, so it's the one place a hand can actually *witness* the
+world running on a schedule bigger than any single visit, rather than just
+being told that's true. `available_actions` offers `"watch clouds"` at
+night whenever `_moon_view` returns non-`None` (`world.py` imports it the
+same deferred way it already imports `_crop_in`/`_patch_in`/`find_visible`,
+for the same circular-import reason). `_is_full_moon` survives as a thin
+`_moon_view(world) == "full"` wrapper, so existing imports and tests didn't
+need to move.
 
-Deliberately inert beyond the text: the moon must never light the room (no
-free lamp-substitute — `test_moon_line_touches_no_world_state` asserts
-`w.is_dark("yard")` stays true right after the call) or touch state in any
-other way. Same never-break constraint as `listen`/`watch_clouds` by day,
-just gated by date instead of a probability roll.
+**BUG WE HIT, measured rather than just noticed: the moon was reachable in
+theory and dead in practice.** The original `_is_full_moon` was
+`world.day() % MOON_CYCLE_DAYS == 0` — day 0 is a new moon by construction,
+so a fresh world's first full moon landed on day 29, roughly 23 visits of
+30 turns in. Even past that cold start, only one night in 29 ever showed
+anything, and a hand also has to be outdoors, awake, and choose to look on
+that exact night. Two independent faults, not one: a **cold start** (the
+cycle is aligned to day 0) and a **narrow window** (one night in 29). Fixing
+either alone leaves the other broken.
+
+The fix is `MOON_PHASE_OFFSET` (22) and `MOON_NEAR_NIGHTS` (3).
+`MOON_PHASE_OFFSET` shifts the cycle so the first full moon lands on day 7
+instead of day 29 — a real moon has an arbitrary phase at any given epoch,
+so day 1 being a new moon was never anything but an unexamined accident of
+counting from 0; 22 specifically leaves day 1 at phase-distance 6, safely
+outside the near-window, so `test_watch_clouds_still_refuses_on_an_ordinary_
+night` — which waits from a fresh world to its first night and asserts
+withdrawal — keeps passing with margin rather than by coincidence.
+`MOON_NEAR_NIGHTS` widens "worth a look" from the single exact-full night to
+the `2 * MOON_NEAR_NIGHTS + 1` (7) nights around it, returning `"waxing"`
+or `"waning"` from `_moon_view` on the near nights and drawn from their own
+line pool, `MOON_VIEW_LINES`. **A near-full night must read as its own
+weather, never a consolation prize for missing the full one** — no line in
+either pool references the full moon or implies anything was missed; the
+moment a gibbous-moon line reads as a near-miss notification, widening the
+window makes the feature worse, not better, because the rare thing stops
+being rare and what replaces it is a notice that you didn't quite catch it.
+`test_a_fresh_world_reaches_a_visible_moon_within_a_few_days` and
+`test_the_moon_is_visible_on_a_minority_of_nights` are the two halves of
+this pinned down as assertions rather than left as tuned constants nobody
+re-checks: reachable soon, but still a minority of nights — 7 of 29, not
+"most nights," or the moon becomes the default night sky instead of an
+event.
+
+Deliberately inert beyond the text on every branch, full or near-full: the
+moon must never light the room (no free lamp-substitute —
+`test_moon_line_touches_no_world_state`/`test_waxing_and_waning_lines_
+touch_no_world_state` both assert `w.is_dark("yard")` stays true right
+after the call) or touch state in any other way. Same never-break
+constraint as `listen`/`watch_clouds` by day, just gated by date instead of
+a probability roll.
+
+## A general rule: content keyed to the calendar is rare in visits, not days
+
+The moon bug above is a specific instance of a class worth naming so it
+doesn't recur elsewhere: a visit is roughly 30 turns ≈ 1.25 world-days
+(`DAY_LENGTH` is 24 ticks), and the world's clock only advances while
+someone is actually playing. So anything keyed to `world.day()` has its
+*real* rarity measured in visits, not days — period-in-visits ≈
+period-in-days ÷ 1.25. A constant that looks modest in days (a 29-day
+cycle) can be a near-total dead zone in visits (23 of them) without the
+constant itself ever looking wrong on the page. When adding day-keyed
+content: state the expected visits-to-first-encounter in a comment beside
+the constant, and pin reachability with a test the way
+`test_a_fresh_world_reaches_a_visible_moon_within_a_few_days` does, rather
+than trusting the day-count to read as obviously fine. Per-tick dice rolls
+(`forest_finds`, `wildlife_glimpse`, and the like) don't need this — they're
+already denominated in turns, which is the unit that actually matters.
 
 ## Ambient wildlife — glimpsed, not met
 
@@ -744,6 +798,116 @@ One line in the base pool (`"...Not yet, but coming."`) is a deliberate
 vague hint that dawn is on its way, without claiming a specific tick count
 — the point is turning the wait from an open-ended void into a night that's
 being gotten through, not a promise about exactly how many turns are left.
+
+## The mystery seed — the first thing one hand leaves for a later one to act on
+
+Everything else a hand leaves behind (a journal note, a curio on the shelf,
+a stone on the cairn) is something a *later* hand can read about or add to.
+A seed found at the forest's edge, planted in the yard, is the first thing
+where one hand's choice changes what a later hand can actually *do* — the
+seed takes longer to bloom than any one visit lasts, so the planter is
+reliably gone by the time it opens, and whoever's around when it does is
+the one who gets to pick it. README has the player-facing description.
+
+**Adds no new verbs.** `plant` learns a second thing to plant
+(`cmd_plant` dispatches to `_plant_seed` when the matched entity has
+`attrs["seed"]` and is actually carried); once bloomed, the plant is just
+an ordinary `portable`/`curio` entity, so `take`, `place`, and `give`
+already know what to do with it without a line of new code. The action
+menu is already 16–19 items deep in every room — a feature that needs its
+own verb to work is a feature working against the game's shape at this
+point.
+
+**The core decision, pinned by a test so it can't quietly regress:**
+`BLOOM_TICKS` (120 — 5 world-days, ~4 visits) must exceed a visit (~30
+turns). This isn't a tuning knob, it *is* the feature — below roughly 72
+ticks the planter starts seeing their own bloom, and the whole multi-visit
+point collapses into a slower potato. `test_a_bloom_outlives_a_single_
+visit` asserts `BLOOM_TICKS > 30` with the reasoning in its docstring, so
+a future "this feels slow" edit has to argue with an assertion, not just
+overwrite a comment.
+
+**The supply is deterministic, not a roll.** `seedfall` (attached to
+`forest_edge`, same shape as `forest_finds`/`wildlife_glimpse`) offers a
+seed whenever `_seed_in_world` and `_mystery_plant` both come back `None`
+— no dice. The precedent is `patch_volunteer`, not `forest_finds`: a
+deterministic floor, not a routine source. Stacking a rare-find roll on
+top of an already multi-visit wait would compound two long odds into
+content that mostly doesn't happen, which is exactly the mistake the
+moon fix above exists to correct — no reason to reintroduce it here. The
+floor is self-limiting on its own: the world holds at most one token of
+the arc (a loose seed, or a growing/bloomed plant) at any time, checked
+across all three states a token can be in, so a second seed simply can't
+appear until the first one's whole arc completes.
+
+The seed is created **on the ground at `forest_edge`, not in the pocket**
+— unlike `forest_finds`'s curios. It renders as an ordinary `- ` line in
+the room description (the same `_room_here`/`cmd_look` machinery every
+other ground item already uses) until a hand chooses to `take` it, so
+noticing it and picking it up are two separate, genuinely optional beats,
+not one automatic pocketing. Worth noting, not by design so much as a
+property that falls out of the actor persisting across sessions: a hand
+who takes the seed and leaves without planting it hands it to whoever's
+body picks up next session — the "you wake holding a stranger's things"
+idea, finally with a seed in it that actually does something later.
+
+**`blooming` is deliberately NOT `growing`.** There is no watered/boosted
+branch, and there must never be one — the whole point of this arc is that
+a hand cannot hurry it along, so the absent water path is the feature, not
+an oversight later code review would "fix." `cmd_water` only ever targets
+a crop *inside* the patch (`_crop_in`), so a freestanding mystery plant in
+the yard was never even a reachable target for it in the first place;
+`test_a_planted_seed_ignores_water_entirely` pins the observable rate
+(always +1 growth per tick) rather than just the missing code path, so a
+future refactor that accidentally unifies the two behaviors still gets
+caught. The mid-arc description is banded the same way `_cairn_description`
+already bands cairn height (`BLOOM_BANDS`, a `(threshold, line)` tuple
+scanned the same way `CAIRN_BANDS` is) — most hands who meet this thing
+meet it here, not at planting or at the open, so the middle bands carry as
+much of the feature's actual screen time as the payoff does.
+
+**`BLOOM_KINDS` is a fixed tuple, deliberately not composed from pools the
+way a forest fragment is.** `FOREST_FRAGMENTS` is composed because it
+fires on every `venture`/`return` and needs combinatorial depth to survive
+that repetition; a bloom opens roughly once every four visits and gets
+read closely when it finally does. A handful of flowers that each read
+like one real, specific thing beats a mad-libs generator with more
+permutations that reads like an approximation of one. Composition is the right
+tool for texture that repeats; it's the wrong tool for a payoff that
+doesn't. Shaped exactly like `FOUND_ITEMS` (name, look_line, cat_reaction)
+for the same reason `FOUND_ITEMS` is shaped that way: the look_line feeds
+the same `_found_description` helper (cat hint appended only for
+`"plays"`), and the reaction is stored on the plant at planting time
+(`bloom_reaction`) and applied to the entity's real `cat_reaction` attr
+only once it opens. That has to be set explicitly, not left to
+`ensure_shelf`'s backfill — that backfill only ever touches
+`"found_"`-prefixed entities (a bloom's id is `"bloom_N"`), so a shelved
+bloom would otherwise silently default to `"ignores"` the next time an
+older save loads, same class of gap `ensure_shelf`'s own backfill was
+written to close for curios.
+
+**No save-version bump.** `to_data()` still returns exactly `{version,
+time, seq, entities}` (see the forest's own Stage 3 section on why that
+shape is asserted, not just believed); a seed and a bloom are ordinary
+entities with ordinary attrs, so an older save simply has no seed yet, and
+`seedfall` supplies one on the first visit to the edge after loading — no
+backfill function needed, unlike `ensure_shelf`/`ensure_cairn`.
+
+**`check_world` is deliberately left alone.** world.py's own docstring
+says no knowledge of any specific verb or behavior lives there, and "at
+most one mystery plant" is content knowledge, not an engine invariant.
+Asserted in the test suite and exercised by `--fuzz` instead.
+
+**Deferred:** when a bloom is left standing and a new seed later gets
+planted, the spec calls for the old bloom to fold into a single collective
+`border` entity — the cairn's yard-side twin, described in bands by how
+many flowers it's held, never pickable again — making the choice at bloom
+time the shelf-versus-cairn choice transplanted to a flower: keep it, or
+let it join something collective. Deliberately not built yet: it's the
+better feature and also the one most likely to be over-built on a first
+pass, so Stage 1 ships alone, a lineage gets to actually use it, and Stage
+2 waits for what that play surfaces — same discipline the forest's own
+staged build already follows.
 
 ## What keeps it from breaking
 

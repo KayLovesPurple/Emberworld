@@ -16,7 +16,7 @@
 - `wait` / `z` -- wait -- let one tick pass while you do nothing.
 - `light` / `kindle` -- light <thing> -- set a fuel source burning (the hearth cooks); light lamp / kindle lamp lights the tin lamp from a lit hearth.
 - `snuff` -- snuff <thing> -- put out a lit flame.
-- `plant` -- plant potato -- press a raw potato into the vegetable patch to grow it.
+- `plant` -- plant <potato|seed> -- press a raw potato into the vegetable patch, or set the seed you found in the ground by the fence.
 - `harvest` -- harvest -- lift a ripened crop from the patch for its potatoes.
 - `cook` / `broil` -- cook potato -- broil a potato at a lit cooking fire, making it edible.
 - `eat` -- eat <thing> -- eat cooked food to ease your hunger.
@@ -29,7 +29,7 @@
 - `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall.
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
-- `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a rare full-moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
+- `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a full or near-full moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
 - `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
 - `mark` -- mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back.
@@ -54,10 +54,13 @@
 - **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it is -- carried or set down -- warning inline as it runs low and again when it finally goes dark.
 - **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there -- venture/return included, since neither verb actually moves `actor.location` off this room), each turn has a small chance of turning up something underfoot: usually a curio, and a slice of that same chance a stray piece of wood instead, no `gather wood` required.
 - **wildlife_glimpse** -- Autonomous: while a hand is present, a small independent chance per tick of glimpsing something living and entirely unrelated to whatever the hand is doing -- see WILDLIFE_LINES/WILDLIFE_CHANCE above.
+- **seedfall** -- Autonomous: while nothing of the seed's arc is in play anywhere in the world -- no seed carried, shelved, or lying about, and no mystery plant growing or bloomed in the yard -- the forest's edge offers one to the next hand who stands here.
+- **blooming** -- Autonomous: a planted seed comes up on its own schedule and eventually opens.
 
 ## World rules (from the code's own constants)
 
 - A full day is **24 ticks**; night falls late in that cycle and is pitch dark without a lit flame. A fresh world starts at dawn, giving a full day's light before the first night falls.
+- The moon is a real clock, independent of anyone's visits: **7** nights out of every **29** show something at night instead of nothing (full, or near enough), offset so a fresh lineage reaches one within its first week rather than its first month.
 - The tin lamp is the only portable light, kindled from a lit hearth; the **hearth** is what cooks.
 - The lamp holds **32** fuel once kindled and warns when it drops to **8**; it can be re-kindled at any lit hearth, which tops it back to full.
 - The cat's hunger is capped at **24** and it can come to no harm -- it only ever wants feeding.
@@ -67,6 +70,7 @@
 - A found curio turns up **8%** of the time on any turn spent at the forest's edge (gathering wood included) -- a delight, never a guarantee.
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The hut's curio shelf holds up to **10** things at once -- personal and curated, unlike the forest-edge cairn, which is collective and never full.
+- A found seed turns up at the forest's edge whenever none is in play (carried, shelved, or growing) -- deterministic, not a roll. Planted in the yard, it takes **120 ticks** (longer than any one visit) to bloom into one of a handful of flowers, fixed the moment it's planted but hidden until it opens -- and water never speeds it up.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.
 

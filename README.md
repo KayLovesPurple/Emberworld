@@ -112,6 +112,18 @@ and the cairn belongs to the whole lineage, not to whoever placed a given
 stone. It only ever grows, one stone at a time, and growing tall takes
 many hands.
 
+**A seed, for later.** The forest's edge also turns up, now and then, a
+seed unlike anything else you've found — deterministic, not a roll: one
+is always waiting there whenever nothing of its kind is currently in
+play anywhere in the world, so there's never more than one loose thread
+of this at a time. Planted in the yard, it takes longer to bloom than any
+one visit lasts, so don't expect to be the one who sees it open — that's
+likely for whoever's around next, planter or stranger. What it becomes is
+fixed the moment you plant it, but hidden until it opens; no watering
+speeds it along, since the wait is the whole point. Once it opens, it's
+an ordinary curio like any other — carry it, give it to the cat, or set
+it on the shelf.
+
 **Calm, unpressured turns.** The forest's edge has its own `listen`: a
 chosen, unpressured turn that just returns a bit of atmosphere and changes
 nothing — no reward, ever, on purpose. The yard (and the forest's edge)
@@ -280,29 +292,42 @@ description. Agents feed every potato to the loud, legible cat and never cook fo
 themselves because their own hunger is silent. Make it visible and a hand will
 likely finally cook and eat — closing a loop it currently always skips.
 
-**A mystery seed — a bloom, not a crop** *(calm-axis, standalone — no dependency on
-the forest or anything else, ready whenever)*. The potato's whole arc is
-instrumental: grow it to eat it. This is its deliberate opposite. A "mystery
-seed" is a rare find, same shape as any other found curio (not bought, not
-guaranteed, something that turns up). Planting it doesn't touch the patch —
-that stays potato-only, protecting the one-crop-at-a-time rule — it's just
-its own entity, planted in the yard, with a grow timer and, on purpose, no
-watering and no way to speed it up. Time passes; it blooms when it blooms.
-The tending loop is deliberately absent, because the whole point is that
-this isn't instrumental — there's nothing to optimize toward.
+**A mystery seed — a bloom, not a crop** *(built — see "The rules, in
+brief" above for the short version)*. The potato's whole arc is
+instrumental: grow it to eat it. This is its deliberate opposite. Planting
+it doesn't touch the patch — that stays potato-only, protecting the
+one-crop-at-a-time rule — it's just its own entity, planted in the yard,
+with a grow timer and, on purpose, no watering and no way to speed it up.
+Time passes; it blooms when it blooms, on a schedule long enough (120
+ticks — about 5 world-days, roughly four visits) that the hand who planted
+it is reliably gone by the time it opens. The tending loop is deliberately
+absent, because the whole point is that this isn't instrumental — there's
+nothing to optimize toward. One divergence from the original idea, worth
+noting since it isn't obvious from playing: the seed's own supply turned
+out to want the opposite of a rare find. Gating a multi-visit wait behind
+a dice roll too would compound two long odds into something that mostly
+never happens, so it's deterministic instead — one always waits at the
+forest's edge whenever none is currently in play anywhere in the lineage.
 
-The interesting part: what it becomes is rolled and fixed the moment it's
-planted, but not revealed until it blooms. Until then the description stays
-vague on purpose — "something is coming up, its shape not yet clear" — so
-there's real anticipation, then a specific, described payoff (colour, shape,
-scent, composed the way a forest fragment is) at the end. Once bloomed, it
-can be picked like any curio and set on the shelf — reusing that system
-outright, no new mechanic needed — or left standing as garden decoration.
-Picking it doesn't feed anyone, cook, or sell; it exists to be pretty and
-yours to keep or leave. One growing at a time to start, mirroring the
-potato's own restraint — less because it competes with anything (it
-doesn't) and more for legibility: one anticipation arc per visit, not a
-flowerbed to manage.
+The interesting part: what it becomes is fixed the moment it's planted,
+but not revealed until it blooms. Until then the description stays vague
+on purpose — "something is coming up, its shape not yet clear" — so
+there's real anticipation, then a specific, described payoff at the end,
+drawn from a small fixed set of hand-written flowers rather than composed
+from pools the way a forest fragment is — this opens once every few
+visits and gets read closely when it does, so each one earning its own
+specific description mattered more than combinatorial variety would have.
+Once bloomed, it can be picked like any curio and set on the shelf —
+reusing that system outright, no new mechanic needed — or left standing
+as garden decoration. Picking it doesn't feed anyone, cook, or sell; it
+exists to be pretty and yours to keep or leave. One growing at a time,
+mirroring the potato's own restraint — less because it competes with
+anything (it doesn't) and more for legibility: one anticipation arc per
+lineage at a time, not a flowerbed to manage. A deferred follow-up: when a
+bloom is left standing and a new seed gets planted, the old one folding
+into a permanent, collective bed by the fence (the cairn's yard-side
+twin) instead of just vanishing — not built yet, on purpose, until a
+lineage has actually lived with the simpler version for a while.
 
 ### The wishing-statue — a wish-sink (built — FOREST_SPEC.md Stage 7)
 
