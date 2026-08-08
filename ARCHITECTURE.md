@@ -18,6 +18,12 @@ breaking, and the recipe for adding a feature safely.
   its verbs (feed/pet/name), and `build_cat`. Split out of content.py once it
   grew into a coherent slice on its own — see "Where to go next" below for why,
   and why it split before a registration pattern did.
+- `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
+  sound, undergrowth, smell), the ambient lines, and `describe_forest` /
+  `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
+  functions take an rng and return a string, which is exactly why this part
+  of the forest lifted out cleanly when the rest of it could not — see
+  "Where to go next".
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
   `load_or_build`, and the headless fuzzer. Imports content.py and cat.py.
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a

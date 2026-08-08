@@ -20,6 +20,10 @@ reads that note and harvests the crop.
   the world as assembled fresh.
 - `cat.py` — the cat as its own self-contained subsystem: its constants,
   behaviors, verbs, and how it's built into a fresh world.
+- `forest_text.py` — the forest's generated texture: the near/mid/deep
+  fragment pools and the ambient lines, plus the two small functions that
+  compose them. Pure writing, no world state; split out because it's the
+  largest block of prose in the game and gets edited as prose.
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
   the persistence-loading glue, and the headless fuzzer.
 - `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
