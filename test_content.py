@@ -36,7 +36,7 @@ from content import (
     WAIT_DARK_LINES, WAIT_DARK_HUT_LINES, WAIT_DARK_CAT_LINE, _wait_dark_lines,
     SEED_NAME, BLOOM_TICKS, BLOOM_SHOWING_AT, BLOOM_BUDDING_AT, BLOOM_BANDS,
     BLOOM_KINDS, _seed_in_world, _mystery_plant, _bloom_description,
-    JOURNAL_READ_LIMIT,
+    JOURNAL_READ_LIMIT, JOURNAL_OLDER_SHOWN, JOURNAL_GAP, journal_view,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -1349,19 +1349,63 @@ def test_seed_journal_has_no_sign_off_tic():
         f"day 1 should point at the lamp and kindling: {entries[0]!r}"
 
 
-def test_read_journal_shows_only_the_last_JOURNAL_READ_LIMIT_entries():
-    # zero-padded so no entry's marker is a substring of another's
-    # ("entry 1" would otherwise also match inside "entry 10")
+def _fill_journal(world, actor, texts):
+    """Fill the journal with known entries. Callers zero-pad their markers so
+    no entry's marker is a substring of another's ("entry 1" would otherwise
+    also match inside "entry 10")."""
+    for text in texts:
+        world.act(actor, f"write {text}")
+
+
+def test_read_journal_keeps_the_most_recent_entries():
     w, actor = fresh()
-    for i in range(JOURNAL_READ_LIMIT + 5):
-        w.act(actor, f"write entry {i:03d}")
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(JOURNAL_READ_LIMIT + 8)])
     entries = w.get("journal").attrs["entries"]
-    assert len(entries) == 1 + JOURNAL_READ_LIMIT + 5, "the full history must still be kept"
+    assert len(entries) == 1 + JOURNAL_READ_LIMIT + 8, "the full history must still be kept"
     result = w.act(actor, "read journal")
-    for i in range(5):        # the oldest, dropped-from-view entries
-        assert f"entry {i:03d}" not in result
-    for i in range(5, JOURNAL_READ_LIMIT + 5):    # the shown tail
-        assert f"entry {i:03d}" in result
+    recent = range(JOURNAL_READ_LIMIT + 8 - JOURNAL_READ_LIMIT, JOURNAL_READ_LIMIT + 8)
+    for i in recent:
+        assert f"entry {i:03d}" in result, "the recent tail must always be shown"
+
+
+def test_read_journal_reaches_further_back_than_the_recent_tail():
+    """THE REGRESSION THIS WHOLE POLICY EXISTS FOR. A plain tail means a run
+    of similar entries becomes the entire inherited memory: in real play, a
+    stretch where every hand wrote the same warning filled the whole view, so
+    each new hand read nothing but that warning and wrote another one. The
+    view must always reach past the tail into older history."""
+    w, actor = fresh()
+    _fill_journal(w, actor, [f"calm {i:03d}" for i in range(20)]
+                            + [f"panic {i:03d}" for i in range(10)])
+    result = w.act(actor, "read journal")
+    assert any(f"calm {i:03d}" in result for i in range(20)), \
+        "a run of recent entries must not be able to fill the entire view"
+
+
+def test_read_journal_always_keeps_the_seed_entry():
+    """The first entry is the one that orients someone with no memory --
+    it's the only place the lamp/hearth relationship is spelled out."""
+    w, actor = fresh()
+    seed = w.get("journal").attrs["entries"][0]
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(30)])
+    assert seed in w.act(actor, "read journal")
+
+
+def test_read_journal_marks_where_it_skipped():
+    """A hand should be able to tell it's reading an excerpt with gaps, not
+    a complete record -- otherwise the journal quietly lies about the past."""
+    w, actor = fresh()
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(30)])
+    assert "..." in w.act(actor, "read journal")
+
+
+def test_read_journal_is_stable_while_the_journal_is_unchanged():
+    """Reading twice must show the same thing -- the LLM driver tells a hand
+    the journal "won't change" once read, and a physical book doesn't
+    reshuffle which pages fall open."""
+    w, actor = fresh()
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(30)])
+    assert w.act(actor, "read journal") == w.act(actor, "read journal")
 
 
 def test_read_journal_shows_everything_when_within_the_limit():
@@ -1369,17 +1413,47 @@ def test_read_journal_shows_everything_when_within_the_limit():
     w.act(actor, "write a second entry")
     result = w.act(actor, "read journal")
     assert "entry" in result.lower()
+    assert "..." not in result, "nothing was skipped, so no gap marker"
     assert "of" not in result.split(":")[0], \
         "no truncation note should appear when nothing was actually cut"
 
 
 def test_read_journal_notes_how_much_was_cut():
     w, actor = fresh()
-    for i in range(JOURNAL_READ_LIMIT + 3):
-        w.act(actor, f"write entry {i}")
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(JOURNAL_READ_LIMIT + 8)])
     total = len(w.get("journal").attrs["entries"])
     result = w.act(actor, "read journal")
-    assert str(JOURNAL_READ_LIMIT) in result and str(total) in result
+    header = result.split("\n")[0]
+    assert str(total) in header, "the header should say how many entries there are in all"
+    assert str(total) != header.strip(), "and how many of them are being shown"
+
+
+def test_read_journal_all_shows_every_entry():
+    """The excerpt is the default, not a wall the archive hides behind --
+    the whole record stays one command away, and the header says so."""
+    w, actor = fresh()
+    _fill_journal(w, actor, [f"entry {i:03d}" for i in range(30)])
+    capped = w.act(actor, "read journal")
+    assert "read journal all" in capped, "the excerpt must name the way to the full record"
+    full = w.act(actor, "read journal all")
+    for i in range(30):
+        assert f"entry {i:03d}" in full
+    assert "..." not in full, "the full record has no gaps to mark"
+
+
+def test_journal_view_is_bounded_however_long_the_journal_gets():
+    """The whole point is that this never grows without bound. The count of
+    real entries shown is what's fixed; the number of gap markers varies,
+    since neighbouring picks need no gap between them."""
+    def written(view):
+        return [ln for ln in view if ln != JOURNAL_GAP]
+    short = journal_view([f"entry {i}" for i in range(12)])
+    long = journal_view([f"entry {i}" for i in range(400)])
+    assert len(written(long)) == len(written(short)) == \
+        1 + JOURNAL_OLDER_SHOWN + JOURNAL_READ_LIMIT, \
+        "seed + sampled older + the recent tail, however long the journal is"
+    assert len(long) <= 1 + JOURNAL_OLDER_SHOWN * 2 + JOURNAL_READ_LIMIT + 1, \
+        "bounded even counting every possible gap marker"
 
 
 # ===========================================================================

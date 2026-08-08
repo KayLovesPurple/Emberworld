@@ -124,6 +124,18 @@ speeds it along, since the wait is the whole point. Once it opens, it's
 an ordinary curio like any other — carry it, give it to the cat, or set
 it on the shelf.
 
+**The journal, and what you inherit of it.** `write <note>` adds a line for
+whoever comes next; `read journal` is free and shows a spread of the record
+rather than all of it — the first entry (the one that orients someone
+arriving with no memory), a few drawn from across everything since, and the
+most recent handful, with `...` marking the gaps. `read journal all` still
+shows every entry, and nothing is ever deleted. The spread matters more than
+the cap: showing only the most recent entries meant that when a run of
+visits all hit the same trouble, every arriving hand inherited nothing but
+that one warning and duly wrote another — the journal locked into a single
+register for a week of world-time. What a hand reads shapes how its whole
+visit goes, so no single stretch of the world's history gets to be all of it.
+
 **Calm, unpressured turns.** The forest's edge has its own `listen`: a
 chosen, unpressured turn that just returns a bit of atmosphere and changes
 nothing — no reward, ever, on purpose. The yard (and the forest's edge)

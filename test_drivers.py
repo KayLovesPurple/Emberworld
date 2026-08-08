@@ -902,17 +902,41 @@ def test_system_prompt_tells_hands_entries_are_already_dated_for_them():
     assert "sign" in prompt, "should tell hands they needn't sign entries themselves"
 
 
-def test_journal_excerpt_caps_length_but_keeps_seed_entry():
+def test_journal_excerpt_keeps_the_seed_the_tail_and_a_reach_further_back():
+    """The prompt's excerpt is capped for token cost, but WHICH entries it
+    keeps is content.journal_view's policy: never a plain tail, or a run of
+    similar recent entries becomes the whole of what a hand inherits."""
     entries = [f"[Day {i}] entry {i}" for i in range(1, 21)]   # 20 entries
     excerpt = drv._journal_excerpt(entries)
     assert entries[0] in excerpt, "seed entry got dropped"
     for e in entries[-5:]:
         assert e in excerpt, "recent entry missing from excerpt"
-    assert entries[10] not in excerpt, "middle entries should be capped, not shown"
+    older = [e for e in entries[1:-5] if e in excerpt]
+    assert older, "the excerpt must reach past the recent tail"
+    assert len(excerpt.splitlines()) < len(entries), "still an excerpt, not the lot"
 
     small = entries[:3]
     assert drv._journal_excerpt(small) == "\n".join(small), \
         "a short journal should pass through unchanged"
+
+
+def test_journal_excerpt_is_stable_for_an_unchanged_journal():
+    """The prompt tells a hand the journal "won't change" once read; the
+    excerpt has to actually hold still for that to be true."""
+    entries = [f"[Day {i}] entry {i}" for i in range(1, 41)]
+    assert drv._journal_excerpt(entries) == drv._journal_excerpt(entries)
+
+
+def test_system_prompt_does_not_ask_for_a_running_log():
+    """Hands were writing ~2.4 entries a visit -- a mid-visit status report
+    plus the closing note _leave_signoff already writes for them. The status
+    reports are the noise ("Shelf holds a jay's feather, two small brown
+    feathers..."), and they came from a prompt that read as an instruction
+    to log. One note, if there's something worth passing on."""
+    prompt = drv.LLM_SYSTEM_PROMPT.lower()
+    assert "journal" in prompt, "the journal must still be pointed at"
+    assert "one note is plenty" in prompt or "no need to log" in prompt, \
+        "should not read as an instruction to keep a running log"
 
 
 # ---------------------------------------------------------------------------

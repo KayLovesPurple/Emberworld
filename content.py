@@ -1122,11 +1122,64 @@ def cmd_write(world, actor, arg):
 # read turns a quick catch-up into an ever-longer wall of past visits. The
 # full history is never lost (still all in entries, and cmd_write always
 # appends to it); only what a single `read journal` shows is capped.
-JOURNAL_READ_LIMIT = 7
+JOURNAL_READ_LIMIT = 7        # the recent tail, always shown
+JOURNAL_OLDER_SHOWN = 3       # entries drawn from further back, so the tail
+                              # can never be the whole of a lineage's memory
+JOURNAL_GAP = "..."           # marks where the view skipped over entries
+
+
+def journal_view(entries, keep=JOURNAL_READ_LIMIT, older=JOURNAL_OLDER_SHOWN):
+    """Which entries a hand actually sees: the first (it's the one that
+    orients someone with no memory), then `older` drawn from across
+    everything in between, then the last `keep`. Gaps are marked with
+    JOURNAL_GAP so the view never pretends to be the whole record.
+
+    BUG WE HIT: this used to be a plain tail. In real play a stretch of
+    visits where every hand hit the same trouble wrote the same warning
+    over and over, and the tail meant an arriving hand inherited nothing
+    BUT those warnings -- so it wrote another one, and the journal locked
+    itself into a single register for a week of world-time. The journal is
+    the strongest thing in this world for setting how a visit feels, and a
+    pure-recency window hands that entirely to whatever the last few hands
+    happened to be going through. Reaching back across the whole history is
+    what stops any one stretch of it becoming all of it.
+
+    Deliberately deterministic -- spans, and the middle of each span, not a
+    random draw. Two reasons: a hand who reads twice must see the same
+    thing (the LLM driver's prompt tells it the journal "won't change" once
+    read), and a book doesn't reshuffle which pages fall open. The picks
+    still move as the journal grows, because the spans do.
+
+    Deliberately blind to what the entries SAY. Choosing them by content --
+    biasing away from whatever the recent ones are about -- would work, and
+    would quietly make us the editor of what the lineage remembers. Position
+    is ours to choose; meaning isn't."""
+    entries = list(entries)
+    if len(entries) <= keep + older:
+        return entries
+    tail = entries[-keep:]
+    middle = entries[1:-keep]
+    out, taken = [entries[0]], 0
+    span = len(middle) / older if older else 0
+    for i in range(older):
+        idx = min(int(i * span + span / 2), len(middle) - 1)
+        if idx < taken:                   # spans this short can collide
+            continue
+        if idx > taken:
+            out.append(JOURNAL_GAP)
+        out.append(middle[idx])
+        taken = idx + 1
+    if len(middle) > taken:
+        out.append(JOURNAL_GAP)
+    return out + tail
 
 
 def cmd_read(world, actor, arg):
-    """read journal -- read the journal (needs light unless you're holding it); shows only the most recent entries."""
+    """read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot."""
+    arg = (arg or "").strip()
+    show_all = arg.lower() == "all" or arg.lower().endswith(" all")
+    if show_all:
+        arg = arg[:-len("all")].strip()
     journal = find_visible(world, actor, arg or "journal")
     if not journal or "entries" not in journal.attrs:
         return "There's nothing written there."
@@ -1135,11 +1188,16 @@ def cmd_read(world, actor, arg):
     entries = journal.attrs["entries"]
     if not entries:
         return "The journal is blank, waiting for someone's first entry."
-    shown = entries[-JOURNAL_READ_LIMIT:]
+    if show_all:
+        return ("The journal reads, all of it:\n"
+                + "\n".join(f"  {ln}" for ln in entries))
+    shown = journal_view(entries)
     header = "The journal reads:"
-    if len(shown) < len(entries):
-        header = (f"The journal reads (last {JOURNAL_READ_LIMIT} of "
-                   f"{len(entries)} entries):")
+    written = [ln for ln in shown if ln != JOURNAL_GAP]
+    if len(written) < len(entries):
+        header = (f"The journal reads ({len(written)} of {len(entries)} "
+                   f"entries, spread across its whole run -- "
+                   f"`read journal all` for the rest):")
     return header + "\n" + "\n".join(f"  {ln}" for ln in shown)
 
 

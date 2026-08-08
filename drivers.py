@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
+from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, journal_view
 from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
@@ -298,19 +298,16 @@ def _extract_command(text):
     return lines[-1]
 
 
-def _journal_excerpt(entries, keep=5):
+def _journal_excerpt(entries, keep=5, older=2):
     # feeding the agent the WHOLE journal every turn grows the prompt without
-    # bound over many visits. Cap it to the last `keep` entries, but always
-    # keep the first (seed) entry -- it's the one that orients someone new.
+    # bound over many visits, so what's shown is capped. WHICH entries get
+    # shown is content.journal_view's business, shared with cmd_read -- see
+    # the long note there for why it isn't simply the most recent ones. Only
+    # the sizes differ: this one is smaller, because a prompt pays per token
+    # for every turn of the visit and a hand reading a book doesn't.
     if not entries:
         return ""
-    if len(entries) <= keep:
-        return "\n".join(entries)
-    tail = entries[-keep:]
-    first = entries[0]
-    if first in tail:
-        return "\n".join(tail)
-    return "\n".join([first, "...", *tail])
+    return "\n".join(journal_view(entries, keep=keep, older=older))
 
 
 # Substrings that mark a verb's result as a refusal or no-op rather than a
@@ -359,8 +356,11 @@ LLM_SYSTEM_PROMPT = (
     "who'll let you know if it's hungry -- and partly looking closely: "
     "this world holds more than any list of tasks, and unfamiliar objects, "
     "untried actions, and features of the landscape are worth "
-    "experimenting with. What you learn, leave in the journal for those "
-    "who follow -- entries are dated (and named, if you chose one) for you, "
+    "experimenting with. If you learn something worth passing on, leave it "
+    "in the journal for those who follow -- one note is plenty, and a "
+    "closing one gets written for you when you go, so there's no need to "
+    "log your progress as you work. Entries are dated (and named, if you "
+    "chose one) for you, "
     "so just write the note itself: no need to add a date or sign it. "
     "IMPORTANT: looking, reading, and checking inventory are "
     "FREE and do NOT pass time -- only actions like wait, go, plant, cook "
@@ -664,7 +664,11 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
             # remember the journal's contents the first time it's read this visit
             if choice.split()[:1] == ["read"] and "journal reads" in result:
                 jrnl = w.get("journal")
-                if jrnl is not None:
+                # only on the FIRST read: the prompt below tells the hand the
+                # journal "won't change", and re-deriving the excerpt after a
+                # mid-visit `write` would quietly shift which older entries
+                # are in view and make that a lie.
+                if jrnl is not None and journal_text is None:
                     journal_text = _journal_excerpt(jrnl.attrs.get("entries", []))
             # track what really happened, for a grounded sign-off later: active
             # verbs count unless refused; free look/read count only if they

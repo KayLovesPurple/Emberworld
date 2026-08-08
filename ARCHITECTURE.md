@@ -970,15 +970,22 @@ exists (each fixed a real failure we watched happen):
   back, so a fresh instance can see what it just did instead of repeating it.
 - **Journal memory, capped** (`_journal_excerpt`): once the agent reads the
   journal, its text stays pinned in every later prompt ("you've already read
-  it, it won't change"). Without this the agent re-read the journal ~15 times a
-  run — each fresh instance re-deciding to "understand its situation." But the
-  full journal grows without bound across many visits, so what's shown is
-  capped to the seed entry plus the last ~5. This is a *separate* cap from
-  `cmd_read`'s own `JOURNAL_READ_LIMIT` (content.py, 7) — that one shortens
-  what a live `read journal` call returns to any hand, human or LLM, for
-  the same "grows without bound" reason, but always shows a plain tail (no
-  seed-entry-plus-gap shape, since a human rereading isn't paying per-token
-  the way a prompt is) and is unrelated to prompt-building specifically.
+  it, it won't change") — and it's derived exactly once, on the first read, so
+  a mid-visit `write` can't shift it and make that sentence a lie. Without the
+  pinning the agent re-read the journal ~15 times a run — each fresh instance
+  re-deciding to "understand its situation."
+
+  *How much* is shown is capped here (~5 recent + ~2 older) and separately in
+  `cmd_read` (`JOURNAL_READ_LIMIT` 7 + `JOURNAL_OLDER_SHOWN` 3), because a
+  prompt pays per token every turn and a hand reading a book doesn't. *Which*
+  entries get shown is one shared policy, `content.journal_view` — see the
+  long note on it. Short version: never a plain tail. A tail means a run of
+  similar entries becomes the whole of what the next hand inherits, and we
+  watched that happen — a stretch of visits that all hit the same trouble
+  filled the window with the same warning, so each arriving hand read nothing
+  else and wrote another one. The journal is the strongest lever in the world
+  on how a visit *feels*; a pure-recency window hands that lever to whatever
+  the last few hands happened to be going through.
 - **Turns remaining**: shown every turn, so the agent spends a finite budget
   deliberately rather than squandering free actions.
 - **Stuck detection** (`_looks_stuck`): flags the same **free** verb repeated 3×
