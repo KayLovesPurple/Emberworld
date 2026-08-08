@@ -52,6 +52,10 @@ For `--llm` you need `pip install anthropic` and `export ANTHROPIC_API_KEY=...`.
 Add `--show-thoughts` to see *why* the agent chose each command (its thinking,
 printed dimmed above the command) — the best way to debug odd behaviour. Colours
 auto-disable when output isn't a terminal; `--no-color` forces them off.
+`--debug-thinking` is a separate, noisier flag on top of that: it prints the
+raw API response shape (block kinds, `stop_reason`, token usage) whenever a
+turn comes back with no reasoning summary -- worth it if you're chasing why
+thinking's gone quiet, too much to leave on for ordinary play.
 The agent uses **Claude Sonnet 5** by default (set by `LLM_MODEL` at the top of
 `drivers.py`); override per run with `--model`, e.g.
 `--llm --model claude-opus-4-8`. Sonnet 5 runs adaptive thinking on by default,

@@ -649,7 +649,8 @@ def _tending_note(world):
     return "\n(Right now: " + "; ".join(notes) + ".)"
 
 
-def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True):
+def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
+             debug_thinking=False, color=True):
     model = model or LLM_MODEL
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("No ANTHROPIC_API_KEY set. Export your key first:\n"
@@ -701,7 +702,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                 if can_think_aloud:
                     thoughts, reply = _ask_claude(client, system, prompt, model,
                                                   think, return_thinking=True,
-                                                  debug=show_thoughts)
+                                                  debug=debug_thinking)
                     if show_thoughts and thoughts:
                         block = "\n".join("    " + ln for ln in thoughts.splitlines())
                         print(_paint(block, "90", color))     # dim grey

@@ -1613,8 +1613,19 @@ CAIRN_GROWTH_CM = (2, 3, 4, 5)
 # tall takes many, many stones across many, many hands (stones are already
 # rare finds) -- that slowness is the point: nobody who adds one stone will
 # see it grow by much, only the lineage as a whole will.
+#
+# BUG WE HIT: band 0's text ("a good place to START a cairn") stayed up even
+# after real stones had been added -- CAIRN_GROWTH_CM tops out at 2-5cm per
+# stone, well under the old first threshold of 10cm, so two or three
+# genuinely successful `stack stone` calls in a row could all land under 10
+# and show the exact same "nobody's started yet" text, which is simply false
+# the moment height_cm > 0. Added a band at 1cm -- height_cm is always >= 2
+# after even one stone (CAIRN_GROWTH_CM's floor), so this band is guaranteed
+# to catch the very first stone and say something true, while the slow
+# climb to "ankle-high" and beyond is untouched.
 CAIRN_BANDS = (
     (0, "a flat stone set into the ground here -- a good place to start a cairn"),
+    (1, "a small pile of stones here -- maybe the start of a cairn"),
     (10, "the first few stones of a cairn, ankle-high"),
     (40, "a cairn, knee-high now"),
     (80, "a cairn, waist-high"),
@@ -1633,12 +1644,24 @@ def _cairn_description(height_cm):
 
 def ensure_cairn(world):
     """Add the forest-edge cairn to a world that predates it (fresh build or
-    an older save) -- same backfill role as ensure_shelf."""
+    an older save) -- same backfill role as ensure_shelf.
+
+    BUG WE HIT: a cairn's .description is a plain string, computed once by
+    cmd_stack_stone and then just stored -- CAIRN_BANDS changing (as it did
+    when the 1cm band was added) doesn't retroactively touch a description
+    already sitting in a save. A save loaded after that change kept showing
+    whatever text was current the last time a stone was actually stacked,
+    not what its real height_cm now maps to, until someone happened to add
+    another stone. Resyncing the description here, every load, means a
+    change to the bands (or this same kind of drift from anywhere else)
+    shows up the moment the world loads, not only on the next stack."""
     cairn = world.get(CAIRN_ID)
     if cairn is None:
         cairn = world.add(Entity(CAIRN_ID, "cairn", _cairn_description(0),
                                   location="forest_edge",
                                   attrs={"height_cm": 0}))
+    else:
+        cairn.description = _cairn_description(cairn.attrs["height_cm"])
     return cairn
 
 

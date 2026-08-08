@@ -58,6 +58,7 @@ if __name__ == "__main__":
                   model=_str_flag("--model", LLM_MODEL),
                   think="--no-think" not in sys.argv,
                   show_thoughts="--show-thoughts" in sys.argv,
+                  debug_thinking="--debug-thinking" in sys.argv,
                   color="--no-color" not in sys.argv)
     elif "--fuzz" in sys.argv:
         issues = fuzz_run(steps=_int_flag("--steps", 5000), seed=0, verbose=True)

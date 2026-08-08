@@ -2348,6 +2348,25 @@ def test_cairn_description_bands_match_height():
     assert _cairn_description(just_below) == CAIRN_BANDS[0][1]
 
 
+def test_any_stone_added_at_all_moves_the_cairn_off_its_unstarted_text():
+    """BUG WE HIT: band 0's text claims a cairn hasn't been started yet, but
+    stayed up even after real stones landed, since a single stone (2-5cm)
+    can't clear the old first threshold (10cm) alone. height_cm is always
+    at least CAIRN_GROWTH_CM's floor after one stone, so even the smallest
+    possible single stack must read as no-longer-band-0."""
+    assert _cairn_description(min(CAIRN_GROWTH_CM)) != CAIRN_BANDS[0][1]
+
+
+def test_stacking_a_single_stone_updates_the_cairns_description_immediately():
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    _give_stone(w, actor)
+    result = cmd_stack_stone(w, actor, "")
+    cairn = w.get(CAIRN_ID)
+    assert cairn.description != CAIRN_BANDS[0][1]
+    assert cairn.description in result
+
+
 def test_cairn_height_and_description_persist_through_save_load_roundtrip():
     """Unlike forest_depth/calm_visits, the cairn is lineage-scale: it must
     survive a reload, the opposite guarantee from the session-scoped state
@@ -2383,6 +2402,20 @@ def test_ensure_cairn_is_idempotent_and_does_not_reset_an_existing_cairns_height
     height = w.get(CAIRN_ID).attrs["height_cm"]
     ensure_cairn(w)
     assert w.get(CAIRN_ID).attrs["height_cm"] == height
+
+
+def test_ensure_cairn_resyncs_a_stale_description_to_the_current_bands():
+    """BUG WE HIT: a cairn's description is only recomputed by cmd_stack_stone
+    -- a save loaded after CAIRN_BANDS changed kept showing whatever text was
+    current at the last real stacking, not what the height actually maps to
+    now, until another stone happened to be added. ensure_cairn (called on
+    every load) must resync it instead of leaving stale text sitting there."""
+    w, actor = fresh()
+    cairn = w.get(CAIRN_ID) or ensure_cairn(w)
+    cairn.attrs["height_cm"] = 8
+    cairn.description = "some stale description from an old band definition"
+    ensure_cairn(w)
+    assert w.get(CAIRN_ID).description == _cairn_description(8)
 
 
 # ===========================================================================
