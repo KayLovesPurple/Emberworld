@@ -200,6 +200,46 @@ def test_existing_found_item_is_backfilled_with_its_cat_reaction_on_load():
         assert loaded.get("found_2").attrs.get("cat_reaction") == "ignores"
 
 
+def test_existing_stone_is_backfilled_with_the_cairn_hint_on_load():
+    """A stone found before the stone->cairn legibility fix has an old-style
+    description with no mention of the cairn; ensure_shelf backfills it in
+    place, the same move as the cat_reaction backfill just above, so a
+    lineage's already-found stones read the same as a freshly-found one
+    without needing a fresh world. A non-stone legacy curio must be left
+    untouched."""
+    with tempfile.TemporaryDirectory() as d:
+        save_path = os.path.join(d, "emberworld_save.json")
+        w, actor = fresh()
+        w.add(Entity("found_1", "a smooth grey stone",
+                     "river-worn, a pale band round its middle.",
+                     location=actor.id, portable=True))
+        w.add(Entity("found_2", "a pinecone",
+                     "tight and resinous, one scale broken — the cat might bat at it.",
+                     location=actor.id, portable=True))
+        with open(save_path, "w") as f:
+            json.dump(w.to_data(), f)
+        original = drv.SAVE
+        drv.SAVE = save_path
+        try:
+            loaded, _ = drv.load_or_build(quiet=True)
+        finally:
+            drv.SAVE = original
+        assert "cairn" in loaded.get("found_1").description.lower()
+        assert "cairn" not in loaded.get("found_2").description.lower()
+
+
+def test_backfilling_the_cairn_hint_is_idempotent():
+    from content import ensure_shelf
+    w, actor = fresh()
+    stone = w.add(Entity("found_1", "a smooth grey stone",
+                         "river-worn, a pale band round its middle.",
+                         location=actor.id, portable=True))
+    ensure_shelf(w)
+    once = stone.description
+    ensure_shelf(w)
+    assert stone.description == once, "a second backfill pass must not double the hint"
+
+
 def test_llm_session_log_is_named_for_the_hand_and_logs_the_model_in_its_header():
     """A visit gets its own Markdown record, named for the hand rather than
     the model -- with several hands visiting over time, the filename is how

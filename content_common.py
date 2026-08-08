@@ -8,11 +8,26 @@ can be expressed as pure functions on World/Entity.
 
 # Actor hunger rises 1/tick via content.py's hungering behavior; cap matches
 # that behavior so thresholds here cannot drift from the simulation.
-ACTOR_HUNGER_CAP = 20
+#
+# BUG WE HIT (see sessions/20260808-113503_*, once the hunger line went
+# live): a hand at or near the cap ate one cooked potato and was STILL
+# flagged "getting hungry" a turn later, because the old numbers (cap 20,
+# nag at 10, one meal worth 8 -- 40% of the cap) meant a single meal from
+# the cap only ever reached 12, still above the nag threshold. The hand
+# chased the note across three more cook-and-eat cycles in one 20-turn
+# visit. Doubling the cap alone would have reproduced the exact same
+# problem at a different scale (the nag-to-cap RATIO is what matters, not
+# the absolute numbers) -- so alongside doubling the cap and its bands
+# (same proportions as before: nag at 50%, ravenous at 80%), `cmd_cook`'s
+# food value went from 40% of the old cap to 75% of the new one, so one
+# meal clears the nag with real margin, from anywhere, in one bite. See
+# test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note, which
+# pins the relationship directly rather than any one constant alone.
+ACTOR_HUNGER_CAP = 40
 # Bands shared by inventory, look, and the LLM tending note (drivers.py).
-ACTOR_HUNGER_STUFFED = 3
-ACTOR_HUNGER_FINE = 10
-ACTOR_HUNGER_HUNGRY = 16
+ACTOR_HUNGER_STUFFED = 6
+ACTOR_HUNGER_FINE = 20
+ACTOR_HUNGER_HUNGRY = 32
 
 
 def actor_hunger_mood(hunger):

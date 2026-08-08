@@ -118,7 +118,8 @@ just full). A found stone has one more option, instead of the shelf:
 growing at the forest's edge — unlike the shelf, nobody can take it back,
 and the cairn belongs to the whole lineage, not to whoever placed a given
 stone. It only ever grows, one stone at a time, and growing tall takes
-many hands.
+many hands. A found stone says so itself, wherever you look at it, so the
+option travels with the stone instead of waiting to be remembered.
 
 **A seed, for later.** The forest's edge also turns up, now and then, a
 seed unlike anything else you've found — deterministic, not a roll: one

@@ -474,6 +474,66 @@ def test_found_item_look_line_ends_with_a_cat_hint_only_when_cat_eligible():
     assert ignores_line == "river-worn, a pale band round its middle."
 
 
+# ===========================================================================
+# STONE -> CAIRN LEGIBILITY -- `stack stone on cairn` has worked since Stage
+# 7, but the cairn was only ever mentioned in the forest-edge room text, a
+# cue a hand loses the moment they carry a stone anywhere else. Across a
+# long lineage, the shelf filled with duplicate stones and the cairn barely
+# grew. Fix: the cue travels with the stone itself, the same way the shelf
+# always describes its own held-capacity regardless of where a hand stands
+# -- named directly (a real mechanic, not lore), every time, no fatigue
+# gating. Found stones only; no other curio has a cairn-equivalent yet.
+# ===========================================================================
+def test_stone_description_mentions_the_cairn():
+    stone_name, look_line, reaction = next(
+        t for t in FOUND_ITEMS if t[0] == "a smooth grey stone")
+    desc = _found_description(look_line, reaction, stone_name)
+    assert "cairn" in desc.lower()
+    assert "forest's edge" in desc.lower()
+
+
+def test_non_stone_found_item_descriptions_do_not_mention_the_cairn():
+    for name, look_line, reaction in FOUND_ITEMS:
+        if "stone" in name.lower():
+            continue
+        desc = _found_description(look_line, reaction, name)
+        assert "cairn" not in desc.lower(), f"{name!r} wrongly mentions the cairn: {desc!r}"
+
+
+def test_found_description_omits_the_cairn_hint_when_no_name_is_given():
+    """Existing call sites that don't pass a name (or pass one with no
+    "stone" in it) must see the exact same text as before this feature --
+    the two other tests above pin the wired-in cases directly."""
+    assert _found_description("river-worn, a pale band round its middle", "ignores") \
+        == "river-worn, a pale band round its middle."
+
+
+def test_a_found_stone_from_the_forest_names_the_cairn_on_look():
+    class Lucky:
+        def random(self): return 0.0
+        def choice(self, seq):
+            return next(t for t in seq if t[0] == "a smooth grey stone") \
+                if seq is FOUND_ITEMS else seq[0]
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    w.rng = Lucky()
+    w.act(actor, "gather wood")
+    stone = next(e for e in w.contents(actor.id) if e.name == "a smooth grey stone")
+    assert "cairn" in stone.description.lower()
+    assert "cairn" in w.act(actor, f"look {stone.name}").lower()
+
+
+def test_a_bloomed_flower_never_mentions_the_cairn():
+    """_found_description is reused to build a bloomed flower's description
+    (see `blooming`) -- none of BLOOM_KINDS names a stone, and the cairn
+    hint must never leak onto a flower just because both paths share a
+    helper."""
+    from content import BLOOM_KINDS
+    for name, look, reaction in BLOOM_KINDS:
+        assert "cairn" not in _found_description(look, reaction, name).lower()
+
+
 def test_gather_wood_found_item_is_rare_not_guaranteed():
     w, actor = fresh()
     w.rng = _Unlucky()
@@ -3121,6 +3181,26 @@ def test_inventory_and_look_report_the_same_hunger_mood():
     inv = w.act(actor, "inventory")
     look = w.act(actor, "look")
     assert "You feel hungry." in inv and "You feel hungry." in look
+
+
+# BUG WE HIT (real lineage transcript, see sessions/20260808-113503_*): once
+# the hunger line above went live, a hand arriving at (or near) the cap ate
+# a single cooked potato and was STILL told "you're getting hungry" a turn
+# or two later -- the meal (food=8) didn't drop hunger below the nag
+# threshold (ACTOR_HUNGER_FINE=10), so the now-visible note kept firing and
+# the hand cooked and ate three more times chasing it. The relationship
+# between the cap, the nag threshold, and one meal's restore is what
+# matters, not any single constant in isolation -- pin it directly so a
+# future tweak to any one of them can't silently reintroduce the chase.
+def test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note():
+    from content_common import ACTOR_HUNGER_CAP, ACTOR_HUNGER_FINE, actor_self_care_note
+    w, actor = fresh()
+    run(w, actor, "go out", "take potato", "go in", "light hearth", "cook potato")
+    actor.attrs["hunger"] = ACTOR_HUNGER_CAP
+    w.act(actor, "eat broiled potato")
+    assert actor.attrs["hunger"] < ACTOR_HUNGER_FINE, \
+        f"one meal from the cap left hunger at {actor.attrs['hunger']}, still >= the nag threshold"
+    assert actor_self_care_note(actor) == "", "the note should be fully clear after one meal from the cap"
 
 
 # ===========================================================================

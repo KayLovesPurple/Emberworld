@@ -64,7 +64,7 @@
 - The tin lamp is the only portable light, kindled from a lit hearth; the **hearth** is what cooks.
 - The lamp holds **32** fuel once kindled and warns when it drops to **8**; it can be re-kindled at any lit hearth, which tops it back to full.
 - The cat's hunger is capped at **24** and it can come to no harm -- it only ever wants feeding.
-- Your own hunger is capped at **20** and comes to no harm either -- but unlike the cat's, it says nothing on its own until you `look` or check `inventory`. Both surface the same mood, from "stuffed" up to "ravenous" at **16**.
+- Your own hunger is capped at **40** and comes to no harm either -- but unlike the cat's, it says nothing on its own until you `look` or check `inventory`. Both surface the same mood, from "stuffed" up to "ravenous" at **32**.
 - The cat stays content (and may do small idle things) below hunger **24**; at or above it, it starts meowing to be fed.
 - A full bucket holds **5** units of water; each unit spent doubles a crop's growth for that one tick.
 - Gathering wood yields **3**; feeding one unit into the hearth restores **60** fuel -- a full night's burn, and enough to revive a spent hearth.

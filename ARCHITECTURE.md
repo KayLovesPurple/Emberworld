@@ -478,6 +478,28 @@ cairn's height. `available_actions` only offers `"stack stone on cairn"`
 when the hand is at `forest_edge` *and* actually carrying something
 stone-named, the same legibility rule `give`/`place` already follow.
 
+**Stone → cairn legibility fix.** `stack stone on cairn` worked from Stage
+7 on, but for a long stretch the cairn was only ever *named* in the
+forest-edge room text — a cue a hand loses the moment they carry a stone
+anywhere else. Observed in play: the shelf filled with duplicate stones
+(10/10, several of them stones) while the cairn barely grew, and across a
+long lineage only one hand had ever used it. Same family as `name cat`'s
+fix and the shelf's own `_shelf_description`: an affordance that already
+works but wasn't legible at the moment a hand could act on it. The cue now
+rides on the stone itself rather than the room — `_found_description`
+takes an optional `name` and appends `STONE_CAIRN_HINT` ("it could go on
+the cairn at the forest's edge") whenever `"stone" in name.lower()`, the
+same substring check `cmd_stack_stone` already uses. It fires every time
+the description is shown — no fatigue, no first-sighting-only gating,
+consistent with the shelf always stating its own capacity regardless of
+who's asking or how many times. `ensure_shelf` backfills the hint onto any
+already-found stone from an older save, the same move as its existing
+`cat_reaction` backfill just above. Scope stayed narrow on purpose: found
+stones are the only curio with a cairn-shaped second fate, so this doesn't
+touch the room description, `cmd_stack_stone`'s own behavior, or nudge the
+shelf itself — worth watching whether the stone's own description is
+enough before adding a second nudge elsewhere.
+
 ## The forest, staged — Stage 3: episodic reset, made explicit
 
 Stage 1 already made `forest_depth` a plain runtime attribute, never written
@@ -990,13 +1012,40 @@ for the same hunger value; `drivers.py`'s `_tending_note` calls
 a hand's own hunger competes on equal footing with the world's asks instead
 of losing to them by default.
 
-**Deliberately not done:** no new verb, no buff, no change to how hunger
-rises or is eased (`hungering`/`cmd_eat` untouched, just now reading
-`ACTOR_HUNGER_CAP` instead of a bare `20`) — this is a visibility fix, not
-a mechanics change. The three call sites are checked against each other
-directly (`test_inventory_and_look_report_the_same_hunger_mood`) rather
-than each pinned to a hardcoded string, so the bands can move without three
-separate edits falling out of sync.
+**Deliberately not done, in this first pass:** no new verb, no buff — the
+legibility fix itself never touched `hungering`/`cmd_eat`, just made an
+existing value visible in more places. The three call sites are checked
+against each other directly
+(`test_inventory_and_look_report_the_same_hunger_mood`) rather than each
+pinned to a hardcoded string, so the bands can move without three separate
+edits falling out of sync. (The numbers themselves *did* move shortly
+after, once legibility exposed a problem with them — see immediately
+below.)
+
+**The retune, one real session later.** Making hunger visible surfaced a
+second problem it didn't create: [Thistle's transcript](sessions/20260808-113503_thistle_day-25_20-turns.md)
+shows a hand arriving near the cap, eating once, and being told
+"you're getting hungry" a turn later anyway — the old numbers (cap 20, nag
+at 10, one meal worth 8, i.e. 40% of the cap) meant a single meal from the
+cap only ever reached 12, still above the nag threshold. The hand chased
+the note across three more cook-and-eat cycles in one 20-turn visit,
+burning potatoes and turns on a signal one meal should have resolved. This
+had always been true of the numbers; it just took the note actually
+firing somewhere a hand would see it (`look`, the tending note) for the
+mismatch to matter.
+
+The fix is a ratio fix, not just a bump: doubling `ACTOR_HUNGER_CAP` (20 →
+40) and its bands in step (same proportions — nag at 50% of cap, ravenous
+at 80%) would have reproduced the identical problem at a new scale, since
+what actually matters is food-value-as-a-fraction-of-cap, not any
+constant in isolation. `cmd_cook`'s `POTATO_FOOD_VALUE` went from 40% of
+the old cap to 75% of the new one, so one meal now clears the nag with
+real margin from anywhere, including straight off the cap.
+`test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note` pins
+the relationship itself (post-meal hunger must land below the nag
+threshold), not any single number, so a future edit to the cap or the
+food value in isolation fails loudly instead of quietly reintroducing the
+chase.
 
 ## What keeps it from breaking
 

@@ -246,7 +246,7 @@ def forest_finds(world, room):
         return
     name, look_line, reaction = world.rng.choice(FOUND_ITEMS)
     world.add(Entity(world.fresh_id("found"), name,
-                      _found_description(look_line, reaction),
+                      _found_description(look_line, reaction, name),
                       location=actor.id, portable=True,
                       attrs={"curio": True, "cat_reaction": reaction}))
     world.announce(f"Half-buried by the path, {name} — you pocket it.",
@@ -861,13 +861,30 @@ FOUND_ITEMS = (
 )
 
 
-def _found_description(look_line, reaction):
+# `stack stone on cairn` has worked since Stage 7, but the cairn was only
+# ever named in the forest-edge room text -- a cue a hand loses the moment
+# they carry a stone anywhere else. Observed in play: the shelf filled with
+# duplicate stones while the cairn barely grew. The fix is to put the cue on
+# the stone itself, the same way the shelf always describes its own held
+# capacity regardless of where a hand stands -- see ARCHITECTURE.md's
+# "Stone -> cairn legibility" note. Named directly: unlike the statue, the
+# cairn is a real mechanic, so there's no reason to euphemize it.
+STONE_CAIRN_HINT = "it could go on the cairn at the forest's edge"
+
+
+def _found_description(look_line, reaction, name=""):
     """Assemble a curio's full description from its bare look_line -- adding
-    the cat hint only for a cat_reaction of "plays", since only those finds
-    are worth a cat's attention."""
+    the cat hint only for a cat_reaction of "plays" (only those finds are
+    worth a cat's attention), and the cairn hint for anything named a stone
+    (only found stones have one, and no other curio has a cairn-equivalent
+    yet). `name` defaults to "" so existing call sites that never mention a
+    stone see byte-identical output to before this hint existed."""
+    text = look_line
     if reaction == "plays":
-        return f"{look_line} — the cat might bat at it."
-    return f"{look_line}."
+        text += " — the cat might bat at it"
+    if "stone" in name.lower():
+        text += f" — {STONE_CAIRN_HINT}"
+    return text + "."
 
 
 # ---------------------------------------------------------------------------
@@ -1038,6 +1055,14 @@ def cmd_add_wood(world, actor, arg):
     return "You stack wood in the cold hearth, ready for a light."
 
 
+# 75% of ACTOR_HUNGER_CAP (content_common.py), not the 40% it used to be --
+# see that constant's own comment for the "one meal from the cap still
+# left the nag firing" bug this fixes. Keep the two numbers read together;
+# raising the cap without raising this in step reproduces the same bug at
+# a different scale.
+POTATO_FOOD_VALUE = 30
+
+
 def cmd_cook(world, actor, arg):
     """cook potato -- broil a potato at a lit cooking fire, making it edible."""
     e = find_visible(world, actor, arg or "potato", prefer=_is_raw)
@@ -1051,7 +1076,7 @@ def cmd_cook(world, actor, arg):
         return "You need a lit cooking fire. The hearth, if you light it."
     e.name = "broiled potato"
     e.description = "a hot broiled potato, skin blistered and steaming"
-    e.attrs["food"] = 8
+    e.attrs["food"] = POTATO_FOOD_VALUE
     return ("You bury the potato in the embers. Soon it's blistered and steaming."
             + _last_potato_beat(world, actor, consumed_was_raw=True))
 
@@ -1922,6 +1947,15 @@ def ensure_shelf(world):
             # give to work, so it defaults to "ignores" rather than crashing.
             entity.attrs.setdefault(
                 "cat_reaction", _FOUND_ITEM_REACTIONS.get(entity.name, "ignores"))
+            # A stone found before the stone->cairn legibility fix has an
+            # old-style description with no mention of the cairn -- append
+            # it in place so an already-found stone reads the same as a
+            # freshly-found one. Guarded by the substring check itself, so
+            # a second backfill pass (or a stone found after the fix, whose
+            # description already has the hint baked in) is a no-op.
+            if "stone" in entity.name.lower() and STONE_CAIRN_HINT not in entity.description:
+                entity.description = entity.description.rstrip(".") \
+                    + f" — {STONE_CAIRN_HINT}."
     shelf = world.get("shelf")
     if shelf is None:
         shelf = world.add(Entity("shelf", "shelf",
