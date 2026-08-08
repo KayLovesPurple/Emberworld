@@ -156,9 +156,14 @@ BEHAVIORS.update({"cat_wander": cat_wander, "cat_hunger": cat_hunger,
                    "cat_idle": cat_idle, "cat_replay": cat_replay})
 
 
+_FEED_HEARTH = {"hearth", "the hearth", "fire", "the fire"}
+
+
 def cmd_feed(world, actor, arg):
-    """feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you)."""
-    from content import _is_raw, _last_potato_beat   # deferred to dodge a cat<->content cycle
+    """feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it)."""
+    from content import _is_raw, _last_potato_beat, cmd_add_wood   # deferred to dodge a cat<->content cycle
+    if arg.strip().lower() in _FEED_HEARTH:
+        return cmd_add_wood(world, actor, "")
     cat = world.get("cat")
     if cat is None or cat.location != actor.location:
         return "There's no cat here to feed."

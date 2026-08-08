@@ -234,7 +234,11 @@ class World:
         if room.id in ("yard", "forest_edge") and (
                 self.phase() != "night" or _moon_view(self) is not None):
             acts.append("watch clouds")
-        if find_visible(self, actor, "hearth") and actor.attrs.get("wood", 0) > 0:
+        if find_visible(self, actor, "hearth"):
+            # offered even with no wood carried -- the refusal ("it comes
+            # from the forest's edge") is how a hand learns the one causal
+            # chain it needs before it needs it, so this is the one place
+            # the "only offer what can do something" rule is wrong to apply.
             acts.append("add wood")
         for e in carried:
             acts.append(f"drop {e.name}")

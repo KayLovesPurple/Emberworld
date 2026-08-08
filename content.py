@@ -110,16 +110,29 @@ HEARTH_LOW_FUEL = HEARTH_FUEL_START // 4    # below this, it reads as dying
 
 
 def hearth_state(world, hearth):
-    """Autonomous: while lit, the hearth's description shows whether it's
-    dying low on fuel or burning steady, so a hand can see it needs wood
-    before it goes dark, not just be told after the fact."""
-    if not hearth.attrs.get("lit"):
-        return          # burning() already owns the unlit/spent description
-    if hearth.attrs.get("fuel", 0) <= HEARTH_LOW_FUEL:
-        hearth.description = "the hearth, embers dying low -- it wants more wood"
+    """Autonomous: the hearth's description bands by fuel level whether lit
+    or not -- a cold hearth used to say nothing about how much fuel it was
+    holding, so a hand couldn't tell "unlit but stocked" from "unlit and
+    empty" without trying to light it and failing. Banded the same way a lit
+    hearth already shows dying-low vs steady, so the standing perception
+    carries the fact before it's needed."""
+    fuel = hearth.attrs.get("fuel", 0)
+    if hearth.attrs.get("lit"):
+        if fuel <= HEARTH_LOW_FUEL:
+            hearth.description = "the hearth, embers dying low -- it wants more wood"
+        else:
+            hearth.description = hearth.attrs.get(
+                "lit_desc", "the hearth, full of red embers and low flame")
+        return
+    if fuel <= 0:
+        hearth.description = hearth.attrs.get(
+            "spent_desc", "the hearth, burnt out")
+    elif fuel <= HEARTH_LOW_FUEL:
+        hearth.description = ("a cold hearth, only a little wood laid in -- "
+                               "feed it more before lighting")
     else:
         hearth.description = hearth.attrs.get(
-            "lit_desc", "the hearth, full of red embers and low flame")
+            "unlit_desc", "a cold stone hearth, ash and a few charred sticks")
 
 
 def hungering(world, actor):
@@ -580,8 +593,15 @@ def _shelf_description(world, shelf):
             + ", ".join(e.name for e in items))
 
 
+_PUT_WOOD_IN_HEARTH = {
+    "wood in hearth", "wood in the hearth", "wood on hearth", "wood on the hearth",
+}
+
+
 def cmd_place(world, actor, arg):
-    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once)."""
+    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it)."""
+    if arg.lower().strip() in _PUT_WOOD_IN_HEARTH:
+        return cmd_add_wood(world, actor, "")
     shelf = next((e for e in world.contents(actor.location)
                   if e.attrs.get("display_surface")), None)
     if not shelf:
@@ -1017,17 +1037,16 @@ def cmd_gather(world, actor, arg):
 
 
 def cmd_add_wood(world, actor, arg):
-    """add wood -- feed carried firewood into the hearth, raising its fuel."""
+    """add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from)."""
     hearth = find_visible(world, actor, "hearth")
     if not hearth:
         return "There's no hearth here to feed."
     if actor.attrs.get("wood", 0) <= 0:
-        return "You've no wood to add. Gather some in the yard first."
+        return "You've no wood. It comes from the forest's edge."
     actor.attrs["wood"] -= 1
     hearth.attrs["fuel"] = hearth.attrs.get("fuel", 0) + FUEL_PER_WOOD
     if hearth.attrs.get("lit"):
         return "You feed wood into the fire. It catches and burns brighter."
-    hearth.description = "a stone hearth, freshly stacked with wood, ready for a light"
     return "You stack wood in the cold hearth, ready for a light."
 
 

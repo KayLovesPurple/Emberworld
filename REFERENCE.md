@@ -4,7 +4,7 @@
 
 ## Verbs
 
-- `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you).
+- `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
 - `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 - `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions".  _(free -- costs no time)_
@@ -25,7 +25,7 @@
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
-- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once).
+- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
 - `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall.
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
@@ -34,7 +34,7 @@
 - `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
 - `mark` -- mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back.
 - `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
-- `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel.
+- `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from).
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 
 ## Autonomous behaviors
@@ -49,7 +49,7 @@
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it, including whether it was just watered.
 - **patch_volunteer** -- Autonomous: if the patch stays continuously empty for PATCH_VOLUNTEER_TURNS turns, one volunteer potato plant sprouts on its own -- deterministic, self-healing ground so a lineage can never be permanently seedless.
 - **bucket_state** -- Autonomous: the bucket describes itself by how much water it's holding.
-- **hearth_state** -- Autonomous: while lit, the hearth's description shows whether it's dying low on fuel or burning steady, so a hand can see it needs wood before it goes dark, not just be told after the fact.
+- **hearth_state** -- Autonomous: the hearth's description bands by fuel level whether lit or not -- a cold hearth used to say nothing about how much fuel it was holding, so a hand couldn't tell "unlit but stocked" from "unlit and empty" without trying to light it and failing.
 - **hungering** -- Autonomous: the actor slowly gets hungrier over time (capped, harmless).
 - **lamp_burning** -- Autonomous: a lit tin lamp burns down one fuel per tick, wherever it is -- carried or set down -- warning inline as it runs low and again when it finally goes dark.
 - **forest_finds** -- Autonomous: while a hand lingers at the forest's edge (arriving, or spending any later turn there -- venture/return included, since neither verb actually moves `actor.location` off this room), each turn has a small chance of turning up something underfoot: usually a curio, and a slice of that same chance a stray piece of wood instead, no `gather wood` required.
