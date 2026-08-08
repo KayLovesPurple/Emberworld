@@ -31,6 +31,11 @@ PHASE_MSG = {
 VERBS = {}          # verb name -> handler fn(world, actor, arg)
 FREE_VERBS = set()  # verb names that don't advance time
 BEHAVIORS = {}       # behavior name -> fn(world, entity), run each tick
+ACTION_SOURCES = []  # fn(world, actor) -> the actions it can offer right now.
+                     # A list, not a dict, because the ORDER a hand reads the
+                     # actions in is part of the surface -- so content.py
+                     # registers them all at one site, in one deliberate
+                     # order, rather than leaving it to import order.
 
 
 class IncompatibleSaveError(Exception):
@@ -193,94 +198,24 @@ class World:
         return VERBS["look"](self, actor, "")
 
     def available_actions(self, actor):
-        # deferred: these two helpers are Emberworld-specific (they know about
-        # "patch" and "crop" by id), so they live in content.py -- which
-        # imports World/Entity from here, making a module-level import back
-        # into content.py circular. Importing inside the function, once it's
-        # actually called (after both modules have finished loading), avoids that.
-        from content import _crop_in, _patch_in, find_visible, _moon_view, SHELF_CAPACITY, _statue_reachable, _room_here, _mystery_plant
-        acts = ["look", "actions", "wait"]
-        room = self.get(actor.location)
-        for d in room.exits:
-            acts.append(f"go {d}")
-        here = _room_here(self, actor, room)
-        carried = self.contents(actor.id)
-        for e in here:
-            if e.id == actor.id:
-                continue
-            acts.append(f"look {e.name}")
-            if e.portable:
-                acts.append(f"take {e.name}")
-        crop = _crop_in(self, room.id)
-        if crop and crop.attrs.get("ready"):
-            acts.append("harvest")
-        if find_visible(self, actor, "well"):
-            acts.append("draw water")
-        bucket = find_visible(self, actor, "bucket")
-        if crop and not crop.attrs.get("ready") and bucket and bucket.attrs.get("water", 0) > 0:
-            acts.append("water crop")
-        if room.id == "forest_edge":
-            acts.append("gather wood")
-            acts.append("listen")
-            acts.append("venture")
-            if self.forest_depth > 0:
-                acts.append("return")
-                if self.forest_depth > self.forest_mark_depth:
-                    acts.append("mark trail")
-            if self.forest_depth == 0 and any("stone" in e.name.lower() for e in carried):
-                acts.append("stack stone on cairn")
-            if _statue_reachable(self, actor):
-                acts.append("wish <something>")
-        if room.id in ("yard", "forest_edge") and (
-                self.phase() != "night" or _moon_view(self) is not None):
-            acts.append("watch clouds")
-        if find_visible(self, actor, "hearth"):
-            # offered even with no wood carried -- the refusal ("it comes
-            # from the forest's edge") is how a hand learns the one causal
-            # chain it needs before it needs it, so this is the one place
-            # the "only offer what can do something" rule is wrong to apply.
-            acts.append("add wood")
-        for e in carried:
-            acts.append(f"drop {e.name}")
-        shelf = next((e for e in here if e.attrs.get("display_surface")), None)
-        if shelf:
-            if len(self.contents(shelf.id)) < SHELF_CAPACITY:
-                for e in carried:
-                    acts.append(f"place {e.name} on shelf")
-            for e in self.contents(shelf.id):
-                acts.append(f"take {e.name}")
-        for e in here + carried:
-            if "lit" in e.attrs:
-                acts.append(("snuff " if e.attrs["lit"] else "light ") + e.name)
-                if e.id == "lamp" and e.attrs["lit"]:
-                    # topping up an already-lit lamp before a night is a
-                    # deliberate feature -- it must stay a listed option, not
-                    # just something reachable by an unlisted command.
-                    acts.append(f"light {e.name}")
-            if e.attrs.get("food", 0) > 0:
-                acts.append(f"eat {e.name}")
-        # contextual crafting verbs
-        if any("potato" in e.name and e.attrs.get("food", 0) == 0 for e in carried):
-            if _patch_in(self, room.id) and not crop:
-                acts.append("plant potato")
-            if any(f.attrs.get("cooks") and f.attrs.get("lit") for f in here):
-                acts.append("cook potato")
-        if room.id == "yard" and any(e.attrs.get("seed") for e in carried) \
-                and _mystery_plant(self) is None:
-            acts.append("plant seed")
-        if any(e.id == "journal" for e in here + carried):
-            acts.append("read journal")
-            acts.append("write <your note>")
-        cat = self.get("cat")
-        if cat is not None and cat.location == room.id:
-            acts.append(f"pet {cat.name}")
-            if any("potato" in e.name for e in carried):
-                acts.append(f"feed {cat.name}")
-            for e in carried:
-                if e.attrs.get("curio"):
-                    acts.append(f"give {e.name} to {cat.name}")
-            if not cat.attrs.get("given_name"):
-                acts.append("name cat <name>")
+        """Every command that can do something here, right now -- the shared
+        surface a human reads off `actions` and an LLM picks from.
+
+        WHICH actions those are is entirely Emberworld's business, not the
+        engine's: it turns on hearths, potatoes, cats and how deep into the
+        forest someone has wandered, none of which this module knows about.
+        So the list is assembled from ACTION_SOURCES, filled by content.py
+        the same way it fills VERBS and BEHAVIORS -- which is what lets the
+        promise at the top of this file stay true.
+
+        (It didn't used to. This method was 89 lines of hardcoded "yard",
+        "forest_edge", "potato", "lamp", "journal", "cat" -- the single
+        reason this module needed a deferred import back into content.py to
+        dodge a circular import, and the single thing every new feature
+        anywhere had to come here to edit.)"""
+        acts = []
+        for source in ACTION_SOURCES:
+            acts.extend(source(self, actor))
         return acts
 
     def act(self, actor, command):

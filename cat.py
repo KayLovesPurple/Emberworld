@@ -209,6 +209,31 @@ VERBS.update({
 })
 
 
+def cat_actions(world, actor):
+    """What the cat offers a hand sharing its room -- petting, feeding it a
+    carried potato, handing it a curio, and naming it if it hasn't been
+    named yet.
+
+    Lives here rather than in the engine's action list for the same reason
+    the cat's verbs and behaviors do: this file is meant to be the whole
+    cat, and "what you can do with the cat" is as much the cat as "what
+    happens when you do it". Registered into ACTION_SOURCES by content.py,
+    which owns the order the whole list is read in."""
+    cat = world.get("cat")
+    if cat is None or cat.location != actor.location:
+        return []
+    acts = [f"pet {cat.name}"]
+    carried = world.contents(actor.id)
+    if any("potato" in e.name for e in carried):
+        acts.append(f"feed {cat.name}")
+    for e in carried:
+        if e.attrs.get("curio"):
+            acts.append(f"give {e.name} to {cat.name}")
+    if not cat.attrs.get("given_name"):
+        acts.append("name cat <name>")
+    return acts
+
+
 def build_cat(world):
     """Add the cat to a freshly-assembled world, in the hut, with its four
     autonomous behaviors attached."""

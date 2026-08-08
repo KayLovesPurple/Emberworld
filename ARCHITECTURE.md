@@ -26,16 +26,30 @@ breaking, and the recipe for adding a feature safely.
   test suite, split to match, sharing a couple of helpers via
   `_test_helpers.py`.
 
-world.py and content.py have a real mutual dependency: content.py needs
-`World`/`Entity` to build things, and world.py's `available_actions` needs a
-couple of content-specific helpers (`_crop_in`/`_patch_in`) to know what's
-contextually available. Importing content.py at module level from world.py
-would be circular (content.py imports world.py for `World`/`Entity` at ITS
-module level), so that one call site uses a deferred import instead — see the
-comment in `World.available_actions`. Keep new content-engine coupling
-flowing the same direction (content depends on world, not the reverse) and
-reach for a deferred import only at the couple of spots that genuinely need
-one both ways.
+The dependency runs one way: **content depends on world, never the reverse.**
+content.py imports `World`/`Entity` to build things; world.py imports nothing
+back. What makes that possible is the registry pattern — world.py declares
+`VERBS`, `FREE_VERBS`, `BEHAVIORS` and `ACTION_SOURCES` empty, and content.py
+(and cat.py) fill them at import time. The engine calls what it's given
+without knowing what any of it is.
+
+`ACTION_SOURCES` is the newest of the four and the one that took longest to
+arrive. `World.available_actions` used to *be* the answer rather than ask for
+it: 89 lines hardcoding `"yard"`, `"forest_edge"`, `"potato"`, `"lamp"`,
+`"journal"`, `"cat"` and the rest, inside the file whose whole promise is that
+it knows none of that. It was the only thing in the codebase needing a
+deferred import back into content.py to dodge a circular import, and the only
+place every new feature — a forest verb, a seed, a cat affordance — had to
+come and edit a shared function far from itself. Now each subsystem answers
+for its own surface (`forest_actions`, `garden_actions`, `cat_actions` in
+cat.py beside the rest of the cat), the deferred import is gone, and the
+engine is what the top of world.py always claimed.
+
+It's a list rather than a dict because the order a hand reads the actions in
+is part of the surface, so content.py registers all the sources at one site
+in one deliberate order instead of leaving it to import order. When you add
+a feature, add to the source that already owns its subject, or write a new
+one beside it.
 
 content.py and cat.py have the same shape of problem, one level up: content.py
 imports `build_cat`/`CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD` from cat.py at
@@ -669,10 +683,9 @@ still honor that reasoning rather than undercut it: `_moon_view(world)` is a
 real clock keyed to `world.day()`, not a dice roll and not anything
 session-scoped, so it's the one place a hand can actually *witness* the
 world running on a schedule bigger than any single visit, rather than just
-being told that's true. `available_actions` offers `"watch clouds"` at
-night whenever `_moon_view` returns non-`None` (`world.py` imports it the
-same deferred way it already imports `_crop_in`/`_patch_in`/`find_visible`,
-for the same circular-import reason). `_is_full_moon` survives as a thin
+being told that's true. `sky_actions` offers `"watch clouds"` at night
+whenever `_moon_view` returns non-`None` — both of them in content.py,
+where anything that knows what a moon is belongs. `_is_full_moon` survives as a thin
 `_moon_view(world) == "full"` wrapper, so existing imports and tests didn't
 need to move.
 

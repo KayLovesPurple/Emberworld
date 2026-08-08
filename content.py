@@ -9,8 +9,9 @@ one-line docstring; new autonomy goes in BEHAVIORS; new content goes in
 build_world(). See ARCHITECTURE.md for the full recipe.
 """
 
-from world import World, Entity, VERBS, FREE_VERBS, BEHAVIORS, SAVE, SAVE_VERSION, DAY_LENGTH
-from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap
+from world import (World, Entity, VERBS, FREE_VERBS, BEHAVIORS, ACTION_SOURCES,
+                   SAVE, SAVE_VERSION, DAY_LENGTH)
+from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, cat_actions
 
 
 # ---------------------------------------------------------------------------
@@ -1799,6 +1800,162 @@ VERBS.update({
     "stack": cmd_stack_stone,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
+
+
+# ---------------------------------------------------------------------------
+# What can be done here, right now. world.py owns the *shape* of this (see
+# World.available_actions); everything below owns the answers, because every
+# one of them turns on something Emberworld-specific -- a hearth, a crop, how
+# deep into the trees someone has wandered.
+#
+# Each source returns the actions it alone is responsible for. Adding a
+# feature means adding to the one that already owns its subject, or writing a
+# new source beside it -- not editing a single 89-line function in the engine
+# that knew about every room and object in the game at once, which is what
+# this replaced.
+#
+# THE ONE RULE, unchanged: an action appears only when it can actually do
+# something. Discoverability rides on this list, not on room prose. The lone
+# deliberate exception is `add wood` -- see hearth_actions.
+# ---------------------------------------------------------------------------
+def core_actions(world, actor):
+    """The always-theres: looking, waiting, the exits, and looking at or
+    picking up whatever's in the room."""
+    acts = ["look", "actions", "wait"]
+    room = world.get(actor.location)
+    for d in room.exits:
+        acts.append(f"go {d}")
+    for e in _room_here(world, actor, room):
+        if e.id == actor.id:
+            continue
+        acts.append(f"look {e.name}")
+        if e.portable:
+            acts.append(f"take {e.name}")
+    return acts
+
+
+def garden_actions(world, actor):
+    """Harvesting, and the well -> bucket -> crop watering chain."""
+    acts = []
+    room = world.get(actor.location)
+    crop = _crop_in(world, room.id)
+    if crop and crop.attrs.get("ready"):
+        acts.append("harvest")
+    if find_visible(world, actor, "well"):
+        acts.append("draw water")
+    bucket = find_visible(world, actor, "bucket")
+    if crop and not crop.attrs.get("ready") and bucket and bucket.attrs.get("water", 0) > 0:
+        acts.append("water crop")
+    return acts
+
+
+def forest_actions(world, actor):
+    """Everything the forest's edge offers, including the depth-gated verbs.
+    The only place outside this file's forest section that reads
+    world.forest_depth/forest_mark_depth."""
+    if actor.location != "forest_edge":
+        return []
+    carried = world.contents(actor.id)
+    acts = ["gather wood", "listen", "venture"]
+    if world.forest_depth > 0:
+        acts.append("return")
+        if world.forest_depth > world.forest_mark_depth:
+            acts.append("mark trail")
+    if world.forest_depth == 0 and any("stone" in e.name.lower() for e in carried):
+        acts.append("stack stone on cairn")
+    if _statue_reachable(world, actor):
+        acts.append("wish <something>")
+    return acts
+
+
+def sky_actions(world, actor):
+    """Watching the sky, wherever there's open sky to watch -- and at night
+    only when there's a moon worth looking up at."""
+    if actor.location in ("yard", "forest_edge") and (
+            world.phase() != "night" or _moon_view(world) is not None):
+        return ["watch clouds"]
+    return []
+
+
+def hearth_actions(world, actor):
+    """Feeding the fire. Offered even with no wood carried -- the refusal
+    ("it comes from the forest's edge") is how a hand learns the one causal
+    chain it needs BEFORE it needs it, so this is the single place the
+    "only offer what can do something" rule is wrong to apply. A hand that
+    only discovers wood feeds the hearth once it already holds wood
+    discovers it after dark, which is exactly too late."""
+    if find_visible(world, actor, "hearth"):
+        return ["add wood"]
+    return []
+
+
+def carrying_actions(world, actor):
+    """What can be done with things in hand or in reach: putting them down,
+    shelving them, lighting and snuffing them, eating them."""
+    acts = []
+    room = world.get(actor.location)
+    here = _room_here(world, actor, room)
+    carried = world.contents(actor.id)
+    for e in carried:
+        acts.append(f"drop {e.name}")
+    shelf = next((e for e in here if e.attrs.get("display_surface")), None)
+    if shelf:
+        if len(world.contents(shelf.id)) < SHELF_CAPACITY:
+            for e in carried:
+                acts.append(f"place {e.name} on shelf")
+        for e in world.contents(shelf.id):
+            acts.append(f"take {e.name}")
+    for e in here + carried:
+        if "lit" in e.attrs:
+            acts.append(("snuff " if e.attrs["lit"] else "light ") + e.name)
+            if e.id == "lamp" and e.attrs["lit"]:
+                # topping up an already-lit lamp before a night is a
+                # deliberate feature -- it must stay a listed option, not
+                # just something reachable by an unlisted command.
+                acts.append(f"light {e.name}")
+        if e.attrs.get("food", 0) > 0:
+            acts.append(f"eat {e.name}")
+    return acts
+
+
+def making_actions(world, actor):
+    """Putting something into the ground or onto the fire: the potato's
+    plant/cook loop, and the mystery seed's one-way planting."""
+    acts = []
+    room = world.get(actor.location)
+    here = _room_here(world, actor, room)
+    carried = world.contents(actor.id)
+    if any("potato" in e.name and e.attrs.get("food", 0) == 0 for e in carried):
+        if _patch_in(world, room.id) and not _crop_in(world, room.id):
+            acts.append("plant potato")
+        if any(f.attrs.get("cooks") and f.attrs.get("lit") for f in here):
+            acts.append("cook potato")
+    if room.id == "yard" and any(e.attrs.get("seed") for e in carried) \
+            and _mystery_plant(world) is None:
+        acts.append("plant seed")
+    return acts
+
+
+def journal_actions(world, actor):
+    """Reading and writing, wherever the journal happens to be -- it's
+    portable, so this follows it rather than assuming the hut."""
+    room = world.get(actor.location)
+    here = _room_here(world, actor, room)
+    if any(e.id == "journal" for e in here + world.contents(actor.id)):
+        return ["read journal", "write <your note>"]
+    return []
+
+
+# Registered here, in one place and one deliberate order, rather than each
+# module appending its own on import: this is a list, and the order a hand
+# reads the actions in is part of the surface. cat_actions is defined in
+# cat.py with the rest of the cat, and stays last, where it has always been.
+ACTION_SOURCES.extend([
+    core_actions, garden_actions, forest_actions, sky_actions,
+    hearth_actions, carrying_actions, making_actions, journal_actions,
+    cat_actions,
+])
+
 
 
 # ---------------------------------------------------------------------------
