@@ -62,14 +62,26 @@ def _start_session_log(display_name, model, start_day, turns, started_at=None):
     return path, log
 
 
-def _log_turn(log, number, thoughts, command, result):
-    """Append one completed LLM turn; Markdown italics distinguish thoughts."""
+def _log_turn(log, number, can_think_aloud, thoughts, command, result):
+    """Append one completed LLM turn; Markdown italics distinguish thoughts.
+
+    A blank thoughts block is ambiguous after the fact -- did the run never
+    ask for a summary (model flagged as unsupported), or did it ask and get
+    nothing back (adaptive thinking decided this turn didn't need it)? Those
+    two cases used to look identical in the saved log; noting which one
+    happened turns a "why is reasoning gone" question into something the log
+    itself can answer."""
     log.write(f"## Turn {number}\n\n")
-    if thoughts:
+    if not can_think_aloud:
+        log.write("_(thinking not requested -- model flagged as unsupported "
+                   "this visit)_\n\n")
+    elif thoughts:
         # A line-by-line blockquote keeps multi-line summaries readable while
         # putting every thought line in Markdown italics.
         log.write("\n".join(f"> *{line}*" if line else ">"
                             for line in thoughts.splitlines()) + "\n\n")
+    else:
+        log.write("_(thinking requested; the API returned no summary)_\n\n")
     log.write(f"**Command:** `{command}`\n\n{result}\n\n")
     log.flush()
 
@@ -210,19 +222,56 @@ def fuzz_run(steps=2000, seed=0, verbose=False):
 # in the agent's head. So every visit ends by leaving a note on purpose: the
 # only thread between one visit and the next.
 # ---------------------------------------------------------------------------
-def _ask_claude(client, system, user, model=LLM_MODEL, think=True, return_thinking=False):
+def _ask_claude(client, system, user, model=LLM_MODEL, think=True,
+                return_thinking=False, debug=False):
     # Sonnet 5 has adaptive thinking on by default, but display defaults to
     # "omitted" -- thinking blocks come back EMPTY. To read the reasoning we must
     # explicitly ask for a summary. (You're billed for full thinking either way,
-    # so this is free to surface.) Thinking tokens count against max_tokens, so
-    # give generous headroom or the command gets truncated.
-    kwargs = dict(model=model, max_tokens=1024, system=system,
+    # so this is free to surface.)
+    #
+    # BUG WE HIT: session logs from early August show a real thinking summary on
+    # nearly every turn, even for plain ones ("pet cat"). By mid-August that had
+    # dropped to roughly 1 in 10-15 turns, on a FRESH day-1 world with the exact
+    # same code path. Investigated and ruled out, in order: prompt growth (tested
+    # the pre-growth system prompt directly -- no change), world/journal
+    # complexity (a brand new world showed the same drop-off), and token headroom
+    # (bumped max_tokens 1024->2048; the debug block below showed thinking_tokens
+    # nonzero and stop_reason="end_turn" well under budget, so nothing was being
+    # truncated). Also tried classic extended thinking (thinking.type "enabled")
+    # as an alternative to adaptive's summarizer -- rejected outright, this model
+    # only supports adaptive. Tried output_config={"effort": "high"} per the
+    # API's own error message naming that as the real effort knob -- no change.
+    # Conclusion: this isn't something any lever in this file controls. It looks
+    # like the adaptive-thinking summarizer itself became more conservative about
+    # when it bothers to surface a summary, sometime between early and mid
+    # August, on the same model alias and SDK version (anthropic 0.118.0,
+    # unchanged throughout). Left as an open question outside this codebase --
+    # the debug block still there so a future run can keep an eye on it.
+    kwargs = dict(model=model, max_tokens=2048, system=system,
                   messages=[{"role": "user", "content": user}])
     if not think:                            # Sonnet 5 accepts this at any effort
         kwargs["thinking"] = {"type": "disabled"}
     elif return_thinking:                    # opt in to a readable reasoning summary
         kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
     msg = client.messages.create(**kwargs)
+    if debug and return_thinking:
+        # One-time-per-turn visibility into what actually came back, so an
+        # empty summary can be told apart from "we're reading the wrong
+        # field": every block's type (and thinking-block length specifically,
+        # since a present-but-zero-length block reads differently than no
+        # block at all), the stop reason, and -- if the SDK exposes it --
+        # token usage, which would show whether the model spent any thinking
+        # tokens at all on a turn that came back with no summary.
+        def _block_len(b):
+            # each block type carries its payload under a different attribute
+            # -- reading .thinking off a text block (or vice versa) silently
+            # returns "" via the getattr default, which misreported every
+            # text block as length 0 before this fix.
+            return len(getattr(b, "thinking", None) or getattr(b, "text", None) or "")
+        kinds = [(getattr(b, "type", None), _block_len(b)) for b in msg.content]
+        usage = getattr(msg, "usage", None)
+        print(f"    [debug] blocks={kinds} stop_reason={msg.stop_reason} "
+              f"usage={usage}")
     text = "".join(b.text for b in msg.content
                    if getattr(b, "type", None) == "text").strip()
     if return_thinking:
@@ -651,7 +700,8 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
                 thoughts = ""
                 if can_think_aloud:
                     thoughts, reply = _ask_claude(client, system, prompt, model,
-                                                  think, return_thinking=True)
+                                                  think, return_thinking=True,
+                                                  debug=show_thoughts)
                     if show_thoughts and thoughts:
                         block = "\n".join("    " + ln for ln in thoughts.splitlines())
                         print(_paint(block, "90", color))     # dim grey
@@ -670,7 +720,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False, color=True)
             print(_paint(f">>> {choice}", "1;36", color))     # bold cyan
             result = w.act(actor, choice)
             print(result, "\n")
-            _log_turn(session_log, i + 1, thoughts, choice, result)
+            _log_turn(session_log, i + 1, can_think_aloud, thoughts, choice, result)
             # remember the journal's contents the first time it's read this visit
             if choice.split()[:1] == ["read"] and "journal reads" in result:
                 jrnl = w.get("journal")

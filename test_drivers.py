@@ -252,7 +252,7 @@ def test_llm_session_log_is_named_for_the_hand_and_logs_the_model_in_its_header(
         try:
             path, log = drv._start_session_log("Wren", "claude-sonnet-5", 10, 30,
                                                datetime(2026, 7, 31, 14, 30, 52))
-            drv._log_turn(log, 1, "I should wait.", "wait", "Time passes.")
+            drv._log_turn(log, 1, True, "I should wait.", "wait", "Time passes.")
             log.close()
             duplicate, duplicate_log = drv._start_session_log(
                 "Wren", "claude-sonnet-5", 10, 30, datetime(2026, 7, 31, 14, 30, 52))
@@ -267,6 +267,29 @@ def test_llm_session_log_is_named_for_the_hand_and_logs_the_model_in_its_header(
         assert "- Model: claude-sonnet-5" in transcript, "the model must still be logged"
         assert "> *I should wait.*" in transcript
         assert "**Command:** `wait`" in transcript
+
+
+def test_log_turn_distinguishes_thinking_skipped_from_thinking_empty():
+    """A blank thoughts block used to be ambiguous: never asked (model flagged
+    unsupported) and asked-but-nothing-back (adaptive thinking chose not to
+    think this turn) looked identical in the saved log. Each case now gets
+    its own note, so a run of empty-looking turns can be told apart after
+    the fact instead of prompting a "did we break reasoning?" guess."""
+    with tempfile.TemporaryDirectory() as d:
+        original = drv.SESSIONS_DIR
+        drv.SESSIONS_DIR = d
+        try:
+            path, log = drv._start_session_log("Wren", "claude-haiku-4-5", 1, 2,
+                                               datetime(2026, 7, 31, 14, 30, 52))
+            drv._log_turn(log, 1, False, "", "wait", "Time passes.")
+            drv._log_turn(log, 2, True, "", "wait", "Time passes.")
+            log.close()
+        finally:
+            drv.SESSIONS_DIR = original
+        with open(path, encoding="utf-8") as f:
+            transcript = f.read()
+        assert "model flagged as unsupported" in transcript
+        assert "the API returned no summary" in transcript
 
 
 def test_llm_session_log_filename_falls_back_to_someone_when_unnamed():
@@ -419,6 +442,44 @@ def test_ask_claude_can_return_the_thinking():
     assert thoughts == "I should wait." and text == "wait"
     # default call still returns just the command string
     assert drv._ask_claude(C(), "s", "u", drv.LLM_MODEL) == "wait"
+
+
+def test_ask_claude_debug_prints_block_kinds_and_stop_reason_on_an_empty_summary():
+    """The empty-thinking-summary mystery isn't a wrong-field bug -- real
+    summaries do come through some of the time -- but seeing what the API
+    actually sent back on the EMPTY turns (block types, whether the thinking
+    block was present-but-zero-length vs absent, stop_reason, usage) is the
+    next diagnostic step now that prompt size and token headroom are ruled
+    out. This just pins that --show-thoughts's debug path doesn't blow up
+    and surfaces those fields when a turn comes back with nothing to show."""
+    class Msg:
+        def __init__(self):
+            self.content = [
+                type("T", (), {"type": "thinking", "thinking": ""})(),
+                type("B", (), {"type": "text", "text": "wait"})(),
+            ]
+            self.stop_reason = "end_turn"
+            self.usage = "usage-stub"
+
+    class C:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            return Msg()
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        thoughts, text = drv._ask_claude(C(), "s", "u", drv.LLM_MODEL,
+                                         return_thinking=True, debug=True)
+    assert thoughts == "" and text == "wait"
+    out = buf.getvalue()
+    assert "[debug]" in out
+    assert "('thinking', 0)" in out, "empty thinking block reports length 0"
+    assert "('text', 4)" in out, \
+        "a text block must report its OWN length, not 0 from misreading .thinking off it"
+    assert "stop_reason=end_turn" in out
+    assert "usage-stub" in out
 
 
 class _FakeModel:

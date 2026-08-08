@@ -242,7 +242,18 @@ class World:
         acts = []
         for source in ACTION_SOURCES:
             acts.extend(source(self, actor))
-        return acts
+        # Several sources build one action per matching entity (every "take
+        # <curio>", "look <curio>", "give <curio> to <cat>"), and it's
+        # ordinary for a room or a pack to hold more than one curio sharing a
+        # name (three stones, say) -- which used to mean the exact same
+        # command text repeated once per duplicate. They're the same action
+        # regardless of which physical copy answers it (find_visible always
+        # resolves the string the same way), so collapsed here, once,
+        # centrally, rather than in every action source that could ever
+        # produce a same-named entity. dict.fromkeys preserves first-seen
+        # order; genuinely distinct strings ("light lamp" vs "snuff lamp")
+        # are untouched.
+        return list(dict.fromkeys(acts))
 
     def act(self, actor, command):
         command = (command or "").strip()

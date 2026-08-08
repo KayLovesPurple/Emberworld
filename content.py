@@ -487,6 +487,29 @@ def _exit_label(room_id, direction):
     return _EXIT_LABELS.get(room_id, {}).get(direction, direction)
 
 
+# BUG WE HIT: a dropped curio showed up in the room listing as a bare
+# fragment -- "sea-frosted, edges gone soft." with no indication of what it
+# even was. Every other room entity's .description is written to stand alone
+# ("a stone well, its bucket-rope disappearing into the dark") because that
+# same field is what the room listing prints -- but a curio's .description is
+# deliberately just its bare look_line (see _found_description), reused
+# as-is by `look <item>` where the name is already implied by having typed
+# it. Those two uses want different text, and the room listing was quietly
+# using the wrong one.
+#
+# Only a curio still capable of being picked up needs its name prefixed back
+# on -- a curio that's been given to the cat (cmd_give) is still tagged
+# curio=True but its description was overwritten with a full, already
+# self-naming trace ("a pinecone, well-battered after a game with the cat"),
+# and cmd_give is the one place that un-portables a curio when it makes that
+# trace. Prefixing the name again there would double it. portable is what
+# tells the two states apart.
+def _room_listing_line(e):
+    if e.attrs.get("curio") and e.portable:
+        return f"{e.name}, {e.description}"
+    return e.description
+
+
 # An LLM hand reached for "look actions" more than once -- a plausible-
 # sounding guess, since there's no entity named "actions" to find; the word
 # is just its own free verb (cmd_actions). Honoring the guess is simpler
@@ -513,7 +536,7 @@ def cmd_look(world, actor, arg):
     lines = [f"[{stamp}]  {room.name.upper()}", room.description]
     here = [e for e in _room_here(world, actor, room) if e.id != actor.id]
     if here:
-        lines += [""] + [f"  - {e.description}" for e in here]
+        lines += [""] + [f"  - {_room_listing_line(e)}" for e in here]
     if room.exits:
         lines += ["", "Exits: " + ", ".join(
             _exit_label(room.id, d) for d in room.exits)]
@@ -535,7 +558,15 @@ def cmd_go(world, actor, arg):
 
 def cmd_take(world, actor, arg):
     """take <thing> -- pick up a portable object."""
-    e = find_visible(world, actor, arg)
+    # BUG WE HIT: with one stone already carried and more of the same name
+    # still sitting on the shelf, `take a smooth grey stone` again reported
+    # "already carrying" -- find_visible's default order is here + carried +
+    # displayed, so once a match is carried it sorts ahead of any other still
+    # -available copy of the same name (room OR shelf). `take`'s whole point
+    # is getting a copy into your hands, so it must prefer one that ISN'T
+    # already there; only fall back to an already-carried match (and the
+    # refusal that follows) once no other copy is left to take.
+    e = find_visible(world, actor, arg, prefer=lambda x: x.location != actor.id)
     if not e:
         return f"There's no '{arg}' here to take."
     if e.location == actor.id:

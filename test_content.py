@@ -613,6 +613,55 @@ def test_taking_a_found_curio_does_not_double_the_article():
     assert result == "You take the smooth grey stone.", f"double article: {result!r}"
 
 
+def test_taking_one_of_several_same_named_curios_reaches_a_still_available_copy():
+    """BUG WE HIT: with one stone already carried and more of the same name
+    left on the shelf, `take a smooth grey stone` again reported "already
+    carrying" -- find_visible's default order sorts a carried match ahead of
+    any other still-available copy of the same name, and cmd_take never said
+    otherwise. `take` must prefer a copy that ISN'T already in hand."""
+    w, actor = fresh()
+    name, look_line, reaction = _stone_tuple()
+    desc = _found_description(look_line, reaction)
+    run(w, actor, "place knife on shelf")   # ensure the shelf exists
+    shelf = w.get("shelf")
+    w.add(Entity(w.fresh_id("found"), name, desc, location=shelf.id,
+                 portable=True, attrs={"curio": True}))
+    w.add(Entity(w.fresh_id("found"), name, desc, location=shelf.id,
+                 portable=True, attrs={"curio": True}))
+    first = w.act(actor, f"take {name}").splitlines()[0]
+    second = w.act(actor, f"take {name}").splitlines()[0]
+    assert first == second == "You take the smooth grey stone."
+    assert sum(1 for e in w.contents(actor.id) if e.name == name) == 2
+
+
+def test_several_same_named_curios_collapse_to_one_action_each():
+    """A room or a pack holding several curios sharing a name used to list
+    "take <name>" (or "look <name>", or "give <name> to <cat>") once per
+    physical copy -- three stones meant three identical lines. They're the
+    same action regardless of which copy answers it, so only one of each
+    should appear."""
+    w, actor = fresh()
+    name, look_line, reaction = _stone_tuple()
+    desc = _found_description(look_line, reaction)
+    for _ in range(3):
+        w.add(Entity(w.fresh_id("found"), name, desc, location="yard",
+                     portable=True, attrs={"curio": True}))
+    run(w, actor, "go out")
+    actions = w.available_actions(actor)
+    assert actions.count(f"take {name}") == 1
+    assert actions.count(f"look {name}") == 1
+
+    # carrying several of the same curio must likewise offer "give ... to
+    # cat" only once
+    w2, actor2 = fresh()
+    for _ in range(3):
+        w2.add(Entity(w2.fresh_id("found"), name, desc, location=actor2.id,
+                      portable=True, attrs={"curio": True}))
+    cat_name = w2.get("cat").name
+    give_actions = w2.available_actions(actor2)
+    assert give_actions.count(f"give {name} to {cat_name}") == 1
+
+
 def test_dropping_a_found_curio_does_not_double_the_article():
     w, actor = fresh()
     name, look_line, reaction = _stone_tuple()
@@ -621,6 +670,33 @@ def test_dropping_a_found_curio_does_not_double_the_article():
                  location=actor.id, portable=True, attrs={"curio": True}))
     result = w.act(actor, f"drop {name}").splitlines()[0]
     assert result == "You set down the smooth grey stone.", f"double article: {result!r}"
+
+
+def test_a_dropped_curio_names_itself_in_the_room_listing():
+    """BUG WE HIT: a dropped curio's bare look_line ("sea-frosted, edges
+    gone soft.") showed up alone in the room listing, with no indication of
+    what it even was -- look_line is meant to stand on its own only for
+    `look <item>`, where the name is already implied by having typed it."""
+    w, actor = fresh()
+    name, look_line, reaction = _stone_tuple()   # "a smooth grey stone"
+    desc = _found_description(look_line, reaction)
+    w.add(Entity(w.fresh_id("found"), name, desc,
+                 location=actor.id, portable=True, attrs={"curio": True}))
+    w.act(actor, f"drop {name}")
+    assert f"- {name}, {look_line}" in w.act(actor, "look")
+
+
+def test_a_curio_given_to_the_cat_does_not_double_its_name_in_the_room_listing():
+    """The give-to-cat trace already names itself ("a pinecone, well-battered
+    after a game with the cat") -- prefixing the name again on top of that
+    (as a naive curio-flag check would) reads as "a pinecone, a pinecone,
+    ..."."""
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    listing = w.act(actor, "look")
+    assert "a pinecone, well-battered after a game with the cat" in listing
+    assert "a pinecone, a pinecone," not in listing
 
 
 def test_placing_a_found_curio_on_the_shelf_does_not_double_the_article():
