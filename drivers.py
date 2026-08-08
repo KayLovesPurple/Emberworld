@@ -20,6 +20,7 @@ from collections import deque
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
 from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, journal_view
 from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
+from content_common import actor_self_care_note
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
@@ -567,8 +568,17 @@ def _tending_note(world):
     too: without it, a hand that arrives to nothing but a crop waiting to be
     lifted reads as having nothing to do, and the curiosity nudge below
     fires instead of the one thing that's actually pressing (see the
-    "Six-Fingers" case in the commit that added this check)."""
+    "Six-Fingers" case in the commit that added this check). Actor hunger
+    is checked first, same reasoning: the cat's hunger was already loud
+    here and on `look`, while a hand's own hunger was silent everywhere but
+    `inventory` -- so every spare potato kept going to the cat instead of
+    the hand carrying it."""
     notes = []
+    you = world.get("you")
+    if you is not None:
+        care = actor_self_care_note(you)
+        if care:
+            notes.append(care)
     cat = world.get("cat")
     if cat is not None and cat.attrs.get("hunger", 0) >= CAT_MEOW_THRESHOLD:
         notes.append("the cat is hungry")

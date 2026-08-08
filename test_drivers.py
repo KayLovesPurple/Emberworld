@@ -558,6 +558,21 @@ def test_tending_note_does_not_flag_a_still_growing_crop():
     assert drv._tending_note(w) == ""
 
 
+def test_tending_note_includes_actor_hunger():
+    from content_common import ACTOR_HUNGER_HUNGRY
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    assert "you're ravenous" not in drv._tending_note(w)
+    assert "you're getting hungry" in drv._tending_note(w)
+
+
+def test_tending_note_calls_actor_hunger_ravenous_at_the_top_band():
+    from content_common import ACTOR_HUNGER_CAP
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_CAP
+    assert "you're ravenous" in drv._tending_note(w)
+
+
 # ===========================================================================
 # 2b-2. CURIOSITY NUDGE -- fires on quiet turns (see above), but points at
 #     real, present scenery in the current room rather than a generic

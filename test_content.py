@@ -3089,6 +3089,41 @@ def test_look_still_examines_a_real_thing_named_actions_free_of_the_alias():
 
 
 # ===========================================================================
+# 12b. ACTOR HUNGER LEGIBILITY -- your own hunger used to be silent on every
+#     turn's primary view (only cmd_inventory said anything, and only if a
+#     hand thought to check), while the cat's hunger is loud on `look` and
+#     the tending note both. That silence is why hands kept feeding every
+#     spare potato to the cat and starving themselves. "look" now carries
+#     the same "You feel X." line cmd_inventory always has, via the one
+#     shared helper (content_common.actor_hunger_line) both call through
+#     _carried_line -- so the two views can't drift apart again.
+# ===========================================================================
+def test_look_surfaces_actor_hunger_when_hungry():
+    from content_common import ACTOR_HUNGER_HUNGRY
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    assert "You feel hungry." in w.act(actor, "look")
+
+
+def test_look_in_the_dark_still_surfaces_actor_hunger():
+    from content_common import ACTOR_HUNGER_HUNGRY
+    w, actor = fresh()
+    while w.phase() != "night":
+        w.act(actor, "wait")
+    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    assert "You feel hungry." in w.act(actor, "look")
+
+
+def test_inventory_and_look_report_the_same_hunger_mood():
+    from content_common import ACTOR_HUNGER_HUNGRY
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    inv = w.act(actor, "inventory")
+    look = w.act(actor, "look")
+    assert "You feel hungry." in inv and "You feel hungry." in look
+
+
+# ===========================================================================
 # 13. THE MYSTERY SEED -- a seed found at the forest's edge, planted in the
 #     yard, that blooms on its own multi-visit schedule and opens for
 #     whoever happens to be around when it does. The first thing where one

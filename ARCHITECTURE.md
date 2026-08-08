@@ -9,10 +9,21 @@ breaking, and the recipe for adding a feature safely.
 - `world.py` — the engine. `Entity`, `World`, the tick loop, persistence,
   `check_world`. Generic: it has no knowledge of any specific verb or
   behavior, only the `VERBS`/`FREE_VERBS`/`BEHAVIORS` registries (declared
-  here as empty containers) that content.py populates.
+  here as empty containers) that content.py populates. Session-scoped state
+  (forest depth, calm-visit acks, the hand's chosen name, …) lives on
+  `World.visit`, a `VisitState` dataclass — one place for a new session
+  field to go, kept out of `to_data()` by construction rather than by
+  remembering to exclude each new key by hand.
 - `content.py` — Emberworld itself. The verbs, the autonomous behaviors,
   `build_world`, and the self-documenting reference generator. Imports
   `World`/`Entity` from world.py and fills in its registries.
+- `content_common.py` — pure helpers shared by content.py, cat.py, and
+  drivers.py without any of them importing each other: `_the`, `_is_raw`/
+  `_is_cooked`, `_last_potato_beat`, `day_stamp`, and the actor's own
+  hunger bands (`ACTOR_HUNGER_*`, `actor_hunger_line`,
+  `actor_self_care_note`). Imports nothing — that's what lets three
+  otherwise-cyclic modules all reach it at module level. See "Actor hunger"
+  below and the cat.py paragraph further down for why it exists.
 - `cat.py` — the cat as its own self-contained subsystem: its constants
   (`CAT_HUNGER_CAP`, `CAT_MEOW_THRESHOLD`), its behaviors (wander/hunger/idle),
   its verbs (feed/pet/name), and `build_cat`. Split out of content.py once it
@@ -70,15 +81,30 @@ and rewriting the function as a plain filter silently changed it — see
 `test_the_statue_stays_last_in_the_room_listing_after_later_arrivals`, which
 exists because the test suite did not catch that and a differential run did.
 
-content.py and cat.py have the same shape of problem, one level up: content.py
+content.py and cat.py had the same shape of problem, one level up: content.py
 imports `build_cat`/`CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD` from cat.py at
 module level (so `build_world` and `generate_reference` can use them), while
-cat.py's `cmd_feed` needs content.py's `_is_raw` (to prefer a raw potato over
-an already-cooked one) and `_last_potato_beat` (the one-shot line fired when
-a raw potato fed to the cat happens to be the last one). Importing content.py
-from cat.py at module level would close the same kind of cycle, so `cmd_feed`
-does the import inside the function body instead — same fix, same reasoning,
-as the world.py/content.py case above.
+cat.py's `cmd_feed`/`cat_replay` needed content.py's `_is_raw` (to prefer a
+raw potato over an already-cooked one), `_last_potato_beat` (the one-shot
+line fired when a raw potato fed to the cat happens to be the last one), and
+`_the`. Importing content.py from cat.py at module level would close the
+same kind of cycle, so those two spots used to do the import inside the
+function body instead — same fix, same reasoning, as the world.py/content.py
+case above.
+
+That deferred-import fix worked, but it meant the shared logic still *lived*
+in content.py, owned by neither side — cat.py was borrowing content.py's
+internals just to avoid a cycle, not because the helpers were conceptually
+content's. `content_common.py` is the real fix: `_the`, `_is_raw`/
+`_is_cooked`, `_last_potato_beat`, and `day_stamp` moved out into a module
+that imports nothing, so content.py, cat.py, and drivers.py can all import
+it directly at module level. cat.py's only remaining deferred import is
+`cmd_add_wood` (inside `cmd_feed`, for the `feed hearth` alias) — a real verb
+handler, which has to stay in content.py rather than move to a helpers-only
+module. One fewer deferred import is a small win on its own; the larger one
+is that the next feature needing something both cat.py and content.py agree
+on (tea, more curios, whatever) now has an obvious home instead of a choice
+between growing the cycle or duplicating the helper.
 
 ## The core model
 
@@ -941,6 +967,37 @@ pass, so Stage 1 ships alone, a lineage gets to actually use it, and Stage
 2 waits for what that play surfaces — same discipline the forest's own
 staged build already follows.
 
+## Actor hunger — legible everywhere the cat's already is
+
+**The problem, observed across LLM session transcripts:** the cat's hunger
+is loud — `look` lists it, `_tending_note` flags it once it crosses
+`CAT_MEOW_THRESHOLD` — while a hand's own hunger was silent everywhere
+except `cmd_inventory`, a view nothing prompts a hand to check. A hungry
+cat competes for attention every turn; a hungry hand doesn't even know to
+ask. The predictable result: every spare potato went to the cat, because
+the cat was the only one visibly asking for it.
+
+**The fix is one helper, read in three places.** `content_common.py` holds
+the bands (`ACTOR_HUNGER_STUFFED`/`_FINE`/`_HUNGRY`, `ACTOR_HUNGER_CAP`) and
+two functions: `actor_hunger_line` (`"You feel hungry."`, `cmd_inventory`'s
+exact wording) and `actor_self_care_note` (`"you're getting hungry"` /
+`"you're ravenous"`, phrased for a sentence rather than standing alone).
+`cmd_inventory` and `content.py`'s `_carried_line` — the one function both
+branches of `cmd_look` (lit and dark) already funnel through — both call
+`actor_hunger_line`, so `look` and `inventory` cannot read different moods
+for the same hunger value; `drivers.py`'s `_tending_note` calls
+`actor_self_care_note` first, ahead of the cat/lamp/hearth/crop checks, so
+a hand's own hunger competes on equal footing with the world's asks instead
+of losing to them by default.
+
+**Deliberately not done:** no new verb, no buff, no change to how hunger
+rises or is eased (`hungering`/`cmd_eat` untouched, just now reading
+`ACTOR_HUNGER_CAP` instead of a bare `20`) — this is a visibility fix, not
+a mechanics change. The three call sites are checked against each other
+directly (`test_inventory_and_look_report_the_same_hunger_mood`) rather
+than each pinned to a hardcoded string, so the bands can move without three
+separate edits falling out of sync.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be
@@ -1096,8 +1153,9 @@ exists (each fixed a real failure we watched happen):
   name again, that's kept rather than discarded. A hand's second,
   deliberate answer is still its answer; naming just isn't allowed to loop
   forever chasing a "better" one.
-- **Attribution lives in the stamp, not a sign-off** (`_day_stamp`, in
-  content.py): both `cmd_write` and `_leave_signoff` build their journal
+- **Attribution lives in the stamp, not a sign-off** (`day_stamp`, in
+  content_common.py, imported into content.py as `_day_stamp`): both
+  `cmd_write` and `_leave_signoff` build their journal
   stamp through this one shared helper — `[Day N]`, or `[Day N, Name]` when
   `world.hand_name` is set — so the format can't drift between a hand's own
   `write` and the automatic closing note. Since attribution is automatic,

@@ -10,6 +10,7 @@ ever reach. This is enforced here and pinned by a test. Do not add harm.
 """
 
 from world import Entity, VERBS, BEHAVIORS
+from content_common import _the, _is_raw, _last_potato_beat
 
 CAT_HUNGER_CAP = 24       # doubled in the pacing rebalance -- loosened first,
                           # since it was the loudest, most legible turn-eater
@@ -145,7 +146,6 @@ def cat_replay(world, cat):
             if not e.portable and e.attrs.get("cat_reaction") == "plays"]
     if not toys or world.rng.random() >= CAT_REPLAY_CHANCE:
         return
-    from content import _the   # deferred to dodge a cat<->content cycle
     toy = world.rng.choice(toys)
     line = world.rng.choice(CAT_REPLAY_LINES).format(
         cat=_cat_cap(cat), toy=_the(toy.name))
@@ -161,7 +161,7 @@ _FEED_HEARTH = {"hearth", "the hearth", "fire", "the fire"}
 
 def cmd_feed(world, actor, arg):
     """feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it)."""
-    from content import _is_raw, _last_potato_beat, cmd_add_wood   # deferred to dodge a cat<->content cycle
+    from content import cmd_add_wood   # deferred: cmd_add_wood is a verb handler, stays in content.py
     if arg.strip().lower() in _FEED_HEARTH:
         return cmd_add_wood(world, actor, "")
     cat = world.get("cat")

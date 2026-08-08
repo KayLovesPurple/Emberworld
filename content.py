@@ -14,6 +14,11 @@ from world import (World, Entity, VERBS, FREE_VERBS, BEHAVIORS, ACTION_SOURCES,
 from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, cat_actions
 from forest_text import (FOREST_FRAGMENTS, FOREST_AMBIENT, FOREST_AMBIENT_CHANCE,
                          _forest_band, describe_forest, _forest_ambient)
+from content_common import (
+    ACTOR_HUNGER_CAP, ACTOR_HUNGER_HUNGRY, actor_hunger_line,
+    _the, _is_raw, _is_cooked, LAST_POTATO_BEAT, _patch_has_crop,
+    _last_potato_beat, day_stamp as _day_stamp,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +145,7 @@ def hearth_state(world, hearth):
 
 def hungering(world, actor):
     """Autonomous: the actor slowly gets hungrier over time (capped, harmless)."""
-    actor.attrs["hunger"] = min(actor.attrs.get("hunger", 0) + 1, 20)
+    actor.attrs["hunger"] = min(actor.attrs.get("hunger", 0) + 1, ACTOR_HUNGER_CAP)
 
 
 LAMP_FUEL_START = 32       # doubled in the pacing rebalance -- one kindling now
@@ -412,37 +417,6 @@ def _carrying(world, actor, e):
     return e is not None and e.location == actor.id
 
 
-def _is_raw(e):
-    return e.attrs.get("food", 0) <= 0
-
-
-def _is_cooked(e):
-    return e.attrs.get("food", 0) > 0
-
-
-LAST_POTATO_BEAT = "That was the last potato — the patch lies bare behind you now."
-
-
-def _patch_has_crop(world):
-    patch = world.get("patch")
-    return patch is not None and bool(world.contents(patch.id))
-
-
-def _last_potato_beat(world, actor, consumed_was_raw):
-    """A one-shot pang, not a standing warning: fires only at the exact
-    moment a hand spends its LAST raw (plantable) potato with nothing
-    growing in the patch. Cooked food was never seed, so it never counts
-    toward "raw potatoes remaining" -- and since the trigger is "now holds
-    zero," there's no state left to re-announce on a later turn."""
-    if not consumed_was_raw:
-        return ""
-    still_have_raw = any(_is_raw(e) and "potato" in e.name
-                         for e in world.contents(actor.id))
-    if still_have_raw or _patch_has_crop(world):
-        return ""
-    return "\n" + LAST_POTATO_BEAT
-
-
 def _lamp_state_tag(lamp):
     if not lamp.attrs.get("lit"):
         return "unlit"
@@ -479,10 +453,14 @@ def _carried_line(world, actor):
     # carried items are part of the standing perception (not hidden behind a
     # separate 'inventory' command an amnesiac agent has to choose to run),
     # and stay visible even in the dark -- you can feel what's in your hands.
+    # Hunger rides along on the same line for the same reason: cmd_inventory
+    # is the only other place a hand's own hunger was ever legible, so a
+    # hand that never runs it was otherwise blind to itself (see the "fed
+    # every spare potato to the cat" pattern this fixes).
     names = _carried_names(world, actor)
-    if not names:
-        return "Your hands are empty."
-    return "You are carrying: " + ", ".join(names) + "."
+    hands = "Your hands are empty." if not names \
+        else "You are carrying: " + ", ".join(names) + "."
+    return hands + "\n" + actor_hunger_line(actor)
 
 
 _EXIT_LABELS = {
@@ -553,17 +531,6 @@ def cmd_go(world, actor, arg):
         return f"You can't go {arg or 'that way'}."
     actor.location = dest
     return cmd_look(world, actor, "")
-
-
-def _the(name):
-    """'the ' + name, minus a leading indefinite article. Found curios bake
-    one into their name (so the discovery and carried-item lines read
-    naturally as-is), but a message that prepends its own 'the' would
-    otherwise double up into 'the a smooth grey stone'."""
-    for article in ("a ", "an "):
-        if name.lower().startswith(article):
-            return "the " + name[len(article):]
-    return "the " + name
 
 
 def cmd_take(world, actor, arg):
@@ -685,10 +652,7 @@ def cmd_give(world, actor, arg):
 def cmd_inventory(world, actor, arg):
     """inventory -- list what you're carrying and how hungry you feel."""
     names = _carried_names(world, actor)
-    hunger = actor.attrs.get("hunger", 0)
-    mood = ("stuffed" if hunger < 3 else "fine" if hunger < 10
-            else "hungry" if hunger < 16 else "ravenous")
-    head = f"You feel {mood}."
+    head = actor_hunger_line(actor)
     if not names:
         return head + "\nYour hands are empty."
     return head + "\nYou are carrying:\n" + "\n".join(f"  - {n}" for n in names)
@@ -1119,16 +1083,6 @@ def _journal_missing_message(world):
     if loc == "yard":
         return "You've no journal to hand. It's out in the yard."
     return "You've no journal to hand — it's not here with you."
-
-
-def _day_stamp(world):
-    """The auto-prepended journal stamp: '[Day N]', or '[Day N, Name]' when
-    the current hand has named itself (see drivers.py's llm_agent, which
-    sets world.hand_name once at session start). Shared by cmd_write and the
-    LLM sign-off so the format can't drift between the two paths -- and so
-    attribution lives in the stamp itself, with nothing for a hand to sign."""
-    name = getattr(world, "hand_name", None)
-    return f"[Day {world.day()}, {name}]" if name else f"[Day {world.day()}]"
 
 
 def cmd_write(world, actor, arg):
@@ -1907,6 +1861,11 @@ def generate_reference():
             "at any lit hearth, which tops it back to full.",
             f"- The cat's hunger is capped at **{CAT_HUNGER_CAP}** and it can "
             "come to no harm -- it only ever wants feeding.",
+            f"- Your own hunger is capped at **{ACTOR_HUNGER_CAP}** and comes "
+            "to no harm either -- but unlike the cat's, it says nothing on "
+            "its own until you `look` or check `inventory`. Both surface "
+            f"the same mood, from \"stuffed\" up to \"ravenous\" at **"
+            f"{ACTOR_HUNGER_HUNGRY}**.",
             f"- The cat stays content (and may do small idle things) below "
             f"hunger **{CAT_MEOW_THRESHOLD}**; at or above it, it starts "
             "meowing to be fed.",

@@ -11,6 +11,7 @@ content.py owns everything that's specific to Emberworld itself.
 import os
 import json
 import random
+from dataclasses import dataclass, field
 
 # Save next to THIS script, not wherever you happen to launch from -- so the
 # world travels with the file and you get one world, not one-per-directory.
@@ -44,6 +45,17 @@ class IncompatibleSaveError(Exception):
 
 class WorldInvariantError(Exception):
     """The world reached a state that should be impossible. A real bug."""
+
+
+@dataclass
+class VisitState:
+    """Session-scoped state for one hand's visit. Never written by World.to_data()."""
+
+    forest_depth: int = 0
+    forest_mark_depth: int = 0
+    statue_found_this_session: bool = False
+    calm_visits: dict = field(default_factory=dict)
+    hand_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -97,32 +109,46 @@ class World:
         self.log = []                    # (message, room_id_or_None) this tick
         self.strict = False              # if True, check invariants every tick
         self.rng = random.Random()       # world's own randomness (cat wander, etc.)
-        # FOREST_SPEC.md Stage 1: how far a hand has ventured into the forest
-        # this session. Deliberately a plain runtime attribute, like rng/strict
-        # above, not part of to_data()/from_data() -- position in the forest is
-        # episodic (gone the instant a session ends), unlike anything a hand
-        # actually carries or changes out there, which persists normally.
-        self.forest_depth = 0
-        # FOREST_SPEC.md Stage 5: the deepest depth marked this session via
-        # `mark trail` (content.py's cmd_mark_trail) -- extends how far
-        # cmd_return's Stage 4 off-course roll considers "safe" beyond the
-        # flat SAFE_DEPTH_THRESHOLD. Session-scoped like forest_depth right
-        # above, for the identical reason: a trail marked this visit means
-        # nothing to the next, memoryless hand.
-        self.forest_mark_depth = 0
-        # FOREST_SPEC.md Stage 7: whether THIS session has found the statue
-        # yet (content.py's cmd_venture rolls for it past STATUE_MIN_DEPTH).
-        # Session-scoped like forest_depth/forest_mark_depth above, for the
-        # same reason -- whether you've found it is a fact about this visit,
-        # not the world; the next hand has to find it again on their own.
-        self.statue_found_this_session = False
-        # Calm-axis session acknowledgment (see content.py's _calm_visit_ack):
-        # how many times THIS hand has chosen a calm act at a given calm spot
-        # this visit, keyed by spot (e.g. "forest_edge"). Same reasoning as
-        # forest_depth above -- deliberately not part of to_data()/from_data();
-        # a hand's own sense of "I've been coming back here" is episodic, not
-        # a fact about the world for the next hand to inherit.
-        self.calm_visits = {}
+        # Session-scoped visit state (forest depth, calm ack, hand name, …).
+        # See VisitState and to_data()'s four-key shape -- nothing here persists.
+        self.visit = VisitState()
+
+    # --- visit-scoped fields (alias VisitState for existing call sites) ----
+    @property
+    def forest_depth(self):
+        return self.visit.forest_depth
+
+    @forest_depth.setter
+    def forest_depth(self, value):
+        self.visit.forest_depth = value
+
+    @property
+    def forest_mark_depth(self):
+        return self.visit.forest_mark_depth
+
+    @forest_mark_depth.setter
+    def forest_mark_depth(self, value):
+        self.visit.forest_mark_depth = value
+
+    @property
+    def statue_found_this_session(self):
+        return self.visit.statue_found_this_session
+
+    @statue_found_this_session.setter
+    def statue_found_this_session(self, value):
+        self.visit.statue_found_this_session = value
+
+    @property
+    def calm_visits(self):
+        return self.visit.calm_visits
+
+    @property
+    def hand_name(self):
+        return self.visit.hand_name
+
+    @hand_name.setter
+    def hand_name(self, value):
+        self.visit.hand_name = value
 
     # --- bookkeeping -------------------------------------------------------
     def add(self, e):

@@ -88,7 +88,11 @@ the first night falls.
 cooked before they'll feed you. There's a cat: it wanders, likes the fire
 lit, and can be fed a potato or petted. **The cat can never come to harm**
 — that's guaranteed in the code and pinned by a test. Draw water from the
-well into the bucket, then water a planted crop to speed its growth.
+well into the bucket, then water a planted crop to speed its growth. Your
+own hunger rises the same slow, capped way the cat's does, and now shows
+up everywhere the cat's does too — `look` and `inventory` both say how
+you feel, so it isn't only the cat's hunger that's visible when there's a
+potato spare.
 
 **The forest's edge.** A path off the yard leads there, and that's where
 the wood comes from now too: gather fallen branches and deadfall and add
@@ -302,11 +306,15 @@ scarce turns. If it ever needs anything at all, make it something trivially
 met (or self-sustaining), never a second potato-mouth. The design constraint IS
 the feature; a needy chicken is the one version not to build.
 
-Potential, but not a priority: **A standing legibility fix worth doing anytime:** surface the *player's own
-hunger* in the standing perception, the way the cat's hunger already shows in its
-description. Agents feed every potato to the loud, legible cat and never cook for
-themselves because their own hunger is silent. Make it visible and a hand will
-likely finally cook and eat — closing a loop it currently always skips.
+**A standing legibility fix worth doing anytime** *(built — see "Food and
+the cat" above)*: surface the *player's own hunger* in the standing
+perception, the way the cat's hunger already shows in its description.
+Agents fed every potato to the loud, legible cat and never cooked for
+themselves because their own hunger was silent. `look` and `inventory` now
+say the same thing, via one shared helper (`content_common.py`), and the
+LLM tending note flags it too, ahead of the cat/lamp/hearth/crop checks —
+so a hand's own hunger competes for attention on the same footing the
+cat's always has.
 
 **A mystery seed — a bloom, not a crop** *(built — see "The rules, in
 brief" above for the short version)*. The potato's whole arc is
