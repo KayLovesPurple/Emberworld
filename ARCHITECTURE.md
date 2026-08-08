@@ -57,6 +57,19 @@ in one deliberate order instead of leaving it to import order. When you add
 a feature, add to the source that already owns its subject, or write a new
 one beside it.
 
+`PRESENCE_RULES` (content.py) is the fifth, and the same move one layer down:
+`_room_here` — the helper `find_visible` and every verb that resolves a name
+reach through — used to name the statue and the cairn by id, so the forest's
+rules lived inside the game's most basic visibility check. Now a conditional
+entity registers `fn(world, actor) -> bool` from wherever it belongs, and the
+helper just asks. `PRESENCE_LAST` sits beside it for the one entity whose
+*position* is also deliberate: the statue lands at the end of a listing
+rather than in insertion order, which the old implementation got by
+filtering it out and re-appending it. That was undocumented and untested,
+and rewriting the function as a plain filter silently changed it — see
+`test_the_statue_stays_last_in_the_room_listing_after_later_arrivals`, which
+exists because the test suite did not catch that and a differential run did.
+
 content.py and cat.py have the same shape of problem, one level up: content.py
 imports `build_cat`/`CAT_HUNGER_CAP`/`CAT_MEOW_THRESHOLD` from cat.py at
 module level (so `build_world` and `generate_reference` can use them), while

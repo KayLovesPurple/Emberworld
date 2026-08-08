@@ -29,6 +29,7 @@ from content import (
     FOREST_AMBIENT_CHANCE, FOREST_AMBIENT, _forest_ambient,
     STATUE_MIN_DEPTH, STATUE_DISCOVERY_CHANCE, STATUE_DISCOVERY_TEXT,
     STATUE_WISH_LINE, ensure_statue, _statue_reachable, cmd_wish,
+    PRESENCE_RULES, PRESENCE_LAST, _room_here,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     MOON_NEAR_NIGHTS, MOON_PHASE_OFFSET, MOON_VIEW_LINES, _moon_view,
     WILDLIFE_CHANCE, WILDLIFE_LINES, wildlife_glimpse,
@@ -2956,6 +2957,39 @@ def test_statue_never_appears_in_the_room_listing_back_at_the_edge():
     assert w.forest_depth == 0
     result = w.act(actor, "look")
     assert "stone figure" not in result
+
+
+def test_the_statue_stays_last_in_the_room_listing_after_later_arrivals():
+    """NEAR MISS, pinned here because nothing else caught it. _room_here used
+    to get this for free -- it filtered the statue out and re-appended it, so
+    it always landed at the end. Rewriting that as a straight filter over
+    PRESENCE_RULES silently moved it to wherever insertion order put it, the
+    moment anything at the edge was created after the statue was (a curio
+    dropped there after finding it, say). The statue reads as a beat at the
+    end of what you can see, not one item among the furniture -- see
+    PRESENCE_LAST."""
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    cmd_wish(w, actor, "a warm winter")           # materializes the statue
+    w.add(Entity(w.fresh_id("found"), "a late curio", "odd little thing",
+                 location="forest_edge", portable=True, attrs={"curio": True}))
+    here = _room_here(w, actor, w.get("forest_edge"))
+    assert here[-1].id == "statue", \
+        f"the statue must stay last, got {[e.id for e in here]}"
+
+
+def test_presence_rules_are_how_the_forest_hides_its_two_landmarks():
+    """The rules are registered by the forest, not hardcoded into the helper
+    every verb in the game reaches through -- that's the whole point of the
+    registry. If these two go missing, _room_here silently starts showing
+    both landmarks from everywhere."""
+    assert PRESENCE_RULES["statue"] is _statue_reachable
+    w, actor = fresh()
+    w.forest_depth = 0
+    assert PRESENCE_RULES["cairn"](w, actor), "the cairn is present at the edge"
+    w.forest_depth = 1
+    assert not PRESENCE_RULES["cairn"](w, actor), "and gone one step in"
     assert not any("statue" in a for a in w.available_actions(actor))
 
 

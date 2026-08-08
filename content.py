@@ -326,40 +326,61 @@ def _sow(world, patch):
 # ---------------------------------------------------------------------------
 # Verbs -- the actions. Growing the game = adding entries here.
 # ---------------------------------------------------------------------------
+# Which entities are actually present where they nominally live. Nearly all
+# of them simply are; a couple are conditional, and those register a rule
+# here -- keyed by entity id, fn(world, actor) -> bool -- from whichever
+# part of the game owns them. Same idea as VERBS/BEHAVIORS/ACTION_SOURCES:
+# the general machinery asks, the specific subsystem answers.
+PRESENCE_RULES = {}
+
+# Ids that, when they ARE present, sit at the end of the listing rather than
+# wherever insertion order would put them. Only the statue, and deliberately:
+# it reads as a beat at the end of what you can see, after the ordinary
+# furniture of the clearing, rather than as one item among them. The original
+# hand-rolled version of this function got that for free by filtering the
+# statue out and re-appending it; keeping it explicit here means the ordering
+# survived the rewrite instead of quietly changing the day someone dropped a
+# curio at the edge after finding the statue.
+PRESENCE_LAST = {"statue"}
+
+
+def _always_present(world, actor):
+    return True
+
+
 def _room_here(world, actor, room):
     """The entities actually present in `room` right now -- ordinarily just
-    world.contents(room.id), EXCEPT the forest's edge doubles as every
-    forest depth (venturing is a session-scoped counter, not a real room
-    change -- actor.location never actually leaves "forest_edge"), so a
-    flat content list would make two things visible/reachable from
-    anywhere in the whole forest, not just where they actually belong:
+    world.contents(room.id), minus anything whose PRESENCE_RULE says it
+    isn't really here at the moment.
 
-    BUG WE HIT: once discovered, the statue appeared in the forest_edge
-    room description forever after for the rest of the session -- even
-    back at depth 0, right at the edge, contradicting its own "resists the
-    system" design (it should never be a standing fixture you just look
-    around and see). The cairn had the milder version of the same bug: it
-    was reachable (via `look cairn`, even `stack stone on cairn`) from any
-    depth, when it's meant to be a landmark you pass specifically AT the
-    edge.
+    The rules exist because the forest's edge doubles as every forest depth
+    (venturing is a session-scoped counter, not a real room change --
+    actor.location never leaves "forest_edge"), so a flat content list makes
+    things visible and reachable from anywhere in the whole forest rather
+    than only where they belong:
 
-    So, forest_edge only: the cairn is present only when forest_depth == 0;
-    the statue is present only when _statue_reachable holds (the exact
-    same gate `wish` already uses) -- never unconditionally. Used by
-    cmd_look, available_actions, AND find_visible, so a hand can't reach
-    past either restriction just by typing the object's name directly
-    instead of picking it from the action list."""
-    here = world.contents(room.id)
-    if room.id != "forest_edge":
-        return here
-    here = [e for e in here if e.id != "statue"]
-    if world.forest_depth > 0:
-        here = [e for e in here if e.id != "cairn"]
-    if _statue_reachable(world, actor):
-        statue = world.get("statue")
-        if statue is not None:
-            here = here + [statue]
-    return here
+    BUG WE HIT: once discovered, the statue appeared in the forest_edge room
+    description forever after for the rest of the session -- even back at
+    depth 0, right at the edge, contradicting its own "resists the system"
+    design (it should never be a standing fixture you just look around and
+    see). The cairn had the milder version of the same bug: it was reachable
+    (via `look cairn`, even `stack stone on cairn`) from any depth, when
+    it's meant to be a landmark you pass specifically AT the edge.
+
+    Used by cmd_look, the action sources, AND find_visible, so a hand can't
+    reach past a rule just by typing the object's name directly instead of
+    picking it from the action list.
+
+    This used to name the statue and the cairn inline, by id, which put
+    knowledge of the forest inside the helper every verb in the game reaches
+    through to find anything at all. The rules now live with the forest.
+    """
+    here, trailing = [], []
+    for e in world.contents(room.id):
+        if not PRESENCE_RULES.get(e.id, _always_present)(world, actor):
+            continue
+        (trailing if e.id in PRESENCE_LAST else here).append(e)
+    return here + trailing
 
 
 def find_visible(world, actor, name, prefer=None):
@@ -1324,6 +1345,14 @@ def _statue_reachable(world, actor):
     return (getattr(world, "statue_found_this_session", False)
             and actor.location == "forest_edge"
             and world.forest_depth >= STATUE_MIN_DEPTH)
+
+
+# The forest's two conditional presences (see _room_here). The statue is
+# only here when it's reachable -- the same gate `wish` itself uses, so
+# neither can be reached past the other. The cairn is a landmark AT the
+# edge: step even one pace in and it's behind you.
+PRESENCE_RULES["statue"] = _statue_reachable
+PRESENCE_RULES["cairn"] = lambda world, actor: world.forest_depth == 0
 
 
 def cmd_wish(world, actor, arg):
