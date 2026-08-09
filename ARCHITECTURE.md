@@ -500,6 +500,64 @@ touch the room description, `cmd_stack_stone`'s own behavior, or nudge the
 shelf itself — worth watching whether the stone's own description is
 enough before adding a second nudge elsewhere.
 
+## Tuck in journal — a physically honest fate for flat curios
+
+The shelf's "displayed object" logic doesn't fit everything a curio could
+be. A feather (and, once it exists, the mystery seed's bloom — see
+`_is_tuckable` below) has an obvious real-world home the shelf never quite
+captures: pressed flat into a book. `tuck <thing> in journal` (`cmd_tuck`)
+gives it exactly that, in the same family as the cairn (a distinct,
+physically appropriate fate, not folded into the generic curio system) but
+distinct from it too: the cairn is collective and anonymous, the shelf is
+personal and reversible, and this is personal *and* permanent — the
+one-way half of the shelf/cairn contrast, applied to a hand's own visit
+rather than the whole lineage.
+
+**Scope, deliberately narrow.** `_is_tuckable(e)` returns true for
+anything with `"feather"` in its name, or with a `blooms_at` attr — the
+bloom is matched by that attr rather than by name because `BLOOM_KINDS`
+includes entries like `"a single black bloom"` that don't contain the
+word "flower" at all. Everything else (a pinecone, a stone, a button) gets
+`TUCK_REFUSAL`, an in-world "that won't press flat between the pages," not
+an error. No catch-all "tuck any curio" verb — round/dimensional curios
+don't have a fate here, on purpose; see the tuck-in-journal spec's
+"Explicitly NOT in scope."
+
+**Which entry it attaches to.** A tucked item joins `journal.attrs["tucked"]`,
+a `{str(entry_index): [item_name, ...]}` map (string keys because
+`to_data()` round-trips through JSON, which stringifies int dict keys
+anyway — keying by `str()` from the start avoids a same-value,
+different-type bug appearing only after a save/load). The entry it joins
+is *the one active this visit* — `world.journal_entry_index`, a new
+`VisitState` field alongside `forest_depth`/`calm_visits`/`hand_name`, so
+it's session-scoped and never persists. `cmd_write` sets it to the entry
+it just appended; `_journal_entry_index` (used only by `cmd_tuck`) reuses
+that same index if one's already active this visit, or creates a
+placeholder entry ("— nothing written, just left something pressed
+here.") and activates that instead. This is why a visit that only tucks
+and never writes still works, and why two tucks in one visit with no write
+land on the *same* placeholder rather than each minting their own.
+
+**No duplication, by construction, not by a check.** `cmd_tuck` calls
+`world.entities.pop(e.id, None)` — same move as `cmd_stack_stone` — so a
+tucked item stops existing as an entity at all the instant it's tucked.
+There's no separate invariant to maintain: it cannot simultaneously sit in
+a room, a pack, the shelf, or the cairn, because there's nothing left
+anywhere to sit. `take` has nothing left to find, either.
+
+**Reading it back.** `cmd_read` needs to know not just *what's* shown on a
+spread read but *which entry index* each shown line came from, so it can
+look up `journal.attrs["tucked"]` per line. `journal_view` itself only
+ever returned entry text, and changing that would break every existing
+caller and test, so its selection logic was pulled out into
+`_journal_view_indices` (indices and `None`-for-gap, instead of text and
+`JOURNAL_GAP`) — `journal_view` now just maps that over `entries`, byte-
+identical output to before. `cmd_read` calls `_journal_view_indices`
+itself to get the same picks as indices, then appends `_tucked_line` per
+shown entry. `read journal all` does the same over every index via
+`enumerate`. Availability follows the usual rule: `journal_actions` only
+offers `tuck <item> in journal` once a tuckable item is actually in hand.
+
 ## The forest, staged — Stage 3: episodic reset, made explicit
 
 Stage 1 already made `forest_depth` a plain runtime attribute, never written

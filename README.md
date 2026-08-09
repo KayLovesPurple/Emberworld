@@ -124,6 +124,14 @@ and the cairn belongs to the whole lineage, not to whoever placed a given
 stone. It only ever grows, one stone at a time, and growing tall takes
 many hands. A found stone says so itself, wherever you look at it, so the
 option travels with the stone instead of waiting to be remembered.
+A feather has its own second option, the shelf's opposite in a different
+way than the cairn: `tuck <feather> in journal` presses it flat into
+whatever journal entry belongs to this visit, permanently — no take-back,
+same as the cairn — and it turns up again for a later hand not by looking
+at the shelf, but by reading the journal, alongside whatever got written
+that day (or, if nothing did, a short note that something was pressed in
+anyway). Flat and pressable is the whole test — a pinecone or a button
+still only has the shelf, the cat, and (if it's a stone) the cairn.
 
 **A seed, for later.** The forest's edge also turns up, now and then, a
 seed unlike anything else you've found — deterministic, not a roll: one
@@ -134,8 +142,9 @@ one visit lasts, so don't expect to be the one who sees it open — that's
 likely for whoever's around next, planter or stranger. What it becomes is
 fixed the moment you plant it, but hidden until it opens; no watering
 speeds it along, since the wait is the whole point. Once it opens, it's
-an ordinary curio like any other — carry it, give it to the cat, or set
-it on the shelf.
+an ordinary curio like any other — carry it, give it to the cat, set it
+on the shelf, or, since a flower presses flat as readily as a feather
+does, tuck it in the journal instead.
 
 **The journal, and what you inherit of it.** `write <note>` adds a line for
 whoever comes next; `read journal` is free and shows a spread of the record
@@ -148,6 +157,8 @@ visits all hit the same trouble, every arriving hand inherited nothing but
 that one warning and duly wrote another — the journal locked into a single
 register for a week of world-time. What a hand reads shapes how its whole
 visit goes, so no single stretch of the world's history gets to be all of it.
+Any entry a hand tucked something into (see above) says so wherever it's
+shown, in the spread or in `read journal all` alike.
 
 **Calm, unpressured turns.** The forest's edge has its own `listen`: a
 chosen, unpressured turn that just returns a bit of atmosphere and changes
