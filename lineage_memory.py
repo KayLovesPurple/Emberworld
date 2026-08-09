@@ -53,7 +53,11 @@ ENTITY_HINTS = {
     "shelf": "the hut's curio shelf, where found objects are displayed",
     "statue": "the stone statue found deep in the forest, where wishes are made",
     "cat": "the yard's cat",
-    "patch": "specifically the vegetable patch in the yard, where potatoes are grown -- not the forest floor, ground elsewhere, or a metaphorical patch",
+    "patch": ("specifically the vegetable patch in the yard, where potatoes are grown -- "
+              "not the forest floor, ground elsewhere, or a metaphorical patch. Planting, "
+              "watering, or harvesting a potato is always patch behaviour, even if the entry "
+              "just says \"planted a potato\" without the word \"patch\" -- it's the only place "
+              "in the game potatoes are grown, so the action itself identifies the entity"),
 }
 
 EVIDENCE_TYPES = ("behaviour", "interpretation", "association", "observation")
@@ -147,7 +151,7 @@ _SYSTEM_PROMPT = f"""You extract structured evidence from a text-adventure game'
 Known entities -- only ever tag evidence to one of these, and only when an entry genuinely refers to the specific thing described, not just a word that sounds similar:
 {_ENTITY_LIST_TEXT}
 
-For each journal entry, extract zero or more evidence items using the record_evidence tool. Be conservative: most entries have zero, one, or two pieces of evidence, not many. Prefer skipping a stretch over confidently inventing meaning -- reflect real uncertainty in the confidence score rather than omitting a genuine but weak signal. Do not extract anything about potatoes, weather, or other routine chores unless it specifically characterizes one of the known entities."""
+For each journal entry, extract zero or more evidence items using the record_evidence tool. Be conservative: most entries have zero, one, or two pieces of evidence, not many. Prefer skipping a stretch over confidently inventing meaning -- reflect real uncertainty in the confidence score rather than omitting a genuine but weak signal. Do not extract anything about weather or other routine chores unless it specifically characterizes one of the known entities. Potatoes are the one exception worth naming explicitly: eating, cooking, or carrying one is routine and not worth extracting, but planting, watering, or harvesting one is always patch behaviour (see the patch's own hint above) -- extract that every time it appears, even in a short entry that just says 'planted a potato' with no other detail."""
 
 
 def new_memory():

@@ -68,6 +68,26 @@ def test_patch_hint_specifically_rules_out_ground_elsewhere():
     assert "not" in ENTITY_HINTS["patch"]
 
 
+def test_patch_hint_covers_bare_planting_entries_without_the_word_patch():
+    """A second real-use finding, right after the ground-elsewhere fix
+    landed: most journal entries just say something like "planted a
+    potato" with no mention of "the patch" at all, and those were being
+    skipped -- both because the entity hint only covered disambiguating
+    *away* from other ground, not identifying the patch *without* its own
+    name, and because the system prompt's blanket "don't extract routine
+    potato mentions" instruction swept up genuine patch behaviour along
+    with routine eating/cooking/carrying. Potatoes can only ever be
+    planted in this one patch (see cmd_plant/_patch_in in content.py), so
+    the action itself is enough to identify the entity -- no need for the
+    word "patch" to appear at all."""
+    assert "planted a potato" in ENTITY_HINTS["patch"]
+    assert "planted a potato" in _SYSTEM_PROMPT
+    assert "planting" in _SYSTEM_PROMPT and "harvesting" in _SYSTEM_PROMPT
+    # the carve-out must survive alongside the original routine-chores
+    # exclusion, not replace it -- eating/cooking/carrying stays excluded
+    assert "eating" in _SYSTEM_PROMPT and "cooking" in _SYSTEM_PROMPT
+
+
 # ===========================================================================
 # 2. STAMP PARSING -- entries are already stamped by day_stamp
 #    (content_common.py): "[Day N]" or "[Day N, Name]". Parsed locally

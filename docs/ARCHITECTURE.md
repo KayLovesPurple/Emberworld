@@ -1380,6 +1380,32 @@ same way `patch` did. No backfill needed for already-mis-tagged data —
 `llm_rebuild` is a full rebuild from scratch every time (see below), so
 the next `--lineage-rebuild` simply produces the correct tagging.
 
+**BUG WE HIT, immediately after fixing the one above, same real use:
+disambiguation over-corrected into suppression.** Once `patch` couldn't
+be confused with other ground, most journal entries about planting
+potatoes still weren't showing up — because most of them just say
+something like "planted a potato," with no mention of "the patch" at
+all, and `_SYSTEM_PROMPT`'s original closing line told the model to "not
+extract anything about potatoes ... unless it specifically characterizes
+one of the known entities." A bare "planted a potato" reads as exactly
+the routine chore that instruction exists to filter out, unless something
+tells the model that this specific chore *is* patch behaviour by
+construction. It is: `cmd_plant`/`_patch_in` in content.py only ever let
+a potato go into the one patch entity, so there's no other place in the
+game the action could refer to — the verb+object pair identifies the
+entity on its own, no location word required. Fixed two ways together:
+the patch's own `ENTITY_HINTS` entry now says so explicitly ("even if the
+entry just says 'planted a potato' without the word 'patch'"), and the
+closing instruction now names potatoes as a partial exception instead of
+a blanket one — eating/cooking/carrying stays excluded as routine, but
+planting/watering/harvesting is called out as always-extract. Two
+correctness directions, same underlying question (what does "patch"
+actually refer to), so worth reading as one lesson: pin down what should
+be *excluded* AND what should still get *included* explicitly, since
+fixing one without checking the other silently pushed the wrong way each
+time. `test_patch_hint_covers_bare_planting_entries_without_the_word_
+patch` checks both halves stayed in the prompt.
+
 **Four evidence types, exactly the split
 `docs/LINEAGE_MEMORY_OBSERVATORY.md`'s "V1.5" addendum asked for**:
 `observation` / `interpretation` / `behaviour` / `association`, with the
