@@ -29,10 +29,12 @@ reads that note and harvests the crop.
 - `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
   safety net, split to match. Each runs with or without pytest;
   `_test_helpers.py` holds the handful of things they share.
-- `REFERENCE.md` — every verb, behavior, and rule. **Generated from the code**
-  (`python3 emberworld.py --reference`), so it's always current.
-- `ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
+- `docs/REFERENCE.md` — every verb, behavior, and rule. **Generated from the
+  code** (`python3 emberworld.py --reference`), so it's always current.
+- `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
   without breaking anything.
+- `docs/FOREST_SPEC.md` — the forest's staged build spec. `docs/` also holds
+  a couple of not-yet-built design proposals.
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -45,7 +47,7 @@ python3 emberworld.py --agent    # a dumb random agent drives it (no API key)
 python3 emberworld.py --llm --turns 40   # let a Claude live in it (needs a key)
 python3 emberworld.py --llm --show-thoughts   # also print the agent's reasoning (dimmed)
 python3 emberworld.py --fuzz     # 5000 random steps, invariants checked each tick
-python3 emberworld.py --reference > REFERENCE.md   # regenerate the reference
+python3 emberworld.py --reference > docs/REFERENCE.md   # regenerate the reference
 ```
 
 For `--llm` you need `pip install anthropic` and `export ANTHROPIC_API_KEY=...`.
@@ -74,7 +76,7 @@ turn. These local transcripts are ignored by Git.
 
 ## The rules, in brief
 
-Type `help` in-game for the verb list, or see `REFERENCE.md` for everything.
+Type `help` in-game for the verb list, or see `docs/REFERENCE.md` for everything.
 Type `actions` at any point to see the actions currently available to you; it
 is free and does not advance time.
 
@@ -229,7 +231,7 @@ python3 -m pytest -q                                                            
 ```
 
 Run the tests before any change. Green means the world still holds together;
-a failure points at the exact seam you broke. See `ARCHITECTURE.md` for the
+a failure points at the exact seam you broke. See `docs/ARCHITECTURE.md` for the
 test-first workflow.
 
 ## Where the save lives
@@ -244,7 +246,7 @@ A running list of intended features, roughly in dependency order. Each depends
 on the one before, so build them in sequence. This is a design compass, not a
 commitment.
 
-1. **The forest** *(a real project, its own design pass — see `FOREST_SPEC.md`
+1. **The forest** *(a real project, its own design pass — see `docs/FOREST_SPEC.md`
    for the full staged plan).* **Stages 1-6 — done:** a session-scoped depth
    counter with `venture`/`return`/`mark trail`, generated texture (near/mid/
    deep bands plus an independent ambient-line chance), the episodic-reset
@@ -265,7 +267,7 @@ commitment.
    than a single-verb loop — the cosiest possible use of a turn, and a
    self-directed comfort for the player the way petting is comfort for the cat.
 
-**The mysterious statue** *(built — FOREST_SPEC.md Stage 7 — deliberately
+**The mysterious statue** *(built — docs/FOREST_SPEC.md Stage 7 — deliberately
 mechanic-free even so).* It does NOTHING. No state, no puzzle, no
 explanation, ever — `wish <something>` is the one verb it answers to, and
 that verb is a no-op by design (see "The wishing-statue" below). Its entire
@@ -369,7 +371,7 @@ into a permanent, collective bed by the fence (the cairn's yard-side
 twin) instead of just vanishing — not built yet, on purpose, until a
 lineage has actually lived with the simpler version for a while.
 
-### The wishing-statue — a wish-sink (built — FOREST_SPEC.md Stage 7)
+### The wishing-statue — a wish-sink (built — docs/FOREST_SPEC.md Stage 7)
 
 The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.
 

@@ -1968,7 +1968,7 @@ ACTION_SOURCES.extend([
 # ---------------------------------------------------------------------------
 # Self-documenting reference. Built from the VERBS/BEHAVIORS registries and the
 # world's own constants, so it can never drift out of sync with the code.
-#   python3 emberworld.py --reference > REFERENCE.md
+#   python3 emberworld.py --reference > docs/REFERENCE.md
 # A test asserts every verb and behavior carries a docstring, so nothing new
 # can slip in undocumented.
 # ---------------------------------------------------------------------------

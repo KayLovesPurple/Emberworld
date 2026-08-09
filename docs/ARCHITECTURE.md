@@ -1139,7 +1139,7 @@ mystery bugs. Example: adding fishing.
    `VERBS` with a one-line docstring; new autonomy goes in `BEHAVIORS`; new
    content goes in `build_world`. Route randomness through `world.rng`.
 4. **Go green, then prove nothing else broke.** All existing tests pass, and
-   `--fuzz` stays clean. Regenerate the reference (`--reference > REFERENCE.md`).
+   `--fuzz` stays clean. Regenerate the reference (`--reference > docs/REFERENCE.md`).
 5. **Bump `SAVE_VERSION`** if the save shape changed.
 
 A design note that matters for the LLM driver specifically: each agent turn is a
