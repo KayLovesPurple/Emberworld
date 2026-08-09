@@ -151,12 +151,12 @@ def describe_forest(depth, rng):
 FOREST_AMBIENT_CHANCE = 0.12
 
 FOREST_AMBIENT = (
-    "somewhere off to the side, a branch cracks, and nothing follows it",
-    "a smell drifts past, unplaceable, and then it's gone",
-    "an unseen bird runs through a few notes and stops",
-    "something rustles low in the undergrowth, gone by the time you look",
-    "a cold thread of air crosses your path and is gone",
-    "the light shifts, just slightly, though nothing overhead moved",
+    "Somewhere off to the side, a branch cracks, and nothing follows it.",
+    "A smell drifts past, unplaceable, and then it's gone.",
+    "An unseen bird runs through a few notes and stops.",
+    "Something rustles low in the undergrowth, gone by the time you look.",
+    "A cold thread of air crosses your path and is gone.",
+    "The light shifts, just slightly, though nothing overhead moved.",
 )
 
 

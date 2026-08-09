@@ -679,6 +679,25 @@ test now also scans `FOREST_AMBIENT` (and `MOON_LINES`/`OFF_COURSE_LINES`,
 picked up in the same pass) — worth re-running whenever any of these pools
 grow.
 
+**BUG WE HIT, found in real play: ambient lines read as run-on sentences.**
+`FOREST_AMBIENT` was originally written like `FOREST_FRAGMENTS` — bare,
+lowercase clauses with no trailing period — but the two pools are composed
+completely differently. `describe_forest` joins several `FOREST_FRAGMENTS`
+picks with `"; "` and capitalizes/punctuates the *whole* joined line once,
+at the end. `_forest_ambient`, though, just space-prefixes its one pick and
+appends it directly onto an already-complete, period-ended sentence
+(`describe_forest`'s own line, or — worse — the statue's `STATUE_DISCOVERY_
+TEXT`, which also ends in a period). Style borrowed from the wrong sibling:
+a hit read as "...the way you'd toss a coin in a fountain. something
+rustles low in the undergrowth, gone by the time you look" — no capital,
+no closing period. Fixed by writing `FOREST_AMBIENT` as complete sentences,
+same convention as `LISTEN_LINES`/`WILDLIFE_LINES`/`MOON_LINES`, all of
+which really are appended standalone rather than joined into one line.
+`_forest_ambient` itself didn't need to change. See
+`test_forest_ambient_lines_are_well_formed_sentences` and
+`test_venture_composes_discovery_and_ambient_as_proper_sentences`, the
+latter pinned to this exact discovery-plus-ambient combination.
+
 ## The forest, staged — Stage 7: wood relocation and the statue
 
 Two of the three things Stage 7 promised; the tea-herb is deliberately

@@ -10,6 +10,7 @@ Run it either way:
 
 import json
 import random
+import re
 
 from world import World, Entity, check_world, DAY_LENGTH
 from content import (
@@ -3015,6 +3016,39 @@ def test_return_to_the_edge_never_carries_ambient_text():
     w.rng = _AlwaysAmbient()
     result = cmd_return(w, actor, "")
     assert not any(line in result for line in FOREST_AMBIENT)
+
+
+def test_forest_ambient_lines_are_well_formed_sentences():
+    """BUG WE HIT, found in real play: FOREST_AMBIENT lines were bare
+    lowercase clauses with no trailing period -- styled like FOREST_
+    FRAGMENTS, which only get capitalized/punctuated once, after
+    describe_forest joins several of them into one line. But
+    _forest_ambient's pick is appended directly onto an already-complete,
+    period-ended sentence (describe_forest's own line, or the statue's
+    discovery text), so a hit read as a run-on: "...toss a coin in a
+    fountain. something rustles low in the undergrowth, gone by the time
+    you look" -- no capital, no closing period. Pin these to the same
+    "complete sentence" convention their siblings already follow
+    (LISTEN_LINES, WILDLIFE_LINES, MOON_LINES)."""
+    for line in FOREST_AMBIENT:
+        assert line[0].isupper(), f"not capitalized: {line!r}"
+        assert line.endswith("."), f"missing trailing period: {line!r}"
+
+
+def test_venture_composes_discovery_and_ambient_as_proper_sentences():
+    """The exact real-play scenario: the statue discovery text and an
+    ambient line landing on the same venture, back to back."""
+    w, actor = fresh()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysAmbient()
+    result = w.act(actor, "venture")
+    assert "stone figure" in result
+    assert any(line in result for line in FOREST_AMBIENT)
+    assert result.rstrip().endswith(".")
+    assert not re.search(r"\.\s+[a-z]", result), \
+        f"a sentence boundary reads as a run-on: {result!r}"
 
 
 def test_ambient_can_co_occur_with_an_off_course_return_without_crashing():
