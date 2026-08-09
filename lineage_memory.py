@@ -34,7 +34,7 @@ LLM_MODEL = "claude-haiku-4-5-20251001"
 # Only ever tag evidence to one of these -- keeps the tracked-entity list
 # small and deliberate rather than letting the LLM invent arbitrary nouns
 # (docs/LINEAGE_MEMORY_OBSERVATORY.md section 13's own caution).
-KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue", "cat")
+KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue", "cat", "patch")
 
 EVIDENCE_TYPES = ("behaviour", "interpretation", "association", "observation")
 

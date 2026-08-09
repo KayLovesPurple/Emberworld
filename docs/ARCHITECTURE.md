@@ -1350,7 +1350,7 @@ key installed.
 
 **A closed entity list, an open concept vocabulary.** `KNOWN_ENTITIES` is
 still a small, fixed, hand-authored tuple (well, cairn, forest, hearth,
-lamp, shelf, statue, cat) passed into the prompt as an enum constraint —
+lamp, shelf, statue, cat, patch) passed into the prompt as an enum constraint —
 docs/LINEAGE_MEMORY_OBSERVATORY.md section 13's own caution against
 letting arbitrary nouns become thousands of tracked entities still
 applies, and an LLM is exactly the kind of extractor that would happily
