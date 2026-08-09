@@ -161,7 +161,7 @@ def _call_llm(client, model, batch, offset):
     return []
 
 
-def llm_rebuild(entries, client=None, model=LLM_MODEL):
+def llm_rebuild(entries, client=None, model=LLM_MODEL, on_batch=None):
     """Rebuild Lineage Memory from scratch using an LLM for extraction --
     manually triggered (`--lineage-rebuild`) only, never incremental and
     never automatic. `entries` is the plain list of journal entry strings
@@ -175,12 +175,24 @@ def llm_rebuild(entries, client=None, model=LLM_MODEL):
     module needs it installed. A batch that raises (network error, bad
     response) is skipped rather than aborting the whole rebuild -- a
     partial result developers can see and re-run is better than losing
-    everything to one bad batch."""
+    everything to one bad batch.
+
+    `on_batch(batch_num, total_batches)`, if given, fires right before
+    each batch's API call -- a growing journal means a growing number of
+    calls, and a silent multi-batch rebuild reads as hung rather than
+    working. Called before the call, not after, so the CLI can print
+    progress before a slow or stuck request, not only once it returns.
+    Kept as a plain callback rather than baked-in printing so this module
+    stays decoupled from stdout -- drivers.py owns the actual output, same
+    as everywhere else here."""
     if client is None:
         from anthropic import Anthropic
         client = Anthropic()
     memory = new_memory()
-    for offset in range(0, len(entries), BATCH_SIZE):
+    total_batches = -(-len(entries) // BATCH_SIZE) if entries else 0
+    for batch_num, offset in enumerate(range(0, len(entries), BATCH_SIZE), start=1):
+        if on_batch is not None:
+            on_batch(batch_num, total_batches)
         batch = entries[offset:offset + BATCH_SIZE]
         try:
             items = _call_llm(client, model, batch, offset)

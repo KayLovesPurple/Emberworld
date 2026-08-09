@@ -209,7 +209,12 @@ def lineage_rebuild(model=None):
     journal = w.get("journal")
     entries = journal.attrs.get("entries", []) if journal else []
     print(f"(Rebuilding Lineage Memory from {len(entries)} journal entries...)")
-    memory = llm_rebuild(entries, model=model or LINEAGE_LLM_MODEL)
+
+    def _report_progress(batch_num, total_batches):
+        print(f"  batch {batch_num}/{total_batches}...", flush=True)
+
+    memory = llm_rebuild(entries, model=model or LINEAGE_LLM_MODEL,
+                          on_batch=_report_progress)
     save_lineage(memory)
     print(format_report(memory))
 

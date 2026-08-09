@@ -127,6 +127,38 @@ def test_llm_rebuild_batches_entries_and_makes_one_call_per_batch():
     assert f"[{BATCH_SIZE}]" not in first_prompt, "batch 1 must not leak into batch 0's prompt"
 
 
+def test_llm_rebuild_reports_progress_once_per_batch_before_the_call():
+    """A growing journal means a growing number of batches, and a silent
+    multi-batch rebuild reads as hung rather than working -- on_batch must
+    fire before each API call (not after), so a stuck or slow request still
+    shows up as progress rather than silence."""
+    from lineage_memory import BATCH_SIZE
+    entries = [f"[Day {i}] Entry {i}." for i in range(BATCH_SIZE * 2 + 1)]
+    client = _FakeExtractionClient([[], [], []])
+    seen = []
+
+    def on_batch(batch_num, total_batches):
+        seen.append((batch_num, total_batches, len(client.calls)))
+
+    llm_rebuild(entries, client=client, on_batch=on_batch)
+    assert seen == [(1, 3, 0), (2, 3, 1), (3, 3, 2)], \
+        "each on_batch call must land before that batch's own API call"
+
+
+def test_llm_rebuild_never_calls_on_batch_for_an_empty_journal():
+    calls = []
+    llm_rebuild([], client=_FakeExtractionClient([]), on_batch=lambda *a: calls.append(a))
+    assert calls == []
+
+
+def test_llm_rebuild_works_without_an_on_batch_callback():
+    """on_batch is optional -- every other test already relies on this,
+    but pin it explicitly so it can't regress into a required arg."""
+    entries = ["[Day 1] Fed the cat."]
+    memory = llm_rebuild(entries, client=_FakeExtractionClient([[]]))
+    assert memory["entry_count"] == 1
+
+
 def test_llm_rebuild_skips_a_batch_that_raises_rather_than_aborting():
     class _Boom:
         def __init__(self):

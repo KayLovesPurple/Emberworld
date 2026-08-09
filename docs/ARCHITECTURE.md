@@ -1392,6 +1392,20 @@ developer can look at and re-run, not lose everything to one bad batch.
 index) are dropped the same way — silently, rather than corrupting
 `memory` or crashing.
 
+**Progress, for a rebuild that takes a while.** A real lineage's journal
+already runs to a handful of round trips, and it only grows — a silent
+multi-batch rebuild reads as hung rather than working (found in real use:
+"it took a while and it looked like it was stuck"). `llm_rebuild` takes an
+optional `on_batch(batch_num, total_batches)`, fired right *before* each
+batch's API call rather than after, so a slow or genuinely stuck request
+still shows up as progress instead of silence. Kept as a plain callback,
+not baked-in printing, so this module stays decoupled from stdout the same
+way it stays decoupled from `world.py`; `drivers.py`'s `lineage_rebuild`
+supplies the actual `print(f"  batch {n}/{total}...", flush=True)`. The
+explicit `flush=True` matters here specifically — without it, output can
+sit in a buffer for the same reason a stuck call would, defeating the
+whole point.
+
 **No incremental state.** The old `processed_through`/resume bookkeeping
 is gone along with the automatic sync it existed for: `llm_rebuild`
 always processes every entry from scratch (`{"entry_count": N,
