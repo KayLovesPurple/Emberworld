@@ -1161,6 +1161,16 @@ if so, the group keeps that suffix attached ("two pinecones,
 well-battered after a game with the cat"); if not (an ordinary find), it
 renders the terser count-only line as before.
 
+**BUG WE HIT, a second real one, same review cycle:** `_group_count_line`
+stripped the self-naming prefix before splicing a trace's text onto a
+count; `_group_look_summary` (the `look <name>` detail view, a separate
+function) didn't get the same treatment, so `look pinecone` on a
+compressed trace group read "There are two pinecones here. **a
+pinecone**, well-battered after a game with the cat" — the name spoken
+twice. Both call sites now share one helper, `_drop_self_naming_prefix`,
+so there's exactly one place that knows what a trace's description looks
+like and exactly one place that strips it.
+
 **Thresholds** (`CURIO_GROUP_EXACT_MAX=4`, `CURIO_GROUP_SEVERAL_AT=5`):
 group size 1 renders exactly as `_room_listing_line` always did (zero
 behavioral change for the common case); 2 through 4 spells the count out

@@ -3771,8 +3771,24 @@ def test_look_at_a_compressed_trace_group_reveals_the_exact_count():
     _trace(w, "a pinecone", "plays")
     _trace(w, "a pinecone", "plays")
     result = w.act(actor, "look pinecone")
-    assert "two pinecones" in result.lower()
-    assert "well-battered after a game with the cat" in result
+    assert result == "There are two pinecones here. well-battered after a game with the cat"
+
+
+def test_look_at_a_mixed_compressed_group_does_not_double_a_traces_own_name():
+    """BUG WE HIT (real observed output): "look pinecone" on a compressed
+    trace group read "There are two pinecones here. a pinecone,
+    well-battered after a game with the cat" -- the name spoken twice,
+    because _group_look_summary attached the trace's self-naming
+    description as-is. Same fix as _group_count_line: strip the "{name}, "
+    prefix a trace's own description always opens with before splicing it
+    onto the count sentence."""
+    w, actor = fresh()
+    for _ in range(6):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    _trace(w, "a pinecone", "plays")
+    result = w.act(actor, "look pinecone")
+    assert "a pinecone, well-battered" not in result
+    assert "different: well-battered after a game with the cat" in result
 
 
 def test_look_at_a_compressed_group_with_a_distinctive_member_names_it():

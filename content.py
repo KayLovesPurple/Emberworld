@@ -563,23 +563,38 @@ def _curio_groups(entities):
     return [(name, desc, groups[(name, desc)]) for name, desc in order]
 
 
+def _drop_self_naming_prefix(name, description):
+    """A cat-given trace's description is self-naming -- "{name}, {suffix}"
+    (see _CAT_GIVE_TRACES) -- because on its own (count==1) it's rendered
+    as-is by _room_listing_line with no separate name prefix. Once it's
+    folded into a count line or a group summary, the name is already
+    spoken there, so repeating it verbatim reads as "There are two
+    pinecones here. a pinecone, well-battered..." -- the name twice.
+    Strips the "{name}, " open when present; returns `description`
+    unchanged for an ordinary find's bare look_line (which never has it).
+    Shared by _group_count_line and _group_look_summary so both render a
+    trace group the same way."""
+    prefix = f"{name}, "
+    return description[len(prefix):] if description.startswith(prefix) else description
+
+
 def _group_count_line(name, description, count):
     """The room-listing line for a compressed group. An ordinary find's
     description is just flavor text (a bare look_line) -- dropping it is
     the whole point of compression, so the line is just the count and the
     plural name ("three pinecones"). A cat-given trace's description is
-    self-naming ("{name}, {suffix}" -- see _CAT_GIVE_TRACES) and the
-    suffix IS the point (`give`'s whole invariant is that the gesture
-    always leaves its mark), so a trace group keeps it: "two pinecones,
-    well-battered after a game with the cat" reads naturally even though
-    "a game" stays grammatically singular -- no attempt to conjugate the
-    suffix, which would need real NLG for no real gain here."""
+    self-naming and the suffix IS the point (`give`'s whole invariant is
+    that the gesture always leaves its mark), so a trace group keeps it:
+    "two pinecones, well-battered after a game with the cat" reads
+    naturally even though "a game" stays grammatically singular -- no
+    attempt to conjugate the suffix, which would need real NLG for no
+    real gain here."""
     plural = _plural_of(name)
     prefix = f"{_spell(count)} {plural}" if count <= CURIO_GROUP_EXACT_MAX \
         else f"several {plural}"
-    self_naming_prefix = f"{name}, "
-    if description.startswith(self_naming_prefix):
-        return prefix + ", " + description[len(self_naming_prefix):]
+    tail = _drop_self_naming_prefix(name, description)
+    if tail != description:
+        return prefix + ", " + tail
     return prefix
 
 
@@ -625,14 +640,14 @@ def _group_look_summary(name, entities):
         return None
     head = f"There are {_spell(total)} {_plural_of(name)} here."
     if len(subgroups) == 1:
-        return head + " " + subgroups[0][0]
+        return head + " " + _drop_self_naming_prefix(name, subgroups[0][0])
     subgroups.sort(key=lambda kv: -len(kv[1]))
     parts = []
     for i, (desc, es) in enumerate(subgroups):
         label = "ordinary" if i == 0 else "different"
         count = len(es)
         verb = "is" if count == 1 else "are"
-        parts.append(f"{_spell(count)} {verb} {label}: {desc}")
+        parts.append(f"{_spell(count)} {verb} {label}: {_drop_self_naming_prefix(name, desc)}")
     return head + " " + " ".join(parts)
 
 
