@@ -3113,6 +3113,34 @@ def test_wish_requires_currently_being_deep_enough():
     assert "nothing here" in result.lower()
 
 
+def test_leaving_the_forest_without_returning_resets_depth_on_next_entry():
+    """BUG: `return` is what actually decrements forest_depth, but "go
+    yard" is also a valid exit from forest_edge at any depth -- it skips
+    `return`'s off-course risk entirely, and used to skip resetting depth
+    too. That left forest_depth stuck deep across the trip to the yard, so
+    a later "go forest" showed the fixed, shallow arrival text (this is
+    the edge, nothing lurks yet) while the statue's presence rule -- keyed
+    only on forest_depth and statue_found_this_session -- still passed,
+    surfacing the statue at what reads as a fresh arrival. Leaving via the
+    yard exit has to be as final as walking all the way back with
+    `return`."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysDiscover()
+    w.act(actor, "venture")
+    assert w.statue_found_this_session
+    assert w.forest_depth >= STATUE_MIN_DEPTH
+    w.rng = _Unlucky()
+    run(w, actor, "go yard")
+    assert w.forest_depth == 0, "leaving the forest should reset depth even without `return`"
+    result = w.act(actor, "go forest")
+    assert "stone figure" not in result, \
+        "arriving fresh at the edge must not show the statue"
+
+
 def test_wish_works_again_at_a_different_depth_once_found():
     w, actor = fresh()
     w.rng = _Unlucky()

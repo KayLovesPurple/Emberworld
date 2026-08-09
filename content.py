@@ -704,6 +704,17 @@ def cmd_go(world, actor, arg):
     dest = room.exits.get(key)
     if not dest:
         return f"You can't go {arg or 'that way'}."
+    # BUG WE HIT: forest_edge's "yard" exit is a valid way out at any
+    # forest_depth, but only `return` actually decremented it -- taking
+    # this exit instead left forest_depth stuck deep across the trip to
+    # the yard. A later "go forest" shows the fixed, shallow arrival text
+    # (see forest_edge's description), but the statue's presence rule is
+    # keyed only on forest_depth/statue_found_this_session, so it still
+    # passed and the statue surfaced at what reads as a fresh arrival.
+    # Leaving through this exit has to be as final as walking all the way
+    # back with `return` -- see _room_here's own note on this same bug.
+    if room.id == "forest_edge" and dest != "forest_edge":
+        world.forest_depth = 0
     actor.location = dest
     return cmd_look(world, actor, "")
 

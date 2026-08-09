@@ -799,6 +799,22 @@ would only have fixed the suggestion, not the actual bug.
 since it never went through `find_visible` to locate the cairn in the
 first place — it grabs it directly via `ensure_cairn`.
 
+**BUG WE HIT, a real recurrence of the one above, found in actual play:**
+`_room_here`'s gate is only half the fix — it stops the statue being
+*shown* once `forest_depth` drops back below `STATUE_MIN_DEPTH`, but
+nothing was actually decrementing `forest_depth` on the way out. `return`
+does, one step at a time (with its off-course risk), but forest_edge's
+plain `"yard"` exit is *also* a valid way to leave at any depth, and
+`cmd_go` just relocated the actor without touching it. Leave via `go
+yard` while still deep and `forest_depth` stayed stuck there across the
+trip to the yard; a later `go forest` shows the fixed, shallow arrival
+text (the same text every entry gets, regardless of depth), but the
+statue's presence rule was still reading the stale deep value and passed,
+surfacing the statue at what reads as a first arrival. Fixed in `cmd_go`:
+leaving `forest_edge` for anywhere else resets `world.forest_depth` to
+`0`, so the exit is as final as walking all the way back with `return`.
+See `test_leaving_the_forest_without_returning_resets_depth_on_next_entry`.
+
 ## The full moon — the one exception to the night withdrawal
 
 `watch clouds` at night has always been a clean withdrawal (`WATCH_CLOUDS_
