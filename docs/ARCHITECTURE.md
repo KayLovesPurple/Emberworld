@@ -768,10 +768,41 @@ it appends the raw wish text (tagged with `_day_stamp`, the same stamp
 `cmd_write`/the LLM sign-off use) to `ensure_statue(world).attrs["wishes"]`
 and always returns the identical fixed `STATUE_WISH_LINE`, with no
 confirmation of anything heard or granted, ever. `ensure_statue` creates
-the statue's entity lazily, on the first actual wish — unlike `ensure_
-shelf`/`ensure_cairn`, it isn't wired into `load_or_build`, since most
-visits (plausibly most whole lineages) may never find it at all, and
-nothing else needs the entity to exist before then.
+the statue's entity lazily, on discovery — unlike `ensure_shelf`/`ensure_
+cairn`, it isn't wired into `load_or_build`, since most visits (plausibly
+most whole lineages) may never find it at all, and nothing else needs the
+entity to exist before then.
+
+**BUG WE HIT, found in real play, requested as a small follow-up: `look
+statue` was unreachable for a lineage's very first discovery.**
+`ensure_statue` used to run only from `cmd_wish`, so `cmd_venture`'s
+discovery branch set `statue_found_this_session` and returned the one-time
+discovery paragraph, but never actually created the entity — `find_visible`
+had nothing to find, so `look statue` failed with "you don't see any
+'statue' here" until *after* a hand had already wished on it. Backwards,
+since the description's whole job (see below) is nudging a hand toward
+wishing in the first place. It went unnoticed because it self-heals
+permanently the first time anyone in the lineage ever wishes — the entity
+persists in the save from then on, so every later hand's discovery already
+finds it lookable. Fixed by having the discovery branch call `ensure_
+statue(world)` itself, same idempotent function `cmd_wish` already used, so
+creation now happens exactly once, at the moment it's first needed, however
+a hand gets there. `test_wish_touches_no_state_besides_the_statues_own_
+wish_log` had baked in the old "wish creates the entity" timing as an
+assertion; updated to assert wish adds/removes nothing (the entity already
+exists by then) while still pinning that only the wish log itself changes.
+
+While fixing that, also gave the base description its own quiet nudge:
+`"...the kind of thing a hand leaves a wish with, the way you would a coin
+in a fountain"` — the same register `STATUE_DISCOVERY_TEXT` already uses,
+folded into the permanent `look statue` text too, not just the one-time
+discovery paragraph. README's "wishing-statue" section already claimed
+"the statue's own description hints that wishing here is a thing people
+do"; this makes that literally true of `entity.description`, not just of
+the discovery text. Same restraint applies here as everywhere else about
+the statue: never a word implying it hears, listens, grants, knows, or is
+aware — `test_look_statue_vaguely_hints_at_wishing` checks for both the
+hint and the absence of those words.
 
 Deliberately **not** added to `check_world`: a standing invariant that
 `statue_found_this_session` is never `True` below `STATUE_MIN_DEPTH`. The

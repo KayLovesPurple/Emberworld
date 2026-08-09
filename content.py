@@ -1623,13 +1623,20 @@ def ensure_statue(world):
     """Create the statue's persistent record the first time it's actually
     needed -- lazily, unlike ensure_shelf/ensure_cairn, since most visits
     (most whole lineages, even) may go a long time without ever finding it.
-    Nothing else depends on this entity existing before then."""
+    Nothing else depends on this entity existing before then.
+
+    The description carries the same vague, folk-magic hint as the
+    discovery text -- "a coin in a fountain," never a claim that anything
+    hears or grants -- so a hand who looks again later (this visit, or a
+    later hand entirely, long after the one-time discovery paragraph has
+    scrolled away) still finds the nudge toward `wish`, not just a rock."""
     statue = world.get("statue")
     if statue is None:
         statue = world.add(Entity("statue", "statue",
             "a weathered stone figure, worn past recognizing, moss thick "
-            "in its folds", location="forest_edge", portable=False,
-            attrs={"wishes": []}))
+            "in its folds -- the kind of thing a hand leaves a wish with, "
+            "the way you would a coin in a fountain", location="forest_edge",
+            portable=False, attrs={"wishes": []}))
     return statue
 
 
@@ -1676,6 +1683,14 @@ def cmd_venture(world, actor, arg):
             and world.forest_depth >= STATUE_MIN_DEPTH
             and world.rng.random() < STATUE_DISCOVERY_CHANCE):
         world.statue_found_this_session = True
+        # BUG WE HIT: ensure_statue used to only ever run from cmd_wish, so
+        # the very first hand in a lineage to find the statue could not
+        # `look` at it (find_visible has nothing to find) until they'd
+        # already wished on it -- exactly backwards, since the description's
+        # whole job is nudging a hand toward wishing in the first place.
+        # Later hands never hit this: once any wish has ever been made,
+        # the entity persists in the save from then on.
+        ensure_statue(world)
         discovery = STATUE_DISCOVERY_TEXT
     # Composition order (FOREST_SPEC.md cross-cutting requirement):
     # discovery text leads, then ambient -- off-course doesn't apply to

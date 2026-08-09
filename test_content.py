@@ -3213,15 +3213,20 @@ def test_wish_logs_the_wish_and_returns_a_fixed_line_with_no_confirmation():
 
 
 def test_wish_touches_no_state_besides_the_statues_own_wish_log():
+    """Discovery itself now creates the statue's record (see cmd_venture --
+    a hand has to be able to `look` at it before wishing on it), so by the
+    time `wish` runs, the only thing left for it to change is the wish log
+    on an already-existing entity -- no entity should be added or removed."""
     w, actor = fresh()
     w.rng = _AlwaysDiscover()
     run(w, actor, "go out", "go forest", "venture", "venture", "venture")
     before = w.to_data()
+    before_entities = {e["id"] for e in before["entities"]}
+    assert "statue" in before_entities, "discovery should have created the statue's record"
     cmd_wish(w, actor, "a warm winter")
     after = w.to_data()
-    before_entities = {e["id"] for e in before["entities"]}
     after_entities = {e["id"] for e in after["entities"]}
-    assert after_entities - before_entities == {"statue"}
+    assert after_entities == before_entities, "wish must not add or remove any entity"
     before_by_id = {e["id"]: e for e in before["entities"]}
     for e in after["entities"]:
         if e["id"] == "statue":
@@ -3236,6 +3241,24 @@ def test_ensure_statue_is_idempotent():
     statue2 = ensure_statue(w)
     assert statue2 is statue1
     assert statue2.attrs["wishes"] == ["a wish already logged"]
+
+
+def test_look_statue_vaguely_hints_at_wishing():
+    """README already claims "the statue's own description hints that
+    wishing here is a thing people do" -- but that hint used to live only
+    in the one-time discovery text, not the persistent `description` a
+    later `look statue` actually returns. Fold it into the base
+    description too, same folk-magic register (a coin in a fountain), and
+    keep well clear of THE LINE THAT MUST NEVER APPEAR: nothing implying
+    the statue listens, grants, or is aware."""
+    w, actor = fresh()
+    w.rng = _AlwaysDiscover()
+    run(w, actor, "go out", "go forest", "venture", "venture", "venture")
+    result = w.act(actor, "look statue")
+    assert "wish" in result.lower()
+    for forbidden in ("hears", "listens", "grants", "knows", "aware"):
+        assert forbidden not in result.lower(), \
+            f"statue description implies awareness/granting: {result!r}"
 
 
 def test_statue_found_this_session_does_not_survive_a_save_load_roundtrip():
