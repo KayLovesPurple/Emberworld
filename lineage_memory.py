@@ -36,6 +36,26 @@ LLM_MODEL = "claude-haiku-4-5-20251001"
 # (docs/LINEAGE_MEMORY_OBSERVATORY.md section 13's own caution).
 KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue", "cat", "patch")
 
+# BUG WE HIT, found in real use: a stone left "on the flat ground at the
+# forest's edge" (the cairn) got tagged to "patch" instead. The entity
+# list used to reach the model as bare names with no disambiguation, and
+# "patch" is ordinary English for any patch of ground -- nothing marked it
+# as specifically the yard's vegetable patch, so a passage about ground
+# elsewhere read as a plausible match. One short, unambiguous gloss per
+# entity, always sent alongside the name (see _SYSTEM_PROMPT) rather than
+# trusting the bare word to carry its meaning on its own.
+ENTITY_HINTS = {
+    "well": "the well in the yard",
+    "cairn": "the small stone landmark at the forest's edge, built by stacking found stones -- not any other rock or ground",
+    "forest": "the forest as a whole, or texture/mood deep within it -- not a specific landmark inside it (those get their own entity)",
+    "hearth": "the hut's hearth/fireplace",
+    "lamp": "the portable tin lamp, kindled from the hearth",
+    "shelf": "the hut's curio shelf, where found objects are displayed",
+    "statue": "the stone statue found deep in the forest, where wishes are made",
+    "cat": "the yard's cat",
+    "patch": "specifically the vegetable patch in the yard, where potatoes are grown -- not the forest floor, ground elsewhere, or a metaphorical patch",
+}
+
 EVIDENCE_TYPES = ("behaviour", "interpretation", "association", "observation")
 
 # Entries per API call. A balance: small enough that one batch's prompt
@@ -120,9 +140,12 @@ _EXTRACTION_TOOL = {
     },
 }
 
+_ENTITY_LIST_TEXT = "\n".join(f"- {e}: {ENTITY_HINTS[e]}" for e in KNOWN_ENTITIES)
+
 _SYSTEM_PROMPT = f"""You extract structured evidence from a text-adventure game's shared journal, for a developer tool that observes recurring patterns in how independent hands describe and interact with the world. It never changes the game or is shown to any hand.
 
-Known entities -- only ever tag evidence to one of these, and only when an entry genuinely refers to it: {", ".join(KNOWN_ENTITIES)}.
+Known entities -- only ever tag evidence to one of these, and only when an entry genuinely refers to the specific thing described, not just a word that sounds similar:
+{_ENTITY_LIST_TEXT}
 
 For each journal entry, extract zero or more evidence items using the record_evidence tool. Be conservative: most entries have zero, one, or two pieces of evidence, not many. Prefer skipping a stretch over confidently inventing meaning -- reflect real uncertainty in the confidence score rather than omitting a genuine but weak signal. Do not extract anything about potatoes, weather, or other routine chores unless it specifically characterizes one of the known entities."""
 

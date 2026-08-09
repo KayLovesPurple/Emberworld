@@ -21,9 +21,9 @@ import os
 import tempfile
 
 from lineage_memory import (
-    KNOWN_ENTITIES, EVIDENCE_TYPES, CONFIDENCE_WEAK_BELOW,
+    KNOWN_ENTITIES, ENTITY_HINTS, EVIDENCE_TYPES, CONFIDENCE_WEAK_BELOW,
     new_memory, llm_rebuild, format_report,
-    save, load, _parse_stamp,
+    save, load, _parse_stamp, _SYSTEM_PROMPT,
 )
 
 
@@ -41,6 +41,31 @@ def test_known_entities_are_lowercase_and_unique():
 
 def test_evidence_types_are_the_four_the_doc_asks_for():
     assert set(EVIDENCE_TYPES) == {"observation", "interpretation", "behaviour", "association"}
+
+
+def test_every_known_entity_has_exactly_one_disambiguating_hint():
+    """BUG WE HIT, found in real use: a stone left "on the flat ground at
+    the forest's edge" (the cairn) got tagged to "patch" instead -- bare
+    entity names carried no disambiguation, and "patch" is ordinary
+    English for any patch of ground, not obviously the yard's vegetable
+    patch specifically. Every entity now needs a hint, and no orphaned
+    hint should exist for an entity that's been removed."""
+    assert set(ENTITY_HINTS) == set(KNOWN_ENTITIES)
+    for e in KNOWN_ENTITIES:
+        assert ENTITY_HINTS[e].strip(), f"empty hint for {e!r}"
+
+
+def test_system_prompt_carries_every_entity_hint():
+    for e in KNOWN_ENTITIES:
+        assert ENTITY_HINTS[e] in _SYSTEM_PROMPT, \
+            f"hint for {e!r} not reaching the model"
+
+
+def test_patch_hint_specifically_rules_out_ground_elsewhere():
+    """The exact confusion from real use: ground/a stone at the forest's
+    edge is the cairn's territory, not the vegetable patch's."""
+    assert "vegetable patch" in ENTITY_HINTS["patch"]
+    assert "not" in ENTITY_HINTS["patch"]
 
 
 # ===========================================================================

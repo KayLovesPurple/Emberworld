@@ -1360,6 +1360,26 @@ labels) — the entire reason to bring an LLM in was to stop being limited
 to a hand-authored word list, so constraining concepts the same way as
 entities would have defeated the point.
 
+**BUG WE HIT, found in real use, right after `patch` was added: bare
+entity names aren't enough disambiguation.** A stone left "on the flat
+ground at the forest's edge" — the cairn — got tagged to `patch` instead.
+The enum constraint only forces a *valid* choice, not the *right* one, and
+the entities used to reach the model as bare names with nothing else:
+`well, cairn, forest, hearth, ... patch`. `patch` is ordinary English for
+any patch of ground, and nothing marked it as specifically the yard's
+vegetable patch — a passage about ground elsewhere read as a plausible
+match with nothing to rule it out. Fixed with `ENTITY_HINTS`, a short
+gloss per entity (`"specifically the vegetable patch in the yard... —
+not the forest floor, ground elsewhere, or a metaphorical patch"` for this
+one), always sent alongside the name in `_SYSTEM_PROMPT` rather than
+trusting the bare word to carry its own meaning. `test_every_known_
+entity_has_exactly_one_disambiguating_hint` keeps `ENTITY_HINTS` and
+`KNOWN_ENTITIES` in lockstep, so a future entity added to one without the
+other fails loudly instead of quietly reaching the model unglossed the
+same way `patch` did. No backfill needed for already-mis-tagged data —
+`llm_rebuild` is a full rebuild from scratch every time (see below), so
+the next `--lineage-rebuild` simply produces the correct tagging.
+
 **Four evidence types, exactly the split
 `docs/LINEAGE_MEMORY_OBSERVATORY.md`'s "V1.5" addendum asked for**:
 `observation` / `interpretation` / `behaviour` / `association`, with the
