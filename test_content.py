@@ -1594,6 +1594,140 @@ def test_journal_view_is_bounded_however_long_the_journal_gets():
 
 
 # ===========================================================================
+# TUCK-IN-JOURNAL -- the flat-and-pressable counterpart to the cairn: a
+# feather (or the mystery seed's bloom) presses into the journal entry
+# active this visit, permanently, discovered by reading the journal rather
+# than by a dedicated inventory. Feathers and the bloom only -- round or
+# dimensional curios (a pinecone, a stone, a button) get a plain refusal.
+# ===========================================================================
+def _add_bloom(world, actor, name="a rust-red flower", location=None):
+    """A mystery-seed bloom, already opened -- identified by its blooms_at
+    attr (see _is_tuckable), not by name; some bloom names (e.g. "a single
+    black bloom") don't even contain the word "flower"."""
+    return world.add(Entity(world.fresh_id("bloom"), name,
+                             "ragged-edged petals, the colour of old iron",
+                             location=location or actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "ignores",
+                                    "blooms_at": 400, "growth": 400, "ready": True}))
+
+
+def test_tucking_a_feather_removes_it_and_attaches_it_to_an_entry():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    result = w.act(actor, "tuck jay's feather in journal")
+    assert "press" in result.lower(), f"unexpected tuck response: {result!r}"
+    assert not any("feather" in e.name for e in w.entities.values()), \
+        "the tucked feather must be gone from the world, not just hidden"
+    entries = w.get("journal").attrs["entries"]
+    tucked = w.get("journal").attrs["tucked"]
+    assert tucked[str(len(entries) - 1)] == ["a jay's feather"]
+
+
+def test_tucking_the_mystery_seed_bloom_also_works():
+    w, actor = fresh()
+    _add_bloom(w, actor)
+    result = w.act(actor, "tuck rust-red flower in journal")
+    assert "press" in result.lower(), f"unexpected tuck response: {result!r}"
+    assert not any("blooms_at" in e.attrs for e in w.entities.values()), \
+        "the tucked bloom must be gone from the world"
+
+
+def test_tucking_a_non_qualifying_curio_refuses_gracefully_with_no_state_change():
+    w, actor = fresh()
+    pinecone = _add_curio(w, actor, "a pinecone")
+    before_entries = list(w.get("journal").attrs["entries"])
+    result = w.act(actor, "tuck pinecone in journal")
+    assert "won't press flat" in result.lower(), f"a pinecone should be refused: {result!r}"
+    assert w.get(pinecone.id) is not None and pinecone.location == actor.id, \
+        "a refused tuck must leave the item exactly where it was"
+    assert w.get("journal").attrs["entries"] == before_entries, \
+        "a refused tuck must not touch the journal"
+    assert "tucked" not in w.get("journal").attrs or not w.get("journal").attrs["tucked"]
+
+
+def test_tucking_without_writing_first_still_succeeds_via_a_placeholder_entry():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    before = len(w.get("journal").attrs["entries"])
+    w.act(actor, "tuck jay's feather in journal")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == before + 1, "a placeholder entry should have been created"
+    assert "a jay's feather is pressed into this page" in w.act(actor, "read journal all")
+
+
+def test_two_tucks_in_one_visit_with_no_write_share_the_same_placeholder():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    _add_curio(w, actor, "a small brown feather")
+    before = len(w.get("journal").attrs["entries"])
+    w.act(actor, "tuck jay's feather in journal")
+    w.act(actor, "tuck small brown feather in journal")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == before + 1, "both tucks should land on one placeholder entry"
+    tucked = w.get("journal").attrs["tucked"][str(len(entries) - 1)]
+    assert tucked == ["a jay's feather", "a small brown feather"]
+
+
+def test_tucked_item_appears_in_the_spread_read_journal():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "write a quiet day")
+    w.act(actor, "tuck jay's feather in journal")
+    result = w.act(actor, "read journal")
+    assert "a jay's feather is pressed into this page" in result
+
+
+def test_tucked_item_appears_in_read_journal_all():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "write a quiet day")
+    w.act(actor, "tuck jay's feather in journal")
+    result = w.act(actor, "read journal all")
+    assert "a jay's feather is pressed into this page" in result
+
+
+def test_a_tucked_item_attaches_to_the_entry_just_written_this_visit():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "write a quiet day")
+    entries_before = len(w.get("journal").attrs["entries"])
+    w.act(actor, "tuck jay's feather in journal")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == entries_before, "an already-written entry needs no placeholder"
+    tucked = w.get("journal").attrs["tucked"]
+    assert tucked[str(len(entries) - 1)] == ["a jay's feather"]
+
+
+def test_there_is_no_take_verb_for_a_tucked_item():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "tuck jay's feather in journal")
+    result = w.act(actor, "take jay's feather")
+    assert "there's no" in result.lower(), f"a tucked item should be unreachable: {result!r}"
+
+
+def test_a_tucked_item_never_duplicates_across_room_inventory_shelf_or_cairn():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "tuck jay's feather in journal")
+    shelf = w.get("shelf")
+    live_feathers = [e for e in w.entities.values() if "feather" in e.name]
+    assert live_feathers == [], "a tucked feather must not still exist as an entity anywhere"
+    assert "feather" not in (shelf.description if shelf else "")
+
+
+def test_tuck_action_is_offered_only_with_a_qualifying_curio_in_hand():
+    w, actor = fresh()
+    assert not any(a.startswith("tuck ") for a in w.available_actions(actor)), \
+        "tuck shouldn't be offered with nothing tuckable in hand"
+    _add_curio(w, actor, "a jay's feather")
+    assert "tuck a jay's feather in journal" in w.available_actions(actor)
+    _add_curio(w, actor, "a pinecone")
+    assert not any(a == "tuck a pinecone in journal" for a in w.available_actions(actor)), \
+        "a pinecone is not tuckable and must not be offered"
+
+
+# ===========================================================================
 # 7. DOCUMENTATION -- the reference generates from code, and nothing new can
 #    slip in undocumented. If these fail, you added a verb/behavior without a
 #    docstring: write one, and the reference picks it up for free.

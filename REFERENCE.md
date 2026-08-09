@@ -21,8 +21,9 @@
 - `cook` / `broil` -- cook potato -- broil a potato at a lit cooking fire, making it edible.
 - `eat` -- eat <thing> -- eat cooked food to ease your hunger.
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
-- `read` -- read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot.  _(free -- costs no time)_
+- `read` -- read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot; anything tucked into a shown entry (see `tuck`) is named alongside it.  _(free -- costs no time)_
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
+- `tuck` -- tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn.
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
 - `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).

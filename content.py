@@ -1148,7 +1148,10 @@ def cmd_write(world, actor, arg):
         return _journal_missing_message(world)
     if not arg:
         return "Write what? e.g.  write planted two potatoes near the fence."
-    journal.attrs.setdefault("entries", []).append(f"{_day_stamp(world)} {arg}")
+    entries = journal.attrs.setdefault("entries", [])
+    entries.append(f"{_day_stamp(world)} {arg}")
+    # the entry a same-visit `tuck` attaches to -- see _journal_entry_index.
+    world.journal_entry_index = len(entries) - 1
     return "You write in the journal. The ink dries slowly. It will keep."
 
 
@@ -1189,27 +1192,50 @@ def journal_view(entries, keep=JOURNAL_READ_LIMIT, older=JOURNAL_OLDER_SHOWN):
     would quietly make us the editor of what the lineage remembers. Position
     is ours to choose; meaning isn't."""
     entries = list(entries)
-    if len(entries) <= keep + older:
-        return entries
-    tail = entries[-keep:]
-    middle = entries[1:-keep]
-    out, taken = [entries[0]], 0
+    indices = _journal_view_indices(len(entries), keep, older)
+    return [entries[i] if i is not None else JOURNAL_GAP for i in indices]
+
+
+def _journal_view_indices(n, keep=JOURNAL_READ_LIMIT, older=JOURNAL_OLDER_SHOWN):
+    """journal_view's exact selection, as indices into the entries list
+    (None where it shows a gap) instead of the entries themselves -- so a
+    caller that needs to know WHICH entry is on screen (cmd_read, to look up
+    anything tucked into it) can reuse the identical picks rather than
+    re-deriving them and risking drift from journal_view's own algorithm."""
+    if n <= keep + older:
+        return list(range(n))
+    tail_start = n - keep
+    middle = list(range(1, tail_start))
+    out, taken = [0], 0
     span = len(middle) / older if older else 0
     for i in range(older):
         idx = min(int(i * span + span / 2), len(middle) - 1)
         if idx < taken:                   # spans this short can collide
             continue
         if idx > taken:
-            out.append(JOURNAL_GAP)
+            out.append(None)
         out.append(middle[idx])
         taken = idx + 1
     if len(middle) > taken:
-        out.append(JOURNAL_GAP)
-    return out + tail
+        out.append(None)
+    return out + list(range(tail_start, n))
+
+
+def _tucked_line(journal, idx):
+    """The parenthetical naming whatever a hand pressed into entry `idx` --
+    "" if nothing was. Uses the item's own found-name as-is ("a jay's
+    feather"), the same register as a room listing, not "the jay's
+    feather" -- there's no antecedent to shorten it against here."""
+    names = journal.attrs.get("tucked", {}).get(str(idx))
+    if not names:
+        return ""
+    if len(names) == 1:
+        return f" ({names[0]} is pressed into this page.)"
+    return f" ({', '.join(names)} are pressed into this page.)"
 
 
 def cmd_read(world, actor, arg):
-    """read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot."""
+    """read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot; anything tucked into a shown entry (see `tuck`) is named alongside it."""
     arg = (arg or "").strip()
     show_all = arg.lower() == "all" or arg.lower().endswith(" all")
     if show_all:
@@ -1223,16 +1249,79 @@ def cmd_read(world, actor, arg):
     if not entries:
         return "The journal is blank, waiting for someone's first entry."
     if show_all:
-        return ("The journal reads, all of it:\n"
-                + "\n".join(f"  {ln}" for ln in entries))
-    shown = journal_view(entries)
+        lines = [f"  {ln}{_tucked_line(journal, i)}" for i, ln in enumerate(entries)]
+        return "The journal reads, all of it:\n" + "\n".join(lines)
+    indices = _journal_view_indices(len(entries))
+    shown = [entries[i] if i is not None else JOURNAL_GAP for i in indices]
     header = "The journal reads:"
     written = [ln for ln in shown if ln != JOURNAL_GAP]
     if len(written) < len(entries):
         header = (f"The journal reads ({len(written)} of {len(entries)} "
                    f"entries, spread across its whole run -- "
                    f"`read journal all` for the rest):")
-    return header + "\n" + "\n".join(f"  {ln}" for ln in shown)
+    lines = [f"  {ln}{'' if i is None else _tucked_line(journal, i)}"
+             for i, ln in zip(indices, shown)]
+    return header + "\n" + "\n".join(lines)
+
+
+# Tuck-in-journal -- the flat-and-pressable counterpart to the cairn: a
+# second, physically honest fate for curios the shelf's "displayed object"
+# logic doesn't suit. Scoped narrowly on purpose: a feather (or, once it
+# exists, the mystery seed's bloom) has an obvious real home pressed into a
+# book; a pinecone or button never plausibly would, so round/dimensional
+# curios are NOT part of this. Do not generalize to a catch-all "tuck any
+# curio" verb -- see the tuck-in-journal spec's "Explicitly NOT in scope."
+def _is_tuckable(e):
+    """Feathers, by name; the mystery seed's bloom, by its blooms_at attr
+    rather than by name -- BLOOM_KINDS includes names like "a single black
+    bloom" that don't even contain the word "flower", so name-matching
+    would miss some of them. No other curio type qualifies this pass."""
+    return "feather" in e.name.lower() or "blooms_at" in e.attrs
+
+
+TUCK_REFUSAL = "That won't press flat between the pages -- try the shelf, or the cairn if it's a stone."
+
+
+def _journal_entry_index(world, journal):
+    """The entry a tuck belongs to: whatever's already active this visit --
+    a prior write, or an earlier tuck's own placeholder -- or, if nothing's
+    touched the journal yet this visit, a fresh placeholder entry, so a
+    visit that only tucks and writes nothing still works. Session-scoped
+    (world.journal_entry_index, aliasing VisitState) -- resets every visit,
+    same as forest_depth and the rest."""
+    idx = world.journal_entry_index
+    entries = journal.attrs.setdefault("entries", [])
+    if idx is not None and idx < len(entries):
+        return idx
+    entries.append(f"{_day_stamp(world)} — nothing written, just left something pressed here.")
+    idx = len(entries) - 1
+    world.journal_entry_index = idx
+    return idx
+
+
+def cmd_tuck(world, actor, arg):
+    """tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn."""
+    arg = (arg or "").strip()
+    item_name = arg.lower()
+    for suffix in (" in journal", " in the journal", " journal"):
+        if item_name.endswith(suffix):
+            item_name = item_name[:-len(suffix)].strip()
+            break
+    if not item_name:
+        return "Tuck what in the journal? e.g.  tuck feather in journal"
+    journal = find_visible(world, actor, "journal")
+    if not journal:
+        return _journal_missing_message(world)
+    e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
+    if not e or e.location != actor.id:
+        return f"You aren't carrying any '{arg}'."
+    if not _is_tuckable(e):
+        return TUCK_REFUSAL
+    idx = _journal_entry_index(world, journal)
+    name = e.name
+    world.entities.pop(e.id, None)
+    journal.attrs.setdefault("tucked", {}).setdefault(str(idx), []).append(name)
+    return f"You press {_the(name)} flat between the pages. It will keep."
 
 
 
@@ -1700,7 +1789,7 @@ VERBS.update({
     "light": cmd_light, "kindle": cmd_light, "snuff": cmd_snuff,
     "plant": cmd_plant, "harvest": cmd_harvest,
     "cook": cmd_cook, "broil": cmd_cook, "eat": cmd_eat,
-    "write": cmd_write, "read": cmd_read, "save": cmd_save,
+    "write": cmd_write, "read": cmd_read, "save": cmd_save, "tuck": cmd_tuck,
     "draw": cmd_draw, "water": cmd_water, "place": cmd_place, "put": cmd_place,
     "gather": cmd_gather, "give": cmd_give, "listen": cmd_listen,
     "watch": cmd_watch_clouds, "venture": cmd_venture, "return": cmd_return,
@@ -1849,12 +1938,19 @@ def making_actions(world, actor):
 
 def journal_actions(world, actor):
     """Reading and writing, wherever the journal happens to be -- it's
-    portable, so this follows it rather than assuming the hut."""
+    portable, so this follows it rather than assuming the hut. Tucking a
+    flat curio in only appears once one's actually in hand -- same "only
+    offer what can do something" rule as everywhere but the hearth."""
     room = world.get(actor.location)
     here = _room_here(world, actor, room)
-    if any(e.id == "journal" for e in here + world.contents(actor.id)):
-        return ["read journal", "write <your note>"]
-    return []
+    carried = world.contents(actor.id)
+    if not any(e.id == "journal" for e in here + carried):
+        return []
+    acts = ["read journal", "write <your note>"]
+    for e in carried:
+        if _is_tuckable(e):
+            acts.append(f"tuck {e.name} in journal")
+    return acts
 
 
 # Registered here, in one place and one deliberate order, rather than each

@@ -56,6 +56,7 @@ class VisitState:
     statue_found_this_session: bool = False
     calm_visits: dict = field(default_factory=dict)
     hand_name: str | None = None
+    journal_entry_index: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +150,14 @@ class World:
     @hand_name.setter
     def hand_name(self, value):
         self.visit.hand_name = value
+
+    @property
+    def journal_entry_index(self):
+        return self.visit.journal_entry_index
+
+    @journal_entry_index.setter
+    def journal_entry_index(self, value):
+        self.visit.journal_entry_index = value
 
     # --- bookkeeping -------------------------------------------------------
     def add(self, e):
