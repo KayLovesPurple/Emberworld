@@ -1217,6 +1217,123 @@ individually legible on purpose, being a curated collection rather than
 clutter, and inventory already has its own older "(2)" summarisation via
 `_carried_names`, untouched by this feature).
 
+## Lineage Memory — a one-way microscope on the journal
+
+`lineage_memory.py` is a completely separate module, not a feature of the
+game itself: it reads the journal, records patterns, and is read by a
+developer via `--lineage-report`. Nothing it produces is ever fed back
+into a prompt, a description, or any world state — see
+`docs/LINEAGE_MEMORY_OBSERVATORY.md`'s own "no arrow back into the game"
+diagram, which the module's docstring restates as its own constraint.
+Concretely, that constraint holds because the module imports *nothing*
+from `world.py`/`content.py`/`drivers.py` — every function takes plain
+strings or a duck-typed object (`sync_lineage_memory` only ever calls
+`.get("journal")` and reads `.attrs` on what comes back), so nothing on
+the content side has to import it either, other than the two call sites
+that hand it data.
+
+**Extraction is rule-based in v1** (see the doc's own Status note for why
+and what that trades away): two hand-authored word tables,
+`CANDIDATE_ENTITIES` and `CANDIDATE_CONCEPTS`, matched against entry text
+on real word boundaries (`\bword\b`, never a bare substring check — "cat"
+must not fire on "cattle"). Same discipline as `FOUND_ITEMS`/
+`_CURIO_PLURALS`: small, explicit, hand-adjustable tables over anything
+that tries to guess or stem. One accepted imprecision worth knowing about:
+"well" is also an ordinary English discourse word ("Well, I planted the
+potato"), and rule-based matching can't tell the two apart — flagged in
+the table's own comment rather than engineered around, consistent with
+"start simple, revise once a real report looks off."
+
+**The unit of evidence is the journal entry itself** — its own list
+index, not a derived grouping. The doc's original proposal suggested
+"visit" as the unit and warned against raw journal lines specifically
+because one visit expressing the same thought three ways shouldn't count
+as three confirmations. (day, hand name) looked like a reasonable proxy
+for "visit" during design, until we recalled a real, previously-observed
+failure mode in this lineage: two different hands landing on the same
+name is not rare (see the "Marrow naming convergence" fix), so grouping
+by (day, name) would have silently merged genuinely different evidence.
+Journal-entry-level granularity sidesteps the whole problem and matches
+how every other part of the codebase already treats an entry — one
+`write` call is one atomic thing to `JOURNAL_READ_LIMIT`, the tuck index,
+and everywhere else that touches `journal.attrs["entries"]`.
+
+**Association granularity is the cross-product within one SENTENCE, not
+the whole entry** — a narrower scope than v1 originally shipped with.
+Real accumulated journal data caught the wider version's cost
+immediately: `HEARTH`, `SHELF`, `LAMP`, `CAT`, `FOREST`, and `WELL` all
+came back with an identical "danger: 1 entry" from ONE real entry (Day
+18) whose only actually-dangerous subject was the forest ("the forest is
+dangerous after dark") — the entry also happened to mention feeding the
+cat, the hearth being spent, and the shelf, in earlier sentences, so all
+of them picked up the association too under entry-wide matching. Once the
+excerpts (see above) made that visible, the fix was to narrow the match
+scope itself, not just document the imprecision: `extract_associations`
+now splits each entry into sentences (`_sentences`, a naive
+period/question/exclamation split with the entry's own `[Day N, Name]`
+stamp reattached to each piece, since a later sentence wouldn't otherwise
+carry its own day/name context) and cross-products only within one
+sentence. Re-running the report on the same real journal after this
+change: `FOREST` alone carries "danger," with the excerpt trimmed to just
+"The forest is dangerous after dark." — the cat, hearth, lamp, and shelf
+no longer show it at all.
+
+This is also the seam future LLM-based extraction (the doc's own deferred
+upgrade) replaces, and deliberately nothing above `extract_associations`
+had to change to add sentence-scoping: the function still takes one whole
+entry and returns `(entity, concept, excerpt)` triples, same as before —
+only what happens *inside* it changed. An LLM step can judge relatedness
+across a sentence boundary a regex never will (and should, since splitting
+by sentence is itself capable of new mistakes — a real one surfaced in the
+same re-sync: "she's calm, well-fed, and the shelf grows richer" matched
+`WELL` because `\bwell\b` fires inside the hyphenated "well-fed," the same
+known discourse-word imprecision the entity's own trigger-word comment
+already warns about, just via a different route). Sentence-scoping fixes
+one class of false positive; it doesn't and can't fix that one, which is
+exactly the class of problem the doc always expected only real language
+understanding could solve.
+
+**Persistence**: `lineage_memory.json`, a sibling of `emberworld_save.json`
+but a genuinely separate file and gitignored the same way — derived,
+regenerable (`rebuild(entries)` replays the whole journal from scratch),
+and specific to one local lineage's actual play history, not something a
+fresh clone should inherit. `{"processed_through": N, "entities": {...}}`
+— an envelope-plus-payload shape, matching `World.to_data()`'s own, so a
+future bookkeeping field never risks colliding with an entity key (entity
+keys only ever come from `CANDIDATE_ENTITIES`, but keeping the shapes
+separate costs nothing and rules the collision out by construction).
+
+**Sync is one shared checkpoint, not four.** All three drivers already
+had their own "session's over, persist now" moment
+(`w.save(SAVE)`, at four call sites total between `play`/`random_agent`/
+`llm_agent`). `_save_and_sync_lineage(w)` (drivers.py) wraps both the
+world save and `sync_lineage_memory` in one function, and all four call
+sites were switched to it, so a future fourth driver can't add a save
+call and forget the sync. `sync_lineage_memory` itself is incremental and
+idempotent: it tracks `processed_through` and only ever folds in entries
+past that point, so calling it repeatedly (as every `quit`/Ctrl-C/normal
+exit already does) never reprocesses or double-counts anything. The
+fuzzer never calls it at all, since `fuzz_run` never saves — fully
+in-memory by design, so it can't pollute real lineage data even
+accidentally.
+
+**BUG WE HIT while wiring this in:** an existing test
+(`test_random_agent_never_drops_anything`) called the real
+`random_agent()` with `drv.SAVE` monkeypatched to a temp path but not
+`drv.LINEAGE_MEMORY_PATH` — which didn't exist as a concept when that
+test was written. Running the suite left a real `lineage_memory.json` in
+the repo root, seeded from nothing but a random agent's nonsense session.
+Fixed by monkeypatching both paths together; worth remembering for any
+future test that drives a real session end-to-end.
+
+**Deliberately not built**: everything the Status note in
+`docs/LINEAGE_MEMORY_OBSERVATORY.md` lists as needing real language
+understanding (observation-vs-interpretation, naming, symbolic acts,
+behavioural tracking), tone-distribution reporting, temporal banding
+(days 1-10 vs 11-20 vs 21-32), and the "little scatter of..." style
+prose-merging the doc's own "later, if it proves out" language already
+anticipates deferring.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

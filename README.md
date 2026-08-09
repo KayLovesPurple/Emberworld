@@ -26,15 +26,17 @@ reads that note and harvests the crop.
   largest block of prose in the game and gets edited as prose.
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
   the persistence-loading glue, and the headless fuzzer.
-- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
-  safety net, split to match. Each runs with or without pytest;
-  `_test_helpers.py` holds the handful of things they share.
+- `lineage_memory.py` — the Lineage Memory Observatory: a one-way,
+  developer-only read of the journal (`--lineage-report`), never fed back
+  into the game. Imports nothing from the rest of the codebase on purpose.
+- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` /
+  `test_lineage_memory.py` — the safety net, split to match. Each runs with
+  or without pytest; `_test_helpers.py` holds the handful of things they share.
 - `docs/REFERENCE.md` — every verb, behavior, and rule. **Generated from the
   code** (`python3 emberworld.py --reference`), so it's always current.
 - `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
   without breaking anything.
-- `docs/FOREST_SPEC.md` — the forest's staged build spec. `docs/` also holds
-  a not-yet-built design proposal (Lineage Memory Observatory).
+- `docs/FOREST_SPEC.md` — the forest's staged build spec.
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -48,6 +50,7 @@ python3 emberworld.py --llm --turns 40   # let a Claude live in it (needs a key)
 python3 emberworld.py --llm --show-thoughts   # also print the agent's reasoning (dimmed)
 python3 emberworld.py --fuzz     # 5000 random steps, invariants checked each tick
 python3 emberworld.py --reference > docs/REFERENCE.md   # regenerate the reference
+python3 emberworld.py --lineage-report   # developer-only: recurring journal patterns
 ```
 
 For `--llm` you need `pip install anthropic` and `export ANTHROPIC_API_KEY=...`.

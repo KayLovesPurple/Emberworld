@@ -21,6 +21,7 @@ from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_
 from content import build_world, ensure_shelf, ensure_cairn, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, journal_view
 from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
 from content_common import actor_self_care_note
+from lineage_memory import sync_lineage_memory, LINEAGE_MEMORY_PATH
 
 LLM_MODEL = "claude-sonnet-5"         # which model the --llm run uses (override: --model)
 SESSIONS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions")
@@ -141,6 +142,17 @@ There's a cat -- it wanders, it likes the fire lit, and it can be fed a potato.
 The world (and your journal) persist between runs. Leave a note for whoever comes next."""
 
 
+def _save_and_sync_lineage(w):
+    """Every driver's session-end checkpoint: persist the world, then let
+    Lineage Memory catch up on any journal entries written since it last
+    looked (a no-op when nothing new was written). One shared wrapper so a
+    future fourth driver can't forget to call both -- see
+    lineage_memory.py's own "no arrow back into the game" design: this is
+    the only direction the game ever reaches into it."""
+    w.save(SAVE)
+    sync_lineage_memory(w, LINEAGE_MEMORY_PATH)
+
+
 def play(strict=False):
     w, actor = load_or_build()
     w.strict = strict
@@ -152,11 +164,11 @@ def play(strict=False):
         try:
             cmd = input("\n> ").strip()
         except (EOFError, KeyboardInterrupt):
-            w.save(SAVE)
+            _save_and_sync_lineage(w)
             print(f"\nThe world settles into memory, and goes on without you.\n(saved: {SAVE})")
             return
         if cmd in ("quit", "exit", "q"):
-            w.save(SAVE)
+            _save_and_sync_lineage(w)
             print(f"The world settles into memory, and goes on without you.\n(saved: {SAVE})")
             return
         if cmd in ("help", "?"):
@@ -187,7 +199,7 @@ def random_agent(steps=20):
                                 if "<" not in a and not a.startswith("drop ")])
         print(f">>> {choice}")
         print(w.act(actor, choice), "\n")
-    w.save(SAVE)
+    _save_and_sync_lineage(w)
 
 
 # ---------------------------------------------------------------------------
@@ -745,7 +757,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
         print("\n(the visit is cut short -- but the note still gets left.)")
     finally:
         _leave_signoff(client, w, actor, model, think, did)
-        w.save(SAVE)
+        _save_and_sync_lineage(w)
         session_log.write(f"## Departure\n\nEnded on world day {w.day()}. "
                           "A closing note was left in the shared journal.\n")
         session_log.close()

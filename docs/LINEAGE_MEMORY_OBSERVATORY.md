@@ -2,7 +2,24 @@
 
 ## Status
 
-Proposed design.
+Built (v1: rule-based extraction only — see docs/ARCHITECTURE.md's
+"Lineage Memory" section for the landed shape and what's deliberately
+deferred). The extraction approach was the one real open decision this
+proposal left unresolved (section 20 sanctions an LLM step but doesn't
+mandate it); v1 chose keyword-based matching over entities/concepts
+instead, explicitly as a placeholder to get the rest of the pipeline
+(storage, incremental processing, `--lineage-report`) working end to end
+first. That means v1 does NOT attempt several things this doc asks for:
+the observation-vs-interpretation distinction (section 7), naming and
+symbolic-act detection (section 6), and behavioural tracking (section 11)
+all need real language understanding a keyword table can't provide —
+every match is recorded as a plain, unlabeled association instead, never
+mislabeled as an "interpretation" it can't actually verify. The doc's
+"visit" as the unit of evidence (section 4) also became the journal
+entry itself in the landed version: (day, hand name) was considered and
+rejected, since two different hands sharing a name on the same day is a
+real, observed occurrence in this lineage, and merging them would
+silently conflate distinct evidence.
 
 ## Purpose
 
