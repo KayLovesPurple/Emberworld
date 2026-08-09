@@ -1105,6 +1105,108 @@ threshold), not any single number, so a future edit to the cap or the
 food value in isolation fails loudly instead of quietly reintroducing the
 chase.
 
+## Curio visual compression — a presentation pass, not a mechanic
+
+Curios are deliberately persistent: nothing decays, nothing auto-clears.
+That's the point (the shelf and cairn are both "everything, forever"
+records), but it has a cost — a well-visited hut accumulates loose
+pinecones and feathers without bound, and the room listing was printing
+one bullet per entity regardless. See `docs/CURIO_VISUAL_COMPRESSION.md`
+for the original proposal; this is the v1 slice of it, kept to the doc's
+own "start with the simplest grouping implementation" instruction.
+
+**The core invariant, and why it shaped everything else.** Compression must
+never destroy, merge, or transform a curio, and must never change what an
+action resolves to — it only changes what the room LISTING prints. That's
+what makes it safe to build as a pure presentation pass with zero changes
+to `find_visible`, `cmd_take`, `cmd_give`, `cmd_place`, or any entity's own
+data: `_room_lines` (content.py) computes a list of display strings from
+the same entities `_room_here` already returns, and every verb keeps
+resolving to one real entity exactly as it did before this feature existed.
+
+**Grouping key is (name, description), not name alone.** This is the
+spec's other non-negotiable: "compress repetition, not character." Two
+curios only ever share a group when their name AND their exact
+description match — so a curio holding distinct, persistent state (the
+doc's example: a battered pinecone among ordinary ones) always keeps its
+own line, however small. Nothing in the game actually diverges a loose
+portable curio's description yet (`cat_replay` only touches curios
+already given away, which are non-portable and excluded from grouping
+entirely — see below), so this is forward-looking: the invariant is real
+and tested (`test_compression_never_merges_curios_with_different_
+descriptions`, by hand-setting one entity's `.description`) even though
+no current mechanic exercises it in normal play.
+
+**Traces group too — the first version got this wrong.** `_room_listing_
+line` already had to tell apart a curio still sitting loose (portable=True)
+from one that's been given to the cat and become a permanent, self-naming
+trace (portable=False) — see that function's own comment. The first build
+of `_curio_groups` mirrored that same check and excluded traces from
+grouping entirely, reasoning a trace reads as room scenery, not
+accumulating clutter. Real output disproved that within the first
+playtest: two pinecones given to the cat separately produced two
+identical "a pinecone, well-battered after a game with the cat" bullets —
+exactly the noise this feature exists to remove, just in a field
+(cat-given traces) that accumulates over a lineage the same way loose
+finds do. Traces are eligible now, on the same (name, description) key as
+everything else. The one place this needed real care rather than just
+dropping the portable check: an ordinary find's description is disposable
+flavor text (dropping it in "three pinecones" is the whole point), but a
+trace's description IS the point — `give`'s own invariant is that the
+gesture always leaves its mark, and erasing "well-battered..." to show a
+bare "two pinecones" would erase exactly that mark. `_group_count_line`
+handles this by checking whether the description is self-naming (starts
+with `"{name}, "`, the exact shape `_CAT_GIVE_TRACES` always produces) —
+if so, the group keeps that suffix attached ("two pinecones,
+well-battered after a game with the cat"); if not (an ordinary find), it
+renders the terser count-only line as before.
+
+**Thresholds** (`CURIO_GROUP_EXACT_MAX=4`, `CURIO_GROUP_SEVERAL_AT=5`):
+group size 1 renders exactly as `_room_listing_line` always did (zero
+behavioral change for the common case); 2 through 4 spells the count out
+in words ("three pinecones" reads as prose, "3 pinecones" reads as a stat
+line); 5+ reads as "several X". The doc calls this "a presentation
+choice, not a world rule," free to retune once real play says otherwise.
+
+**Plurals are hand-authored, not derived.** `_plural_of` (content.py, next
+to `FOUND_ITEMS`) looks up a `_CURIO_PLURALS` table rather than guessing —
+"a pebble of blue glass" needs the FIRST word inflected ("pebbles of blue
+glass"), which no naive "add an s to the last word" rule gets right, and
+guessing wrong reads far worse than the noise compression is meant to
+fix. Same discipline as `FOUND_ITEMS` itself: a small, fixed table over
+cleverness. A naive fallback exists so a future curio added without a
+plural entry degrades to something readable instead of crashing, but
+`test_every_found_item_has_a_hand_authored_plural` pins that no real
+entry is actually relying on it.
+
+**`look <name>` on a group always reveals the exact count.** The
+approximate "several" rendering is for the passive, standing room
+description; a hand that deliberately asks gets the real number
+(`_group_look_summary`) — "the exact underlying count is never lost" is
+the doc's own words for this. When the matched curios don't all share one
+description, the summary names the largest sub-group "ordinary" and each
+other sub-group "different," rather than folding a distinctive one in
+silently.
+
+**Deliberately deferred, per the doc's own instructions.** The doc's
+"better presentation" example merges same-name groups into one combined
+sentence ("two pinecones and a battered pinecone"); this build instead
+renders each (name, description) group as its own separate bullet
+("two pinecones" / "a battered pinecone" on two lines). Both satisfy the
+real invariant — the distinctive one is never silently absorbed into the
+count — and the doc explicitly permits starting simple and introducing
+"more sophisticated representative descriptions only when actual play
+demonstrates that they are needed." Combining them into one flowing
+sentence would also require deriving a short adjective from arbitrary
+description text ("well-battered after a game with the cat" → "battered")
+with no live data to design that against yet. Also not built: the tiered
+"little scatter of..." environmental-texture rendering at higher counts,
+curio-specific compression opt-outs, and applying any of this to the
+shelf or inventory (both explicitly out of scope — the shelf stays
+individually legible on purpose, being a curated collection rather than
+clutter, and inventory already has its own older "(2)" summarisation via
+`_carried_names`, untouched by this feature).
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

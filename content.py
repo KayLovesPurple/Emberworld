@@ -510,6 +510,132 @@ def _room_listing_line(e):
     return e.description
 
 
+# CURIO VISUAL COMPRESSION -- curios are intentionally persistent (nothing
+# decays or auto-clears), so a well-visited hut accumulates loose pinecones
+# and feathers without bound. That's fine for the world; it's noisy for the
+# room description. This is a presentation-only pass: it changes what the
+# room LISTING shows, never any entity's own data, so find_visible/take/
+# give/place keep resolving to one real entity exactly as they always have.
+# See docs/CURIO_VISUAL_COMPRESSION.md.
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+
+
+def _spell(n):
+    """A small count in words -- "three pinecones" reads as prose; "3
+    pinecones" reads as a stat line. Falls back to the digit past the
+    table, which a curio's real-world rarity should make unreachable."""
+    return _NUMBER_WORDS.get(n, str(n))
+
+
+CURIO_GROUP_EXACT_MAX = 4    # group sizes 2..this: spell out the exact count
+CURIO_GROUP_SEVERAL_AT = 5   # at/above this: "several X" instead of a number
+
+
+def _curio_groups(entities):
+    """Partition the curios among `entities` into groups keyed by (name,
+    description), in first-seen order. A curio only groups with another
+    that matches on BOTH -- name alone isn't enough, because a curio with
+    different text (a distinct, persistent state -- see
+    CURIO_VISUAL_COMPRESSION.md's "compress repetition, not character")
+    must always keep its own line, however small the group.
+
+    BUG WE HIT (real observed output): the first version of this only
+    considered still-portable curios eligible, on the reasoning that a
+    trace left by `give <curio> to cat` reads as permanent room scenery,
+    not accumulating clutter. It clutters just as visibly -- two pinecones
+    separately given to the cat produced two identical "a pinecone,
+    well-battered after a game with the cat" bullets, exactly the noise
+    this feature exists to fix. Traces are included now; see
+    _group_count_line for how a trace group keeps its text instead of
+    collapsing to a bare count the way an ordinary find does.
+
+    Returns an ordered list of (name, description, [entities])."""
+    order, groups = [], {}
+    for e in entities:
+        if not e.attrs.get("curio"):
+            continue
+        key = (e.name, e.description)
+        if key not in groups:
+            order.append(key)
+            groups[key] = []
+        groups[key].append(e)
+    return [(name, desc, groups[(name, desc)]) for name, desc in order]
+
+
+def _group_count_line(name, description, count):
+    """The room-listing line for a compressed group. An ordinary find's
+    description is just flavor text (a bare look_line) -- dropping it is
+    the whole point of compression, so the line is just the count and the
+    plural name ("three pinecones"). A cat-given trace's description is
+    self-naming ("{name}, {suffix}" -- see _CAT_GIVE_TRACES) and the
+    suffix IS the point (`give`'s whole invariant is that the gesture
+    always leaves its mark), so a trace group keeps it: "two pinecones,
+    well-battered after a game with the cat" reads naturally even though
+    "a game" stays grammatically singular -- no attempt to conjugate the
+    suffix, which would need real NLG for no real gain here."""
+    plural = _plural_of(name)
+    prefix = f"{_spell(count)} {plural}" if count <= CURIO_GROUP_EXACT_MAX \
+        else f"several {plural}"
+    self_naming_prefix = f"{name}, "
+    if description.startswith(self_naming_prefix):
+        return prefix + ", " + description[len(self_naming_prefix):]
+    return prefix
+
+
+def _room_lines(entities):
+    """The final room-listing bullets for `entities` (already filtered to
+    what's actually here -- see _room_here): one line per non-curio or
+    singleton curio, exactly what _room_listing_line always produced, and
+    ONE combined line per compressible group of 2+ otherwise. Ordering
+    stays organic -- a group's line appears wherever its FIRST member sat
+    in the original list, never sorted or moved to the end (the spec is
+    explicit that compression must not turn the room into an alphabetised
+    inventory) -- see
+    test_room_listing_keeps_organic_ordering_for_a_compressed_group."""
+    grouped = {e.id: (name, desc, es) for name, desc, es in _curio_groups(entities)
+               if len(es) > 1 for e in es}
+    seen, lines = set(), []
+    for e in entities:
+        if e.id in seen:
+            continue
+        if e.id in grouped:
+            name, desc, es = grouped[e.id]
+            lines.append(_group_count_line(name, desc, len(es)))
+            seen.update(x.id for x in es)
+        else:
+            lines.append(_room_listing_line(e))
+            seen.add(e.id)
+    return lines
+
+
+def _group_look_summary(name, entities):
+    """What `look <name>` shows when 2+ compressible curios sharing `name`
+    are loose among `entities` -- reveals the exact total (an approximate
+    "several" is for the passive standing description; a hand who
+    deliberately asks always gets the real count, the exact underlying
+    count is never lost) and, when they don't all share one description,
+    names the distinctive one(s) rather than folding them in silently.
+    Returns None when 0 or 1 curio actually matches, so the caller falls
+    back to that single entity's own .description, unchanged from before
+    this feature existed."""
+    subgroups = [(desc, es) for n, desc, es in _curio_groups(entities) if n == name]
+    total = sum(len(es) for _, es in subgroups)
+    if total <= 1:
+        return None
+    head = f"There are {_spell(total)} {_plural_of(name)} here."
+    if len(subgroups) == 1:
+        return head + " " + subgroups[0][0]
+    subgroups.sort(key=lambda kv: -len(kv[1]))
+    parts = []
+    for i, (desc, es) in enumerate(subgroups):
+        label = "ordinary" if i == 0 else "different"
+        count = len(es)
+        verb = "is" if count == 1 else "are"
+        parts.append(f"{_spell(count)} {verb} {label}: {desc}")
+    return head + " " + " ".join(parts)
+
+
 # An LLM hand reached for "look actions" more than once -- a plausible-
 # sounding guess, since there's no entity named "actions" to find; the word
 # is just its own free verb (cmd_actions). Honoring the guess is simpler
@@ -526,6 +652,17 @@ def cmd_look(world, actor, arg):
         # in the dark you can only make out what's in your own hands
         if world.is_dark(room.id) and not _carrying(world, actor, target):
             return "Too dark to make it out. Pick it up, or find a light."
+        # only a curio genuinely IN this room (not carried, not on the
+        # shelf) can be part of a compressed group -- target.location==
+        # room.id excludes both in one check, the same way _carrying does
+        # for the dark-path check just above. No portable check: a
+        # cat-given trace is just as eligible as a loose find (see
+        # _curio_groups) and find_visible may resolve "look pinecone" to
+        # one either way.
+        if target.attrs.get("curio") and target.location == room.id:
+            summary = _group_look_summary(target.name, _room_here(world, actor, room))
+            if summary:
+                return summary
         return target.description
     stamp = world.timestr()
     if world.is_dark(room.id):
@@ -536,7 +673,7 @@ def cmd_look(world, actor, arg):
     lines = [f"[{stamp}]  {room.name.upper()}", room.description]
     here = [e for e in _room_here(world, actor, room) if e.id != actor.id]
     if here:
-        lines += [""] + [f"  - {_room_listing_line(e)}" for e in here]
+        lines += [""] + [f"  - {line}" for line in _room_lines(here)]
     if room.exits:
         lines += ["", "Exits: " + ", ".join(
             _exit_label(room.id, d) for d in room.exits)]
@@ -890,6 +1027,39 @@ FOUND_ITEMS = (
     ("a curl of birch bark", "curled tight, papery, peels if you're not careful", "ignores"),
     ("a sprig of dried moss", "dry and soft, crumbles a little at the edges", "ignores"),
 )
+
+# English pluralization of arbitrary noun phrases isn't reliable to derive
+# ("a pebble of blue glass" -> "pebbles of blue glass" needs the FIRST word
+# inflected, not the last) -- so, same discipline as FOUND_ITEMS itself,
+# these are hand-authored rather than guessed. Used by curio visual
+# compression (see _plural_of) to render a grouped room-listing line
+# ("three pinecones") without ever showing a mangled plural.
+_CURIO_PLURALS = {
+    "a pinecone": "pinecones",
+    "a small brown feather": "small brown feathers",
+    "a smooth grey stone": "smooth grey stones",
+    "a pebble of blue glass": "pebbles of blue glass",
+    "a bone button": "bone buttons",
+    "a jay's feather": "jay's feathers",
+    "a knot of bleached twine": "knots of bleached twine",
+    "a curl of birch bark": "curls of birch bark",
+    "a sprig of dried moss": "sprigs of dried moss",
+}
+
+
+def _plural_of(name):
+    """The plural noun phrase for a curio name, e.g. "a pinecone" ->
+    "pinecones". Looks up _CURIO_PLURALS first; the naive "strip the
+    article, add an s" fallback exists only so a future curio added without
+    a plural entry degrades to something readable instead of crashing --
+    test_every_found_item_has_a_hand_authored_plural pins that every real
+    FOUND_ITEMS entry uses the real table, not the fallback."""
+    if name in _CURIO_PLURALS:
+        return _CURIO_PLURALS[name]
+    for article in ("a ", "an "):
+        if name.lower().startswith(article):
+            return name[len(article):] + "s"
+    return name + "s"
 
 
 # `stack stone on cairn` has worked since Stage 7, but the cairn was only
@@ -2064,6 +2234,12 @@ def generate_reference():
             "(longer than any one visit) to bloom into one of a handful of "
             "flowers, fixed the moment it's planted but hidden until it "
             "opens -- and water never speeds it up.",
+            f"- Two or more loose curios of the same kind and exact "
+            f"description compress into one room-listing line -- an exact "
+            f"count in words up to **{CURIO_GROUP_EXACT_MAX}**, \"several\" "
+            "at or above that -- presentation only, never merging the "
+            "underlying entities; `look <name>` on a group always gives the "
+            "real count.",
             f"- The world saves to disk (save format v{SAVE_VERSION}); an "
             "incompatible save is set aside, never mis-loaded.",
             "- Free verbs don't advance time; everything else ticks the world "

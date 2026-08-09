@@ -1,5 +1,21 @@
 # Curio Visual Compression
 
+## Status
+
+Built (v1: simple grouping only — see ARCHITECTURE.md's "Curio visual
+compression" section for the landed shape and what's still deliberately
+deferred from this proposal).
+
+One real ambiguity this proposal left open, resolved during implementation:
+this doc never mentions curios already given to the cat (permanent,
+self-naming traces left by `give <curio> to cat` — see "Relationship to
+existing curio design" below). The first build excluded them from
+grouping, reasoning they read as room scenery rather than clutter. Real
+output disproved that immediately: two pinecones given to the cat
+separately produced two identical trace bullets. They're included now,
+same as any other loose curio — see ARCHITECTURE.md for how a trace group
+keeps its text instead of collapsing to a bare count.
+
 ## Purpose
 
 Emberworld's curios are intentionally persistent. They can accumulate across many visits, and that accumulation is part of the world's lineage and character. The problem is presentation: an ever-growing list of individual curios will eventually make the hut noisy and difficult to read.
@@ -34,6 +50,11 @@ It does **not** apply to:
 - the planted mystery seed
 - the cat's internal state
 - the journal
+
+It DOES apply to curios already given to the cat (the permanent, self-naming
+traces `give <curio> to cat` leaves in the room) — they're loose the same
+way a fresh find is, and accumulate the same way over a lineage. See the
+Status note above for why this needed saying explicitly.
 
 The shelf should remain individually legible because it is intentionally a curated collection. The cairn is already a collective, permanent structure and should remain mechanically distinct.
 

@@ -73,6 +73,7 @@
 - If the vegetable patch stays empty for **30** turns straight, one volunteer potato plant sprouts on its own -- a floor against a seedless lineage, not a routine source.
 - The hut's curio shelf holds up to **10** things at once -- personal and curated, unlike the forest-edge cairn, which is collective and never full.
 - A found seed turns up at the forest's edge whenever none is in play (carried, shelved, or growing) -- deterministic, not a roll. Planted in the yard, it takes **120 ticks** (longer than any one visit) to bloom into one of a handful of flowers, fixed the moment it's planted but hidden until it opens -- and water never speeds it up.
+- Two or more loose curios of the same kind and exact description compress into one room-listing line -- an exact count in words up to **4**, "several" at or above that -- presentation only, never merging the underlying entities; `look <name>` on a group always gives the real count.
 - The world saves to disk (save format v2); an incompatible save is set aside, never mis-loaded.
 - Free verbs don't advance time; everything else ticks the world forward once.
 

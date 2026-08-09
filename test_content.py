@@ -38,6 +38,8 @@ from content import (
     SEED_NAME, BLOOM_TICKS, BLOOM_SHOWING_AT, BLOOM_BUDDING_AT, BLOOM_BANDS,
     BLOOM_KINDS, _seed_in_world, _mystery_plant, _bloom_description,
     JOURNAL_READ_LIMIT, JOURNAL_OLDER_SHOWN, JOURNAL_GAP, journal_view,
+    CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
+    _curio_groups, _room_lines, _group_look_summary,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -3597,6 +3599,246 @@ def test_planting_a_seed_touches_no_maintenance_resource():
     assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10, "must not touch fire-life"
     assert w.time == time_before, "the handler itself must not advance the clock"
     assert w.day() == day_before
+
+
+# ===========================================================================
+# 14. CURIO VISUAL COMPRESSION -- a presentation-only pass over the room
+#     listing. Curios are intentionally persistent (nothing decays, nothing
+#     is auto-cleared), so a hut that's had many visitors accumulates loose
+#     pinecones and feathers without bound -- fine for the world, noisy for
+#     the room description. Compression changes only what a hand READS, never
+#     what exists: no entity is merged, destroyed, or altered, `take`/`give`/
+#     `place` still resolve to one real underlying entity exactly as before,
+#     and the exact count is always recoverable via `look <name>`. The one
+#     thing compression must never do is erase a curio's own distinct state
+#     (see CURIO_VISUAL_COMPRESSION.md's "compress repetition, not
+#     character") -- so grouping keys on (name, description), not name
+#     alone, and a curio with different text from its neighbors always gets
+#     its own line rather than being silently folded into their count.
+# ===========================================================================
+def test_a_single_loose_curio_renders_exactly_as_before():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone", location="hut")
+    listing = w.act(actor, "look")
+    assert "a pinecone, tight and resinous, one scale broken — the cat might bat at it." in listing
+    assert "pinecones" not in listing, "a single curio must never get plural/count treatment"
+
+
+def test_two_identical_curios_render_as_a_count_line():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone", location="hut")
+    _add_curio(w, actor, "a pinecone", location="hut")
+    listing = w.act(actor, "look")
+    assert "  - two pinecones" in listing
+    assert "tight and resinous" not in listing, "grouped lines drop the repeated description text"
+
+
+def test_three_and_four_identical_curios_use_exact_count_words():
+    for n, word in ((3, "three"), (4, "four")):
+        w, actor = fresh()
+        for _ in range(n):
+            _add_curio(w, actor, "a pinecone", location="hut")
+        listing = w.act(actor, "look")
+        assert f"  - {word} pinecones" in listing, f"count {n} should read '{word} pinecones': {listing!r}"
+
+
+def test_curio_group_exact_max_is_where_several_takes_over():
+    w, actor = fresh()
+    for _ in range(CURIO_GROUP_EXACT_MAX):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    assert "several" not in w.act(actor, "look"), \
+        f"CURIO_GROUP_EXACT_MAX ({CURIO_GROUP_EXACT_MAX}) should still show an exact count"
+
+    w, actor = fresh()
+    for _ in range(CURIO_GROUP_SEVERAL_AT):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    assert "  - several pinecones" in w.act(actor, "look")
+
+
+def test_compression_never_merges_curios_with_different_descriptions():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone", location="hut")
+    _add_curio(w, actor, "a pinecone", location="hut")
+    odd_one = _add_curio(w, actor, "a pinecone", location="hut")
+    odd_one.description = "a pinecone, well-battered after a game with the cat"
+    listing = w.act(actor, "look")
+    assert "  - two pinecones" in listing, "the two ordinary ones may still group"
+    assert "well-battered after a game with the cat" in listing, \
+        "the distinctive one must keep its own line, not vanish into a count of three"
+    assert "  - three pinecones" not in listing
+
+
+def test_room_listing_keeps_organic_ordering_for_a_compressed_group():
+    """A group's line appears where its FIRST member was found, not sorted
+    to the front or back -- the spec is explicit that compression must not
+    turn the room into an alphabetised inventory."""
+    w, actor = fresh()
+    _add_curio(w, actor, "a bone button", location="hut")
+    _add_curio(w, actor, "a pinecone", location="hut")
+    _add_curio(w, actor, "a pinecone", location="hut")
+    listing = w.act(actor, "look")
+    button_idx = listing.index("a bone button")
+    pinecones_idx = listing.index("two pinecones")
+    assert button_idx < pinecones_idx
+
+
+def test_compression_does_not_apply_to_carried_curios():
+    """Carried duplicates already have their own, older summarisation
+    (_carried_names' "potato (2)" style) -- compression is a room-listing
+    concern only and must not change that line's wording."""
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    _add_curio(w, actor, "a pinecone")
+    result = w.act(actor, "look")
+    assert "a pinecone (2)" in result
+    assert "two pinecones" not in result
+
+
+def test_compression_does_not_apply_to_shelved_curios():
+    w, actor = fresh()
+    for _ in range(3):
+        c = _add_curio(w, actor, "a pinecone")
+        w.act(actor, f"place {c.name} on shelf")
+    shelf_line = w.act(actor, "look shelf")
+    assert shelf_line.count("a pinecone") == 3, \
+        "the shelf stays individually legible -- it's a curated collection, not clutter"
+    assert "three pinecones" not in shelf_line
+
+
+def _trace(world, name, reaction, location="hut"):
+    suffix = ("well-battered after a game with the cat" if reaction == "plays"
+              else "given to the cat and roundly ignored")
+    return world.add(Entity(world.fresh_id("found"), name, f"{name}, {suffix}",
+                             location=location, portable=False,
+                             attrs={"curio": True, "cat_reaction": reaction}))
+
+
+# BUG WE HIT (real observed output): two pinecones separately given to the
+# cat produced two IDENTICAL "a pinecone, well-battered after a game with
+# the cat" bullets in the room listing -- exactly the clutter compression
+# exists to fix, in a lineage-scale field (cat-given traces accumulate
+# forever, same as loose finds) this feature's first version had excluded
+# outright. The excluding reasoning ("a trace reads as permanent scenery,
+# not accumulating clutter") turned out to be simply wrong -- it clutters
+# just as visibly. A trace's description already names itself (see
+# _room_listing_line), so a compressed trace group keeps that text
+# attached instead of collapsing to a bare "two pinecones" the way an
+# ordinary find does -- losing "well-battered..." would erase the exact
+# character information the give-to-cat feature exists to record.
+def test_curio_groups_includes_identical_cat_given_traces():
+    w, actor = fresh()
+    t1 = _trace(w, "a pinecone", "plays")
+    t2 = _trace(w, "a pinecone", "plays")
+    groups = _curio_groups(w.contents("hut"))
+    matching = [es for _, _, es in groups if t1 in es]
+    assert matching and t2 in matching[0] and len(matching[0]) == 2
+
+
+def test_room_listing_compresses_identical_traces_and_keeps_the_trace_text():
+    w, actor = fresh()
+    _trace(w, "a pinecone", "plays")
+    _trace(w, "a pinecone", "plays")
+    listing = w.act(actor, "look")
+    assert "  - two pinecones, well-battered after a game with the cat" in listing
+    assert listing.count("well-battered after a game with the cat") == 1, \
+        "the trace text should appear once, attached to the count -- not twice"
+
+
+def test_traces_of_different_curios_never_merge_just_because_the_suffix_matches():
+    w, actor = fresh()
+    _trace(w, "a bone button", "ignores")
+    _trace(w, "a curl of birch bark", "ignores")
+    listing = w.act(actor, "look")
+    assert "a bone button, given to the cat and roundly ignored" in listing
+    assert "a curl of birch bark, given to the cat and roundly ignored" in listing
+    assert "two " not in listing
+
+
+def test_look_at_a_compressed_group_reveals_the_exact_count():
+    w, actor = fresh()
+    for _ in range(7):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    result = w.act(actor, "look pinecone")
+    assert "seven pinecones" in result.lower()
+    assert "tight and resinous" in result, "the shared description should still be surfaced"
+
+
+def test_look_at_a_compressed_trace_group_reveals_the_exact_count():
+    """find_visible may resolve "look pinecone" to a non-portable trace
+    just as easily as a loose one -- the group summary must fire either
+    way, not only when the resolved target happens to still be portable."""
+    w, actor = fresh()
+    _trace(w, "a pinecone", "plays")
+    _trace(w, "a pinecone", "plays")
+    result = w.act(actor, "look pinecone")
+    assert "two pinecones" in result.lower()
+    assert "well-battered after a game with the cat" in result
+
+
+def test_look_at_a_compressed_group_with_a_distinctive_member_names_it():
+    w, actor = fresh()
+    for _ in range(6):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    odd_one = _add_curio(w, actor, "a pinecone", location="hut")
+    odd_one.description = "a pinecone, well-battered after a game with the cat"
+    result = w.act(actor, "look pinecone")
+    assert "seven pinecones" in result.lower()
+    assert "well-battered after a game with the cat" in result
+    assert "different" in result.lower() or "ordinary" in result.lower()
+
+
+def test_look_at_a_single_loose_curio_is_unaffected_by_group_summary():
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone", location="hut")
+    result = w.act(actor, "look pinecone")
+    assert result == "tight and resinous, one scale broken — the cat might bat at it."
+    assert "There are" not in result
+
+
+def test_taking_one_curio_from_a_compressed_group_updates_the_rendered_count():
+    w, actor = fresh()
+    for _ in range(3):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    assert "three pinecones" in w.act(actor, "look")
+    w.act(actor, "take pinecone")
+    assert "a pinecone" in [e.name for e in w.contents(actor.id)], \
+        "take must still resolve to one real entity"
+    listing = w.act(actor, "look")
+    assert "two pinecones" in listing
+    assert "three pinecones" not in listing
+
+
+def test_compression_touches_no_maintenance_resource():
+    """Same invariant as give/place: a purely presentational feature must
+    not sneak in a side effect on fire, food, or water."""
+    w, actor = fresh()
+    cat = w.get("cat")
+    cat.attrs["hunger"] = 5
+    hearth = w.get("hearth")
+    hearth.attrs["lit"], hearth.attrs["fuel"] = True, 10
+    for _ in range(3):
+        _add_curio(w, actor, "a pinecone", location="hut")
+    w.act(actor, "look")
+    assert cat.attrs["hunger"] == 5
+    assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10
+
+
+def test_plural_of_handles_multi_word_curio_names():
+    assert _plural_of("a pinecone") == "pinecones"
+    assert _plural_of("a pebble of blue glass") == "pebbles of blue glass"
+    assert _plural_of("a knot of bleached twine") == "knots of bleached twine"
+    assert _plural_of("a jay's feather") == "jay's feathers"
+    assert _plural_of("a smooth grey stone") == "smooth grey stones"
+
+
+def test_every_found_item_has_a_hand_authored_plural():
+    """_plural_of has a naive fallback so it can never crash, but every real
+    FOUND_ITEMS entry should be hand-authored -- the fallback existing isn't
+    permission to skip one."""
+    for name, _, _ in FOUND_ITEMS:
+        plural = _plural_of(name)
+        assert not plural.startswith("a "), \
+            f"{name!r} fell through to the naive fallback: {plural!r}"
 
 
 # ---------------------------------------------------------------------------

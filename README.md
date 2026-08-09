@@ -34,7 +34,7 @@ reads that note and harvests the crop.
 - `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
   without breaking anything.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec. `docs/` also holds
-  a couple of not-yet-built design proposals.
+  a not-yet-built design proposal (Lineage Memory Observatory).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -134,6 +134,10 @@ at the shelf, but by reading the journal, alongside whatever got written
 that day (or, if nothing did, a short note that something was pressed in
 anyway). Flat and pressable is the whole test — a pinecone or a button
 still only has the shelf, the cat, and (if it's a stone) the cairn.
+Several identical curios left loose in a room read as one line ("three
+pinecones", "several feathers") rather than one bullet each — presentation
+only, nothing is merged or lost, and `look <name>` on a group always gives
+the exact count.
 
 **A seed, for later.** The forest's edge also turns up, now and then, a
 seed unlike anything else you've found — deterministic, not a roll: one
