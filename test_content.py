@@ -39,6 +39,7 @@ from content import (
     SEED_NAME, BLOOM_TICKS, BLOOM_SHOWING_AT, BLOOM_BUDDING_AT, BLOOM_BANDS,
     BLOOM_KINDS, _seed_in_world, _mystery_plant, _bloom_description,
     JOURNAL_READ_LIMIT, JOURNAL_OLDER_SHOWN, JOURNAL_GAP, journal_view,
+    _journal_view_indices,
     CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
     _curio_groups, _room_lines, _group_look_summary,
 )
@@ -1594,6 +1595,51 @@ def test_journal_view_is_bounded_however_long_the_journal_gets():
         "seed + sampled older + the recent tail, however long the journal is"
     assert len(long) <= 1 + JOURNAL_OLDER_SHOWN * 2 + JOURNAL_READ_LIMIT + 1, \
         "bounded even counting every possible gap marker"
+
+
+def test_journal_view_indices_middle_picks_are_seeded_by_length_not_world_rng():
+    """Real-play ask: weight the view toward history so a one-off entry
+    (finding the statue, say) keeps getting real odds of being read, not
+    just a lucky evenly-spaced window it eventually ages out of. The
+    seeded picks must still be fully deterministic for a GIVEN length --
+    two calls with the same n must be identical, with no dependence on
+    world.rng or call order (nothing here is threaded a world or an rng
+    at all, which is itself the guarantee: there's nothing mutable to
+    depend on)."""
+    a = _journal_view_indices(200)
+    b = _journal_view_indices(200)
+    assert a == b
+
+
+def test_journal_view_indices_middle_picks_differ_as_the_journal_grows():
+    """Unlike the old evenly-spaced spans (which moved smoothly and could
+    permanently pass over a given entry once the span swept past it), a
+    length-seeded pick should genuinely differ from one length to the
+    next, not just slide -- most consecutive lengths should not reuse the
+    exact same middle indices."""
+    picks = [tuple(i for i in _journal_view_indices(n) if i not in (None,)
+                    and i != 0 and i < n - JOURNAL_READ_LIMIT)
+             for n in range(30, 60)]
+    assert len(set(picks)) > 1, "middle picks never vary across journal lengths"
+
+
+def test_journal_view_indices_middle_picks_are_unique_and_ordered():
+    indices = _journal_view_indices(300)
+    real = [i for i in indices if i is not None]
+    assert real == sorted(set(real)), "no duplicate or out-of-order picks"
+
+
+def test_journal_view_indices_a_specific_entry_gets_picked_at_some_length():
+    """The actual motivation, made concrete: a single entry written once
+    (say, index 15) should show up in SOME journal length's middle
+    sample, not be permanently excluded the way a fixed evenly-spaced
+    pattern could leave it stranded forever once the spans moved past it."""
+    target = 15
+    ever_shown = any(
+        target in _journal_view_indices(n)
+        for n in range(target + JOURNAL_READ_LIMIT + JOURNAL_OLDER_SHOWN + 1, target + 400)
+    )
+    assert ever_shown, f"entry {target} never appears across a long run of journal lengths"
 
 
 # ===========================================================================

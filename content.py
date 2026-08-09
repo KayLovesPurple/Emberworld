@@ -9,6 +9,8 @@ one-line docstring; new autonomy goes in BEHAVIORS; new content goes in
 build_world(). See ARCHITECTURE.md for the full recipe.
 """
 
+import random
+
 from world import (World, Entity, VERBS, FREE_VERBS, BEHAVIORS, ACTION_SOURCES,
                    SAVE, SAVE_VERSION, DAY_LENGTH)
 from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, cat_actions
@@ -1355,9 +1357,14 @@ def cmd_write(world, actor, arg):
 # read turns a quick catch-up into an ever-longer wall of past visits. The
 # full history is never lost (still all in entries, and cmd_write always
 # appends to it); only what a single `read journal` shows is capped.
-JOURNAL_READ_LIMIT = 7        # the recent tail, always shown
-JOURNAL_OLDER_SHOWN = 3       # entries drawn from further back, so the tail
+JOURNAL_READ_LIMIT = 5        # the recent tail, always shown
+JOURNAL_OLDER_SHOWN = 6       # entries drawn from further back, so the tail
                               # can never be the whole of a lineage's memory
+                              # -- weighted toward history over recency on
+                              # purpose (see journal_view), so a one-off
+                              # entry (the statue's discovery, say) keeps
+                              # getting real odds of being read long after
+                              # it scrolls out of anyone's recent tail
 JOURNAL_GAP = "..."           # marks where the view skipped over entries
 
 
@@ -1377,11 +1384,23 @@ def journal_view(entries, keep=JOURNAL_READ_LIMIT, older=JOURNAL_OLDER_SHOWN):
     happened to be going through. Reaching back across the whole history is
     what stops any one stretch of it becoming all of it.
 
-    Deliberately deterministic -- spans, and the middle of each span, not a
-    random draw. Two reasons: a hand who reads twice must see the same
-    thing (the LLM driver's prompt tells it the journal "won't change" once
-    read), and a book doesn't reshuffle which pages fall open. The picks
-    still move as the journal grows, because the spans do.
+    The `older` picks are seeded, not truly random and not fixed evenly-
+    spaced positions either -- a real-play ask, wanting a one-off entry
+    (a hand's only mention of finding the statue, say) to keep getting a
+    real chance of being read by later hands as the journal grows, not a
+    single lucky window. The original evenly-spaced version moved its
+    sample points smoothly as the journal grew, which meant a given entry
+    was only ever included while a span happened to be sweeping past it,
+    then lost it for good once the span moved on. Seeding by `len(entries)`
+    instead means every new entry changes which middle entries get sampled,
+    so a specific entry gets an independent fresh chance each time the
+    journal grows further, rather than a one-time window it can permanently
+    fall outside of. Still deterministic for a GIVEN journal length, for
+    the same two reasons as before: a hand who reads twice must see the
+    same thing (the LLM driver's prompt tells it the journal "won't change"
+    once read), and a book doesn't reshuffle which pages fall open on a
+    second look -- seeded by length, never by world.rng, which would break
+    exactly that.
 
     Deliberately blind to what the entries SAY. Choosing them by content --
     biasing away from whatever the recent ones are about -- would work, and
@@ -1402,17 +1421,20 @@ def _journal_view_indices(n, keep=JOURNAL_READ_LIMIT, older=JOURNAL_OLDER_SHOWN)
         return list(range(n))
     tail_start = n - keep
     middle = list(range(1, tail_start))
-    out, taken = [0], 0
-    span = len(middle) / older if older else 0
-    for i in range(older):
-        idx = min(int(i * span + span / 2), len(middle) - 1)
-        if idx < taken:                   # spans this short can collide
-            continue
-        if idx > taken:
+    take = min(older, len(middle))
+    # A fresh, locally-seeded Random -- never world.rng, whose shared
+    # stream would make a second read (or any other roll that happens to
+    # fall between two reads) change what's shown. Seeded by `n` alone,
+    # so it depends only on how long the journal is, not on anything it
+    # says (see journal_view's own note on staying content-blind).
+    positions = sorted(random.Random(n).sample(range(len(middle)), take))
+    out, prev = [0], -1
+    for pos in positions:
+        if pos > prev + 1:
             out.append(None)
-        out.append(middle[idx])
-        taken = idx + 1
-    if len(middle) > taken:
+        out.append(middle[pos])
+        prev = pos
+    if len(middle) - 1 > prev:
         out.append(None)
     return out + list(range(tail_start, n))
 

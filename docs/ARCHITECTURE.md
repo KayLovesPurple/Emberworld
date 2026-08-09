@@ -1557,7 +1557,7 @@ exists (each fixed a real failure we watched happen):
   re-deciding to "understand its situation."
 
   *How much* is shown is capped here (~5 recent + ~2 older) and separately in
-  `cmd_read` (`JOURNAL_READ_LIMIT` 7 + `JOURNAL_OLDER_SHOWN` 3), because a
+  `cmd_read` (`JOURNAL_READ_LIMIT` 5 + `JOURNAL_OLDER_SHOWN` 6), because a
   prompt pays per token every turn and a hand reading a book doesn't. *Which*
   entries get shown is one shared policy, `content.journal_view` — see the
   long note on it. Short version: never a plain tail. A tail means a run of
@@ -1567,6 +1567,25 @@ exists (each fixed a real failure we watched happen):
   else and wrote another one. The journal is the strongest lever in the world
   on how a visit *feels*; a pure-recency window hands that lever to whatever
   the last few hands happened to be going through.
+
+  **Rebalanced further, real-play ask.** `cmd_read`'s split used to be 7
+  recent + 3 older (favoring recency); it's now 5 + 6 (favoring history), and
+  the `older` picks themselves changed shape too. The original picker chose
+  the *middle* of `older` evenly-spaced spans across the journal's non-recent
+  history — deterministic, but its sample points slid smoothly as the journal
+  grew, so a specific one-off entry (a hand's only mention of finding the
+  statue, say) was only ever shown while a span happened to be sweeping past
+  it, then permanently lost once the span moved on. `_journal_view_indices`
+  now seeds a fresh `random.Random(n)` off the journal's length instead —
+  never `world.rng`, whose shared, advancing stream would make a second read
+  in the same visit show something different, breaking the same "won't
+  change once read" promise this section leans on. Seeding by length keeps
+  a GIVEN length's picks fully reproducible while making each new length an
+  independent draw, so a given entry gets a fresh, real chance of appearing
+  every time the journal grows further, rather than one narrow window it can
+  age out of for good. `drivers.py`'s own `keep=5, older=2` inherits the same
+  algorithm through the shared `journal_view` call, unchanged in count but
+  picking differently now too.
 - **Turns remaining**: shown every turn, so the agent spends a finite budget
   deliberately rather than squandering free actions.
 - **Stuck detection** (`_looks_stuck`): flags the same **free** verb repeated 3×
