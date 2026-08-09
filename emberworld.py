@@ -28,7 +28,7 @@ game's own verbs/behaviors/content in content.py, and the three drivers
 import sys
 
 from content import generate_reference
-from drivers import play, random_agent, llm_agent, fuzz_run, LLM_MODEL
+from drivers import play, random_agent, llm_agent, fuzz_run, lineage_rebuild, LLM_MODEL
 from lineage_memory import load as load_lineage_memory, format_report
 
 
@@ -54,6 +54,8 @@ if __name__ == "__main__":
         random_agent()
     elif "--reference" in sys.argv:
         print(generate_reference())
+    elif "--lineage-rebuild" in sys.argv:
+        lineage_rebuild(model=_str_flag("--model", None))
     elif "--lineage-report" in sys.argv:
         print(format_report(load_lineage_memory()))
     elif "--llm" in sys.argv:

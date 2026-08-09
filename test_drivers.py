@@ -44,15 +44,14 @@ def test_random_agent_never_drops_anything():
     deliberately keeps drop in ITS pool; only the dumb agent excludes it."""
     with tempfile.TemporaryDirectory() as d:
         save_path = os.path.join(d, "emberworld_save.json")
-        lineage_path = os.path.join(d, "lineage_memory.json")
-        orig_save, orig_lineage = drv.SAVE, drv.LINEAGE_MEMORY_PATH
-        drv.SAVE, drv.LINEAGE_MEMORY_PATH = save_path, lineage_path
+        original = drv.SAVE
+        drv.SAVE = save_path
         try:
             buf = io.StringIO()
             with redirect_stdout(buf):
                 drv.random_agent(steps=200)
         finally:
-            drv.SAVE, drv.LINEAGE_MEMORY_PATH = orig_save, orig_lineage
+            drv.SAVE = original
     chosen = [line for line in buf.getvalue().splitlines()
               if line.startswith(">>> ")]
     assert chosen, "the agent should have taken some actions"
@@ -239,50 +238,6 @@ def test_backfilling_the_cairn_hint_is_idempotent():
     once = stone.description
     ensure_shelf(w)
     assert stone.description == once, "a second backfill pass must not double the hint"
-
-
-# ===========================================================================
-# 2b-3. LINEAGE MEMORY SYNC -- every driver's session-end checkpoint
-#     (w.save(SAVE)) also lets Lineage Memory catch up on any journal
-#     entries written since it last looked. One shared wrapper so a future
-#     fourth driver can't forget to call both -- see lineage_memory.py.
-# ===========================================================================
-def test_save_and_sync_lineage_writes_lineage_memory_alongside_the_save():
-    w, actor = fresh()
-    w.get("journal").attrs["entries"].append(
-        "[Day 6, Marrow] The well felt mysterious tonight.")
-    with tempfile.TemporaryDirectory() as d:
-        save_path = os.path.join(d, "emberworld_save.json")
-        lineage_path = os.path.join(d, "lineage_memory.json")
-        orig_save, orig_lineage = drv.SAVE, drv.LINEAGE_MEMORY_PATH
-        drv.SAVE, drv.LINEAGE_MEMORY_PATH = save_path, lineage_path
-        try:
-            drv._save_and_sync_lineage(w)
-        finally:
-            drv.SAVE, drv.LINEAGE_MEMORY_PATH = orig_save, orig_lineage
-        assert os.path.exists(save_path)
-        assert os.path.exists(lineage_path)
-        from lineage_memory import load
-        memory = load(lineage_path)
-        assert [r["index"] for r in memory["entities"]["well"]["mystery"]] == [1], \
-            "index 1 -- entry 0 is the fresh-world seed entry"
-
-
-def test_random_agent_syncs_lineage_memory_on_exit():
-    """Proves the real driver call site was actually switched to the
-    shared wrapper, not just that the wrapper works in isolation."""
-    with tempfile.TemporaryDirectory() as d:
-        save_path = os.path.join(d, "emberworld_save.json")
-        lineage_path = os.path.join(d, "lineage_memory.json")
-        orig_save, orig_lineage = drv.SAVE, drv.LINEAGE_MEMORY_PATH
-        drv.SAVE, drv.LINEAGE_MEMORY_PATH = save_path, lineage_path
-        try:
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                drv.random_agent(steps=20)
-        finally:
-            drv.SAVE, drv.LINEAGE_MEMORY_PATH = orig_save, orig_lineage
-        assert os.path.exists(lineage_path)
 
 
 def test_llm_session_log_is_named_for_the_hand_and_logs_the_model_in_its_header():

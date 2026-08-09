@@ -1225,114 +1225,122 @@ developer via `--lineage-report`. Nothing it produces is ever fed back
 into a prompt, a description, or any world state — see
 `docs/LINEAGE_MEMORY_OBSERVATORY.md`'s own "no arrow back into the game"
 diagram, which the module's docstring restates as its own constraint.
-Concretely, that constraint holds because the module imports *nothing*
-from `world.py`/`content.py`/`drivers.py` — every function takes plain
-strings or a duck-typed object (`sync_lineage_memory` only ever calls
-`.get("journal")` and reads `.attrs` on what comes back), so nothing on
-the content side has to import it either, other than the two call sites
-that hand it data.
 
-**Extraction is rule-based in v1** (see the doc's own Status note for why
-and what that trades away): two hand-authored word tables,
-`CANDIDATE_ENTITIES` and `CANDIDATE_CONCEPTS`, matched against entry text
-on real word boundaries (`\bword\b`, never a bare substring check — "cat"
-must not fire on "cattle"). Same discipline as `FOUND_ITEMS`/
-`_CURIO_PLURALS`: small, explicit, hand-adjustable tables over anything
-that tries to guess or stem. One accepted imprecision worth knowing about:
-"well" is also an ordinary English discourse word ("Well, I planted the
-potato"), and rule-based matching can't tell the two apart — flagged in
-the table's own comment rather than engineered around, consistent with
-"start simple, revise once a real report looks off."
+**History, briefly, because the design only makes sense in light of it.**
+The first version was rule-based: hand-authored entity/concept word
+tables, matched incrementally after every session and synced
+automatically alongside `w.save(SAVE)`. That version went through two
+real, observed bugs before being replaced outright — worth keeping as
+institutional memory even though the code is gone: (1) matching
+cross-producted every entity and concept mentioned anywhere in a whole
+entry, so one real entry about the hearth, the cat, and (in a separate
+sentence) "the forest is dangerous after dark" tagged FIVE entities with
+"danger," not just the forest — fixed at the time by scoping matches to
+one sentence; (2) a keyword table fundamentally can't tell an observation
+from an interpretation ("the well was dry" vs. "the well was watching
+me") without actually understanding the sentence, which is exactly what
+sank the rule-based approach for good once real reports started asking
+for that distinction, plus richer categories (`good_omen`, not in any
+hand-authored list) and behaviour tracking. Rather than keep bolting
+heuristics onto keyword-matching, extraction was replaced wholesale with
+an LLM call. The other real decision made at the same time: keep this
+**one file, manually rebuilt**, not an automatic sync running a second,
+parallel LLM-backed lineage alongside — cost and latency landing on
+ordinary play (a plain human `quit` making API calls it never used to)
+and the risk of two lineages drifting out of sync with each other were
+both reasons to say no to that shape, even though it was the initially
+proposed design.
 
-**The unit of evidence is the journal entry itself** — its own list
-index, not a derived grouping. The doc's original proposal suggested
-"visit" as the unit and warned against raw journal lines specifically
-because one visit expressing the same thought three ways shouldn't count
-as three confirmations. (day, hand name) looked like a reasonable proxy
-for "visit" during design, until we recalled a real, previously-observed
-failure mode in this lineage: two different hands landing on the same
-name is not rare (see the "Marrow naming convergence" fix), so grouping
-by (day, name) would have silently merged genuinely different evidence.
-Journal-entry-level granularity sidesteps the whole problem and matches
-how every other part of the codebase already treats an entry — one
-`write` call is one atomic thing to `JOURNAL_READ_LIMIT`, the tuck index,
-and everywhere else that touches `journal.attrs["entries"]`.
+**Extraction (`llm_rebuild`) takes a plain list of journal entry
+strings** — not a `World`, not a journal entity — so this module still
+imports nothing from `world.py`/`content.py`/`drivers.py`. The CLI layer
+(`lineage_rebuild()` in drivers.py) owns loading the world and handing
+over `journal.attrs["entries"]`; `anthropic` itself is lazily imported
+inside `llm_rebuild` only when no test double is injected, so the rest of
+this module — and the whole test suite — needs neither the package nor a
+key installed.
 
-**Association granularity is the cross-product within one SENTENCE, not
-the whole entry** — a narrower scope than v1 originally shipped with.
-Real accumulated journal data caught the wider version's cost
-immediately: `HEARTH`, `SHELF`, `LAMP`, `CAT`, `FOREST`, and `WELL` all
-came back with an identical "danger: 1 entry" from ONE real entry (Day
-18) whose only actually-dangerous subject was the forest ("the forest is
-dangerous after dark") — the entry also happened to mention feeding the
-cat, the hearth being spent, and the shelf, in earlier sentences, so all
-of them picked up the association too under entry-wide matching. Once the
-excerpts (see above) made that visible, the fix was to narrow the match
-scope itself, not just document the imprecision: `extract_associations`
-now splits each entry into sentences (`_sentences`, a naive
-period/question/exclamation split with the entry's own `[Day N, Name]`
-stamp reattached to each piece, since a later sentence wouldn't otherwise
-carry its own day/name context) and cross-products only within one
-sentence. Re-running the report on the same real journal after this
-change: `FOREST` alone carries "danger," with the excerpt trimmed to just
-"The forest is dangerous after dark." — the cat, hearth, lamp, and shelf
-no longer show it at all.
+**A closed entity list, an open concept vocabulary.** `KNOWN_ENTITIES` is
+still a small, fixed, hand-authored tuple (well, cairn, forest, hearth,
+lamp, shelf, statue, cat) passed into the prompt as an enum constraint —
+docs/LINEAGE_MEMORY_OBSERVATORY.md section 13's own caution against
+letting arbitrary nouns become thousands of tracked entities still
+applies, and an LLM is exactly the kind of extractor that would happily
+invent a new one every batch if allowed to. `concept`, by contrast, is
+free text the model chooses (normalized to short, lowercase, snake_case
+labels) — the entire reason to bring an LLM in was to stop being limited
+to a hand-authored word list, so constraining concepts the same way as
+entities would have defeated the point.
 
-This is also the seam future LLM-based extraction (the doc's own deferred
-upgrade) replaces, and deliberately nothing above `extract_associations`
-had to change to add sentence-scoping: the function still takes one whole
-entry and returns `(entity, concept, excerpt)` triples, same as before —
-only what happens *inside* it changed. An LLM step can judge relatedness
-across a sentence boundary a regex never will (and should, since splitting
-by sentence is itself capable of new mistakes — a real one surfaced in the
-same re-sync: "she's calm, well-fed, and the shelf grows richer" matched
-`WELL` because `\bwell\b` fires inside the hyphenated "well-fed," the same
-known discourse-word imprecision the entity's own trigger-word comment
-already warns about, just via a different route). Sentence-scoping fixes
-one class of false positive; it doesn't and can't fix that one, which is
-exactly the class of problem the doc always expected only real language
-understanding could solve.
+**Four evidence types, exactly the split
+`docs/LINEAGE_MEMORY_OBSERVATORY.md`'s "V1.5" addendum asked for**:
+`observation` / `interpretation` / `behaviour` / `association`, with the
+model itself doing the classification (its prompt spells out the
+distinction the rule-based version could never make: interpretation is
+"especially anything that treats an inanimate object as if it perceives,
+remembers, or intends"). `behaviour` no longer needs the fragile
+phrase-matching the rule-based version used (`CANDIDATE_BEHAVIOURS`,
+"stacked" / "added a stone" tied to one fixed entity) — the model just
+judges whether the entry describes an actual action, the same way it
+judges everything else.
 
-**Persistence**: `lineage_memory.json`, a sibling of `emberworld_save.json`
-but a genuinely separate file and gitignored the same way — derived,
-regenerable (`rebuild(entries)` replays the whole journal from scratch),
-and specific to one local lineage's actual play history, not something a
-fresh clone should inherit. `{"processed_through": N, "entities": {...}}`
-— an envelope-plus-payload shape, matching `World.to_data()`'s own, so a
-future bookkeeping field never risks colliding with an entity key (entity
-keys only ever come from `CANDIDATE_ENTITIES`, but keeping the shapes
-separate costs nothing and rules the collision out by construction).
+**Confidence is real now, not a TODO.** Every evidence item carries a
+`confidence` (0–1) the model assigns; `format_report` pulls anything
+below `CONFIDENCE_WEAK_BELOW` (0.5) out of its normal evidence-type
+section and into its own `WEAK / DERIVED` heading instead, so a
+developer reading the report isn't handed a shaky inference with the same
+visual weight as a confident one. Never silently dropped, though — "prefer
+false negatives over confidently inventing meaning" cuts the other way
+too: don't manufacture false *certainty* by hiding a real but weak signal
+entirely.
 
-**Sync is one shared checkpoint, not four.** All three drivers already
-had their own "session's over, persist now" moment
-(`w.save(SAVE)`, at four call sites total between `play`/`random_agent`/
-`llm_agent`). `_save_and_sync_lineage(w)` (drivers.py) wraps both the
-world save and `sync_lineage_memory` in one function, and all four call
-sites were switched to it, so a future fourth driver can't add a save
-call and forget the sync. `sync_lineage_memory` itself is incremental and
-idempotent: it tracks `processed_through` and only ever folds in entries
-past that point, so calling it repeatedly (as every `quit`/Ctrl-C/normal
-exit already does) never reprocesses or double-counts anything. The
-fuzzer never calls it at all, since `fuzz_run` never saves — fully
-in-memory by design, so it can't pollute real lineage data even
-accidentally.
+**Batching, not one call per entry.** `BATCH_SIZE` (12) entries go into
+one API call; a full rebuild over a real lineage's journal costs a
+handful of round trips, not one per entry. A batch that raises (network
+error, bad response) is skipped rather than aborting the whole rebuild —
+`llm_rebuild` is meant to hand back a partial, inspectable result a
+developer can look at and re-run, not lose everything to one bad batch.
+`entry_index` values outside the batch's real range (a hallucinated
+index) are dropped the same way — silently, rather than corrupting
+`memory` or crashing.
 
-**BUG WE HIT while wiring this in:** an existing test
-(`test_random_agent_never_drops_anything`) called the real
-`random_agent()` with `drv.SAVE` monkeypatched to a temp path but not
-`drv.LINEAGE_MEMORY_PATH` — which didn't exist as a concept when that
-test was written. Running the suite left a real `lineage_memory.json` in
-the repo root, seeded from nothing but a random agent's nonsense session.
-Fixed by monkeypatching both paths together; worth remembering for any
-future test that drives a real session end-to-end.
+**No incremental state.** The old `processed_through`/resume bookkeeping
+is gone along with the automatic sync it existed for: `llm_rebuild`
+always processes every entry from scratch (`{"entry_count": N,
+"entities": {...}}` is the whole envelope now), and two rebuilds of the
+same journal are fully independent — there's nothing left to accidentally
+carry over between them.
 
-**Deliberately not built**: everything the Status note in
-`docs/LINEAGE_MEMORY_OBSERVATORY.md` lists as needing real language
-understanding (observation-vs-interpretation, naming, symbolic acts,
-behavioural tracking), tone-distribution reporting, temporal banding
-(days 1-10 vs 11-20 vs 21-32), and the "little scatter of..." style
-prose-merging the doc's own "later, if it proves out" language already
-anticipates deferring.
+**Cheap and fast is enough** (`claude-haiku-4-5-20251001`): this is
+structured extraction against a tool schema, not creative writing, and
+Lineage Memory is a bolt-on developer tool, not the game itself — no
+reason to spend a bigger model's budget on it.
+
+**Tested with a fake client, same pattern as the LLM sign-off tests**
+(`test_drivers.py`'s `_FakeClient`/`_leave_signoff`): `_FakeExtractionClient`
+returns one queued response per expected batch call and records every
+`kwargs` dict it was asked to send, so a test can assert not just the
+resulting `memory` shape but which entries actually went into which
+batch. No network, no key, fully deterministic — the one thing genuinely
+*not* covered by the automated suite is the real, non-injected
+`Anthropic()` path, the same gap `llm_agent`'s actual network calls
+already have.
+
+**CLI**: `--lineage-rebuild` (needs `ANTHROPIC_API_KEY`, same check
+`llm_agent` already does) rebuilds `lineage_memory.json` from the whole
+journal and prints the report in one step; `--lineage-report` just reads
+and formats whatever's already there, unchanged regardless of how it was
+built. `lineage_memory.json` itself stays a gitignored sibling of
+`emberworld_save.json` — derived, regenerable, specific to one local
+lineage's play history, never something a fresh clone should inherit.
+
+**Deliberately not built**: naming and symbolic-act detection get no
+special handling beyond whatever the model naturally captures under
+`association`; there's no tone-distribution reporting or temporal banding
+(days 1–10 vs. 11–20 vs. 21–32) the original doc's later sections
+describe; and the report's own prose stays literal (`concept` labels and
+raw excerpts) rather than attempting the "little scatter of..."-style
+prose-merging the doc explicitly frames as a later refinement, if ever.
 
 ## What keeps it from breaking
 
