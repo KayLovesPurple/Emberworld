@@ -29,7 +29,7 @@ from content import (
     SAFE_DEPTH_THRESHOLD, OFF_COURSE_CHANCE, OFF_COURSE_LINES,
     FOREST_AMBIENT_CHANCE, FOREST_AMBIENT, _forest_ambient,
     STATUE_MIN_DEPTH, STATUE_DISCOVERY_CHANCE, STATUE_DISCOVERY_TEXT,
-    STATUE_WISH_LINE, ensure_statue, _statue_reachable, cmd_wish,
+    STATUE_WISH_LINE, STATUE_WISH_HINT, ensure_statue, _statue_reachable, cmd_wish,
     PRESENCE_RULES, PRESENCE_LAST, _room_here,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     MOON_NEAR_NIGHTS, MOON_PHASE_OFFSET, MOON_VIEW_LINES, _moon_view,
@@ -3103,6 +3103,22 @@ def test_statue_can_be_discovered_past_the_min_depth():
     assert "stone figure" in result
 
 
+def test_statue_discovery_starts_on_its_own_paragraph():
+    """Real-play ask: the discovery text used to run on directly from
+    describe_forest's line with just a space ("...turning to something
+    else. Between two trunks..."), reading as one more clause of forest
+    texture rather than an actual find. A blank line ahead of it now marks
+    it as its own thing."""
+    w, actor = fresh()
+    w.rng = _Unlucky()
+    run(w, actor, "go out", "go forest")
+    for _ in range(STATUE_MIN_DEPTH - 1):
+        w.act(actor, "venture")
+    w.rng = _AlwaysDiscover()
+    result = w.act(actor, "venture")
+    assert "\n\nBetween two trunks" in result
+
+
 def test_statue_is_not_rediscovered_once_found_this_session():
     """No flickering in and out of existence on repeated ventures -- once
     found, later discovery text should not appear again."""
@@ -3241,6 +3257,24 @@ def test_ensure_statue_is_idempotent():
     statue2 = ensure_statue(w)
     assert statue2 is statue1
     assert statue2.attrs["wishes"] == ["a wish already logged"]
+
+
+def test_ensure_statue_backfills_the_wish_hint_onto_a_legacy_statue():
+    """Real-play bug: a statue created before STATUE_WISH_HINT existed
+    (any lineage where a wish was ever made pre-fix) keeps its old-style
+    description forever otherwise -- `look statue` in an ongoing lineage
+    kept showing the bare "a weathered stone figure..." with no hint,
+    same class of bug ensure_shelf's STONE_CAIRN_HINT backfill already
+    guards against for stones. ensure_statue must patch an existing
+    statue in place, not just set the hint on newly-created ones."""
+    w, actor = fresh()
+    statue = ensure_statue(w)
+    statue.description = "a weathered stone figure, worn past recognizing, moss thick in its folds"
+    assert STATUE_WISH_HINT not in statue.description
+    patched = ensure_statue(w)
+    assert patched is statue
+    assert STATUE_WISH_HINT in patched.description
+    assert patched.description.startswith("a weathered stone figure")
 
 
 def test_look_statue_vaguely_hints_at_wishing():

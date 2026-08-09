@@ -804,6 +804,28 @@ the statue: never a word implying it hears, listens, grants, knows, or is
 aware — `test_look_statue_vaguely_hints_at_wishing` checks for both the
 hint and the absence of those words.
 
+**Two more real-play follow-ups landed with the hint, both about it not
+actually reaching anyone yet.** First: `STATUE_DISCOVERY_TEXT` used to be
+appended straight onto `describe_forest`'s line with a single leading
+space ("...turning to something else. Between two trunks..."), so a real
+find read as just one more clause of ambient forest texture instead of an
+actual discovery. `cmd_venture` now leads it with a blank line
+(`"\n\n" + STATUE_DISCOVERY_TEXT`) instead — `_forest_ambient`'s own
+leading space is untouched, since that one really is meant to read as
+part of the same breath, not a separate beat. Second, and the more load-
+bearing one: the hint text only ever reaches a *newly created* statue —
+any lineage where a wish had already been made before this fix keeps that
+statue's old-style description forever otherwise, since `ensure_statue`'s
+`if statue is None` branch never runs again once the entity exists. Exact
+same shape as the stone→cairn legibility bug's own backfill requirement.
+Fixed with the same pattern `ensure_shelf` already uses for
+`STONE_CAIRN_HINT`: `STATUE_WISH_HINT` pulled out as its own constant so
+`ensure_statue` can check for it by substring on an *existing* statue too,
+appending it in place when missing — guarded by the substring check
+itself, so a second pass, or a statue that already carries it, is a
+no-op. See `test_statue_discovery_starts_on_its_own_paragraph` and
+`test_ensure_statue_backfills_the_wish_hint_onto_a_legacy_statue`.
+
 Deliberately **not** added to `check_world`: a standing invariant that
 `statue_found_this_session` is never `True` below `STATUE_MIN_DEPTH`. The
 spec's cross-cutting section suggested this, but it doesn't actually hold

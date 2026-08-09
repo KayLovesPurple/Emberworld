@@ -1603,12 +1603,19 @@ STATUE_DISCOVERY_CHANCE = 0.25   # was 0.15; real play found the wait too long.
 # that doing it here works, or that anything hears you. THE LINE THAT MUST
 # NEVER APPEAR: anything implying the statue listens, grants, or is aware.
 STATUE_DISCOVERY_TEXT = (
-    " Between two trunks stands something that isn't a tree -- a weathered "
+    "Between two trunks stands something that isn't a tree -- a weathered "
     "stone figure, worn past recognizing, moss thick in its folds. However "
     "long it's stood here, it was long before you. Something about it makes "
     "you think people have stood here and wished for things, the way you'd "
     "toss a coin in a fountain."
 )
+
+# The same folk-magic hint STATUE_DISCOVERY_TEXT ends on, folded into the
+# statue's permanent description too (see ensure_statue) -- kept as its own
+# constant so ensure_statue's legacy-save backfill can check for it by
+# substring, same pattern ensure_shelf already uses for STONE_CAIRN_HINT.
+STATUE_WISH_HINT = ("the kind of thing a hand leaves a wish with, the way "
+                     "you would a coin in a fountain")
 
 # THE CONSTRAINT THAT MUST NEVER BREAK: the statue stays mechanically
 # inert. Lore says it grants; mechanics grant nothing; if anything is ever
@@ -1629,14 +1636,22 @@ def ensure_statue(world):
     discovery text -- "a coin in a fountain," never a claim that anything
     hears or grants -- so a hand who looks again later (this visit, or a
     later hand entirely, long after the one-time discovery paragraph has
-    scrolled away) still finds the nudge toward `wish`, not just a rock."""
+    scrolled away) still finds the nudge toward `wish`, not just a rock.
+
+    A statue found before that hint was added has an old-style description
+    with no mention of it -- backfilled here in place, same pattern
+    ensure_shelf already uses for STONE_CAIRN_HINT, guarded by the hint's
+    own substring so a second pass (or a statue created after the fix,
+    already carrying it) is a no-op."""
     statue = world.get("statue")
     if statue is None:
         statue = world.add(Entity("statue", "statue",
-            "a weathered stone figure, worn past recognizing, moss thick "
-            "in its folds -- the kind of thing a hand leaves a wish with, "
-            "the way you would a coin in a fountain", location="forest_edge",
+            f"a weathered stone figure, worn past recognizing, moss thick "
+            f"in its folds -- {STATUE_WISH_HINT}", location="forest_edge",
             portable=False, attrs={"wishes": []}))
+    elif STATUE_WISH_HINT not in statue.description:
+        statue.description = statue.description.rstrip(" -") \
+            + f" -- {STATUE_WISH_HINT}"
     return statue
 
 
@@ -1691,7 +1706,12 @@ def cmd_venture(world, actor, arg):
         # Later hands never hit this: once any wish has ever been made,
         # the entity persists in the save from then on.
         ensure_statue(world)
-        discovery = STATUE_DISCOVERY_TEXT
+        # A blank line ahead of it, not just a space -- this is a real find,
+        # not one more clause in the same ambient sentence describe_forest
+        # already built (see _forest_ambient's plain leading space for the
+        # contrast: that one really is meant to read as part of the same
+        # breath).
+        discovery = "\n\n" + STATUE_DISCOVERY_TEXT
     # Composition order (FOREST_SPEC.md cross-cutting requirement):
     # discovery text leads, then ambient -- off-course doesn't apply to
     # venture, only return, so this is the full order for this verb.
