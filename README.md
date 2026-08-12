@@ -38,6 +38,7 @@ reads that note and harvests the crop.
 - `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
   without breaking anything.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec.
+- `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (not yet built).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -285,7 +286,8 @@ can't resolve it, so the *journal* becomes where the lineage theorises and
 a shared myth grows around an object that means nothing. The restraint IS
 the feature. Resist every future urge to explain it.
 
-**Clay — the open-material question** *(a design problem, not a quick feature).*
+**Clay — the open-material question** *(a design problem, not a quick feature —
+see `docs/CLAY_SPEC.md` for the cosmetic-only riverbank/gather/shape spec).*
 Clay would be the first *open* material: a raw thing the player/agent shapes into
 whatever they intend — a teapot, a dish for the cat's potato, a jar for
 (future) fruit — rather than a verb with one predefined outcome. This is
