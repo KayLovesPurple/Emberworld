@@ -1463,6 +1463,23 @@ fixing one without checking the other silently pushed the wrong way each
 time. `test_patch_hint_covers_bare_planting_entries_without_the_word_
 patch` checks both halves stayed in the prompt.
 
+**The same fix, requested again for `statue`, real use once more.** A
+journal line came back that never says "statue": *"Plant your potatoes
+before you venture, and give Ember something blue when you come back —
+the wishing works better that way."* Wishing only ever happens at the
+statue (`cmd_wish`, gated by `_statue_reachable`) — no other verb, no
+other entity — so the same "action alone identifies the entity" rule
+from the patch applies just as cleanly. `ENTITY_HINTS["statue"]` now says
+so directly ("Wishing, or a wish, always refers to this statue, even if
+the entry never says 'statue' at all"). No `_SYSTEM_PROMPT` exclusion
+line needed changing this time — nothing was telling the model to skip
+wishing mentions, unlike potatoes' routine-chores carve-out — so this one
+was a pure disambiguation addition, not a two-sided fix. The comment
+above `ENTITY_HINTS` now names this as a recurring shape rather than two
+unrelated incidents: any entity with exactly one action mechanically tied
+to it and nothing else in the game is worth this treatment up front,
+rather than waiting for a real journal line to expose the gap.
+
 **Four evidence types, exactly the split
 `docs/LINEAGE_MEMORY_OBSERVATORY.md`'s "V1.5" addendum asked for**:
 `observation` / `interpretation` / `behaviour` / `association`, with the

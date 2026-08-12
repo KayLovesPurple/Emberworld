@@ -88,6 +88,19 @@ def test_patch_hint_covers_bare_planting_entries_without_the_word_patch():
     assert "eating" in _SYSTEM_PROMPT and "cooking" in _SYSTEM_PROMPT
 
 
+def test_statue_hint_covers_bare_wishing_entries_without_the_word_statue():
+    """Same shape as the patch/potato fix, requested for the statue after
+    a real journal line came back that never says "statue" at all: "Plant
+    your potatoes before you venture, and give Ember something blue when
+    you come back -- the wishing works better that way." Wishing only
+    ever happens at the statue (see cmd_wish/_statue_reachable in
+    content.py), so the mention of wishing alone should be enough to tag
+    the statue, the same way "planted a potato" alone tags the patch."""
+    assert "wishing" in ENTITY_HINTS["statue"]
+    assert "statue" in ENTITY_HINTS["statue"]
+    assert "wishing" in _SYSTEM_PROMPT
+
+
 # ===========================================================================
 # 2. STAMP PARSING -- entries are already stamped by day_stamp
 #    (content_common.py): "[Day N]" or "[Day N, Name]". Parsed locally

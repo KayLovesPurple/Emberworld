@@ -44,6 +44,14 @@ KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue"
 # elsewhere read as a plausible match. One short, unambiguous gloss per
 # entity, always sent alongside the name (see _SYSTEM_PROMPT) rather than
 # trusting the bare word to carry its meaning on its own.
+#
+# A recurring shape worth naming: several entities have exactly one
+# action mechanically tied to them and nothing else in the game (planting
+# only ever happens in the patch, wishing only ever happens at the
+# statue). For those, the hint says so explicitly, so a journal line that
+# names the action but never the entity's own name -- "planted a potato,"
+# "the wishing works better" -- still gets tagged correctly instead of
+# needing the literal noun to appear.
 ENTITY_HINTS = {
     "well": "the well in the yard",
     "cairn": "the small stone landmark at the forest's edge, built by stacking found stones -- not any other rock or ground",
@@ -51,7 +59,11 @@ ENTITY_HINTS = {
     "hearth": "the hut's hearth/fireplace",
     "lamp": "the portable tin lamp, kindled from the hearth",
     "shelf": "the hut's curio shelf, where found objects are displayed",
-    "statue": "the stone statue found deep in the forest, where wishes are made",
+    "statue": ("the stone statue found deep in the forest, where wishes are made. Wishing, "
+               "or a wish, always refers to this statue, even if the entry never says "
+               "\"statue\" at all -- it's the only place wishing happens in the game, so "
+               "the mention of wishing itself identifies the entity, the same way planting "
+               "identifies the patch below"),
     "cat": "the yard's cat",
     "patch": ("specifically the vegetable patch in the yard, where potatoes are grown -- "
               "not the forest floor, ground elsewhere, or a metaphorical patch. Planting, "
