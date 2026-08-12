@@ -737,7 +737,18 @@ def cmd_take(world, actor, arg):
     if e.location == actor.id:
         return f"You're already carrying {_the(e.name)}."
     if not e.portable:
-        return f"The {e.name} won't budge."
+        # BUG WE HIT: this used to read f"The {e.name} won't budge." --
+        # every curio name already bakes in its own article ("a pinecone"),
+        # the same fact _the() exists to handle, but every OTHER call site
+        # in this function uses "You <verb> {_the(e.name)}", mid-sentence,
+        # so the double article ("The a pinecone won't budge") went
+        # unnoticed until a hand tried to take back a non-portable
+        # cat-given trace. _the() only ever returns a lowercase "the ...",
+        # so the fix capitalizes just the first character rather than
+        # calling .capitalize() on the whole string, which would silently
+        # lowercase a name that happened to contain a proper noun.
+        text = _the(e.name)
+        return f"{text[0].upper()}{text[1:]} won't budge."
     surface = world.get(e.location)
     e.location = actor.id
     if surface is not None and surface.attrs.get("display_surface"):
@@ -1100,19 +1111,33 @@ def _plural_of(name):
 # cairn is a real mechanic, so there's no reason to euphemize it.
 STONE_CAIRN_HINT = "it could go on the cairn at the forest's edge"
 
+# Same legibility fix, same reasoning, for the hut's charm-string (see the
+# CHARM_STRING_ID block below): round/dimensional curios with a hole or a
+# natural hangable quality have a second fate beyond give-to-cat, and the
+# cue belongs on the item itself, not just in the room it's usable in.
+# Deliberately narrow -- a button's hole and a pebble's easy-to-knot shape
+# both plausibly thread; a pinecone hung by a loop is a stretch, and a
+# feather already has its own fate (the journal-tuck). Extend only once the
+# forest generates more qualifying finds.
+CHARM_ELIGIBLE_ITEMS = ("a bone button", "a pebble of blue glass")
+CHARM_STRING_HINT = "it could be threaded onto the charm-string in the hut"
+
 
 def _found_description(look_line, reaction, name=""):
     """Assemble a curio's full description from its bare look_line -- adding
     the cat hint only for a cat_reaction of "plays" (only those finds are
-    worth a cat's attention), and the cairn hint for anything named a stone
-    (only found stones have one, and no other curio has a cairn-equivalent
-    yet). `name` defaults to "" so existing call sites that never mention a
-    stone see byte-identical output to before this hint existed."""
+    worth a cat's attention), the cairn hint for anything named a stone
+    (only found stones have one), and the charm-string hint for anything in
+    CHARM_ELIGIBLE_ITEMS. `name` defaults to "" so existing call sites that
+    never mention a stone or a threadable curio see byte-identical output to
+    before either hint existed."""
     text = look_line
     if reaction == "plays":
         text += " — the cat might bat at it"
     if "stone" in name.lower():
         text += f" — {STONE_CAIRN_HINT}"
+    if name in CHARM_ELIGIBLE_ITEMS:
+        text += f" — {CHARM_STRING_HINT}"
     return text + "."
 
 
@@ -2104,6 +2129,97 @@ def cmd_stack_stone(world, actor, arg):
     return "You set the stone on the pile. Now: " + cairn.description
 
 
+# A fourth fate for found things, alongside the shelf (personal, capped,
+# take-backable), the cairn (collective, stone-only, infinite, one-way),
+# and the journal-tuck (flat things, attached to entries). Round curios --
+# a button, a glass pebble -- had exactly one fate before this: give-to-cat,
+# a one-shot verdict that leaves the item on the floor forever either way
+# (see FOUND_ITEMS: both are hardcoded "ignores", so today they have no
+# positive fate at all). This is that fate: a wall-mounted, collective
+# object hands can add to over the lineage's whole life. Unlike the cairn
+# (grows taller, same texture every stone), it reads differently as it
+# fills -- sparse to rich -- since the appeal here is decorative variety,
+# not monument height. Lives in the hut, next to the shelf: there's nowhere
+# else in the game that reads as the lineage's own fixed architecture the
+# way the hut does.
+CHARM_STRING_ID = "charm_string"
+
+# A "big decoration," not a resource to manage -- large enough that no
+# normal lineage will ever feel the ceiling (a curio is already a rare
+# find, and threading one spends a second rare find, the twine, right
+# alongside it), but a real cap exists so nothing grows truly infinite.
+CHARM_CAPACITY = 100
+
+# Count-based tiers, not item-specific -- same approach as the forest's
+# depth bands and the cairn's height bands, for the same reason: tracking
+# flavor text per possible mix of item types doesn't scale, and isn't the
+# point (naming which items are visible is an explicit stretch goal, not
+# this pass). Exact boundaries are a writing-pass call, not an
+# architectural one -- these are a first guess, easy to retune once real
+# lineages have actually used it a while.
+CHARM_BANDS = (
+    (0, "a bare length of twine hangs on the wall, waiting."),
+    (1, "a single found thing hangs from the twine -- a start, not yet a decoration."),
+    (5, "a small scatter of found things hangs from the twine, starting to gather."),
+    (20, "a charm-string clatters gently, crowded with found things."),
+)
+
+
+def _charm_string_description(count):
+    text = CHARM_BANDS[0][1]
+    for threshold, line in CHARM_BANDS:
+        if count >= threshold:
+            text = line
+    return text
+
+
+def ensure_charm_string(world):
+    """Add the hut's charm-string to a world that predates it (fresh build
+    or an older save) -- same backfill role, and same resync-on-load fix
+    for a description CHARM_BANDS may have changed underneath, as
+    ensure_cairn (see its own docstring for the bug that guards against).
+
+    Present-but-empty from world creation, unlike the lazily-created statue
+    -- a bare length of twine on the wall is visible before anyone's added
+    to it, the same way the cairn's flat stone is visible before any
+    stone's been stacked."""
+    charm = world.get(CHARM_STRING_ID)
+    if charm is None:
+        charm = world.add(Entity(CHARM_STRING_ID, "charm-string",
+                                  _charm_string_description(0),
+                                  location="hut", attrs={"count": 0}))
+    else:
+        charm.description = _charm_string_description(charm.attrs["count"])
+    return charm
+
+
+def cmd_thread(world, actor, arg):
+    """thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it."""
+    if not arg:
+        return "Thread what onto the charm-string? e.g.  thread button on charm-string"
+    charm = find_visible(world, actor, "charm-string")
+    if not charm:
+        return "There's no charm-string here -- it's on the wall of the hut."
+    item_name = arg.lower().strip()
+    for suffix in (" on charm-string", " on the charm-string", " on the wall"):
+        if item_name.endswith(suffix):
+            item_name = item_name[:-len(suffix)].strip()
+            break
+    e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
+    if not e or e.location != actor.id or e.name not in CHARM_ELIGIBLE_ITEMS:
+        return "That's not something you can thread onto the charm-string."
+    if charm.attrs["count"] >= CHARM_CAPACITY:
+        return "The string's full to hanging -- there's no room left for another thing."
+    twine = find_visible(world, actor, "twine", prefer=lambda x: _carrying(world, actor, x))
+    if not twine or twine.location != actor.id:
+        return "You need a knot of twine in hand to thread anything onto the charm-string."
+    world.entities.pop(e.id, None)
+    world.entities.pop(twine.id, None)
+    charm.attrs["count"] += 1
+    charm.description = _charm_string_description(charm.attrs["count"])
+    return f"You knot {_the(e.name)} onto the charm-string. Now: {charm.description}"
+
+
 def cmd_save(world, actor, arg):
     """save -- write the world to disk (also happens automatically on quit)."""
     world.save()
@@ -2130,6 +2246,7 @@ VERBS.update({
     "add": cmd_add_wood, "stoke": cmd_add_wood,
     "stack": cmd_stack_stone,
     "shape": cmd_shape,
+    "thread": cmd_thread,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
 
@@ -2250,6 +2367,12 @@ def carrying_actions(world, actor):
                 acts.append(f"place {e.name} on shelf")
         for e in world.contents(shelf.id):
             acts.append(f"take {e.name}")
+    charm = next((e for e in here if e.id == CHARM_STRING_ID), None)
+    if charm and charm.attrs["count"] < CHARM_CAPACITY \
+            and any("twine" in e.name.lower() for e in carried):
+        for e in carried:
+            if e.name in CHARM_ELIGIBLE_ITEMS:
+                acts.append(f"thread {e.name} on charm-string")
     for e in here + carried:
         if "lit" in e.attrs:
             acts.append(("snuff " if e.attrs["lit"] else "light ") + e.name)
@@ -2454,9 +2577,32 @@ def ensure_shelf(world):
             # freshly-found one. Guarded by the substring check itself, so
             # a second backfill pass (or a stone found after the fix, whose
             # description already has the hint baked in) is a no-op.
-            if "stone" in entity.name.lower() and STONE_CAIRN_HINT not in entity.description:
+            #
+            # BUG WE HIT: this ran against every found_* entity matching the
+            # name, with no check for whether it was still an actual, reachable
+            # curio. A stone (or, once CHARM_STRING_HINT existed, a button/
+            # pebble) already given to the cat is non-portable and its
+            # description already rewritten to a cat-trace by cmd_give -- but
+            # this loop still appended the hint on top, reading as "given to
+            # the cat and roundly ignored -- it could go on the cairn", which
+            # is false: that curio can never reach the cairn or the
+            # charm-string again, it's stuck in the room forever. `portable`
+            # is the one flag cmd_give flips to False and never flips back, so
+            # it's the correct discriminator -- deliberately not "is this
+            # entity still a live curio a hand could carry", which would need
+            # touching cmd_give itself and would reopen a rescue path from
+            # cat-given items that was explicitly ruled out (see the
+            # charm-string's own design notes).
+            if entity.portable and "stone" in entity.name.lower() \
+                    and STONE_CAIRN_HINT not in entity.description:
                 entity.description = entity.description.rstrip(".") \
                     + f" — {STONE_CAIRN_HINT}."
+            # Same backfill, same reasoning, same guard, for a button or
+            # pebble found before the charm-string existed -- see CHARM_STRING_HINT.
+            if entity.portable and entity.name in CHARM_ELIGIBLE_ITEMS \
+                    and CHARM_STRING_HINT not in entity.description:
+                entity.description = entity.description.rstrip(".") \
+                    + f" — {CHARM_STRING_HINT}."
     shelf = world.get("shelf")
     if shelf is None:
         shelf = world.add(Entity("shelf", "shelf",
@@ -2526,6 +2672,7 @@ def build_world():
         ]}))
 
     ensure_shelf(w)
+    ensure_charm_string(w)
 
     build_cat(w)
 

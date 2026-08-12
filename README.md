@@ -138,8 +138,23 @@ whatever journal entry belongs to this visit, permanently — no take-back,
 same as the cairn — and it turns up again for a later hand not by looking
 at the shelf, but by reading the journal, alongside whatever got written
 that day (or, if nothing did, a short note that something was pressed in
-anyway). Flat and pressable is the whole test — a pinecone or a button
-still only has the shelf, the cat, and (if it's a stone) the cairn.
+anyway). Flat and pressable is the whole test — a pinecone still only has
+the shelf and the cat; a button or a glass pebble has one more option of
+its own (below).
+
+A button or a glass pebble — round, and either holed or otherwise easy to
+knot twine round — has a fourth fate, the cairn's opposite in character:
+`thread <item> on charm-string` knots it, permanently, onto a length of
+twine hanging on the hut's own wall, using up one carried twine to do it.
+Like the cairn it's collective and one-way — no take-back, and it belongs
+to the whole lineage, not to whoever threaded a given button — but where
+the cairn only ever grows *taller*, the charm-string reads differently as
+it *fills*: a bare length of twine, waiting, becomes a single found thing,
+then a small scatter, then — given enough hands, enough visits — a
+charm-string crowded with found things. A pinecone still doesn't qualify:
+hanging one by a loop is a stretch of "threaded," and a feather already
+has its own fate above.
+
 Several identical curios left loose in a room read as one line ("three
 pinecones", "several feathers") rather than one bullet each — presentation
 only, nothing is merged or lost, and `look <name>` on a group always gives
@@ -308,10 +323,10 @@ consumes it and leaves a permanent, freely-named object behind —
 `shape clay into a squat dish` → "a clay squat dish" — wherever it was
 shaped. Cosmetic only, on purpose: shape + name → a described, persistent
 object with no mechanics, no shelf slot, no give-to-cat, no cairn, no
-tuck — a made object is categorically different from a found one (it's
-authored, not drawn from a pool), so it gets its own home rather than a
-fifth fate stacked onto a curio system that's already asked for a
-presentation-layer fix once (see "Curio visual compression" below).
+tuck, no charm-string — a made object is categorically different from a
+found one (it's authored, not drawn from a pool), so it gets its own home
+rather than a fifth fate stacked onto a curio system that's already asked
+for a presentation-layer fix once (see "Curio visual compression" below).
 
 The core question this deliberately leaves open: how much must made
 things actually *do*?

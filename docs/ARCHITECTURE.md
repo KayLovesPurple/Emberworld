@@ -1578,6 +1578,99 @@ describe; and the report's own prose stays literal (`concept` labels and
 raw excerpts) rather than attempting the "little scatter of..."-style
 prose-merging the doc explicitly frames as a later refinement, if ever.
 
+## The charm-string — a fourth fate for round, dimensional curios
+
+The cairn (above) gave stones a collective, permanent second door beyond
+give-to-cat. Round/dimensional curios that aren't stones — a button, a
+glass pebble — never got one: `FOUND_ITEMS` hardcodes both as `"ignores"`,
+so before this they had *no* positive fate at all, only a cat's shrug and a
+lifetime on the floor. The charm-string is that door: a wall-mounted,
+collective object in the hut (`CHARM_STRING_ID`) that any hand can thread a
+button or pebble onto, permanently, using up one carried twine to do it —
+`thread <item> on charm-string` (`cmd_thread`).
+
+Structurally it's the cairn's twin: `world.entities.pop` consumes the
+threaded item *and* the twine outright (not a location change — there is
+nothing left to `take` back, by construction, the same one-way permanence
+as the cairn), and increments a plain `count` attr on the `charm_string`
+entity rather than tracking the items themselves. `CHARM_ELIGIBLE_ITEMS`
+(`"a bone button"`, `"a pebble of blue glass"`) is deliberately narrow —
+things with an inherent hole or a natural hangable quality, not every
+round curio (a pinecone hung by a loop is a stretch; a feather already has
+its own fate, the journal-tuck) — extend it only once the forest generates
+more qualifying finds.
+
+Where it differs from the cairn on purpose: the cairn only ever gets
+taller, same texture every stone. The charm-string is meant to read as
+*decorative variety*, not monument height, so `CHARM_BANDS` ties its
+description to a **count**, not a height, in four tiers (empty / a single
+thing / a small scatter / crowded) — deliberately not item-specific
+(naming which items are visible is a stretch goal, not this pass, the same
+"don't track every possible mix" discipline the forest's depth bands and
+the cairn's height bands already follow). `CHARM_CAPACITY` (100) exists so
+nothing grows *truly* infinite, but reads as effectively unbounded in
+normal play — a curio is already a rare find, and threading one spends a
+second rare find (twine) right alongside it, so no ordinary lineage will
+ever feel the ceiling.
+
+Present-but-empty from world creation (`ensure_charm_string`, called
+alongside `ensure_shelf`/`ensure_cairn`/`ensure_riverbank` in both
+`build_world` and `load_or_build`) rather than lazily created like the
+statue — a bare length of twine on the wall is visible before anyone's
+threaded anything, the same way the cairn's flat stone is visible before
+any stone's been stacked. `ensure_charm_string` re-syncs a stale
+description to the current `CHARM_BANDS` on every load, the identical fix
+`ensure_cairn` already needed (see its own note above) for the same
+underlying reason: a description computed once and stored doesn't
+retroactively follow a later change to the bands.
+
+**Same legibility fix as `STONE_CAIRN_HINT`, for the same reason.**
+`_found_description` appends `CHARM_STRING_HINT` ("it could be threaded
+onto the charm-string in the hut") whenever the curio's name is in
+`CHARM_ELIGIBLE_ITEMS` — the cue rides on the item itself, not just the
+room it's usable in, so a hand doesn't lose it the moment a button leaves
+the hut. `ensure_shelf` backfills the hint onto an already-found button or
+pebble from an older save, right alongside its existing `STONE_CAIRN_HINT`
+backfill.
+
+**BUG WE HIT: both backfills ran against any matching curio, whether or
+not it was still reachable.** A stone or button already given to the cat
+is non-portable and its description already rewritten to a cat-trace by
+`cmd_give` — but the backfill loop still appended its hint on top, reading
+as *"given to the cat and roundly ignored — it could be threaded onto the
+charm-string in the hut"*, which is false: that curio is stuck in the room
+forever, it can never reach the charm-string or the cairn again. Fixed by
+guarding both backfills on `entity.portable` — the one flag `cmd_give`
+flips to `False` and never flips back, so it's the correct discriminator
+between a live, reachable curio and a permanent trace. Deliberately *not*
+fixed by making cat-given items portable again, which would reopen a
+rescue path from cat-given items into the charm-string or cairn — ruled
+out on purpose (see the charm-string's own scope notes above): give-to-cat
+stays a one-shot, irreversible gesture, the same permanence as the cairn
+and the journal-tuck.
+
+`available_actions` (`carrying_actions`) only offers `"thread <item> on
+charm-string"` when all three are true: the hand is in the hut, is
+carrying at least one eligible item, and is carrying twine — the same
+"only offer what can do something" rule the shelf and cairn already
+follow, with twine specifically required since threading genuinely can't
+do anything without it (unlike `add wood`'s deliberate exception).
+
+`look charm` (not just `look charm-string`) already resolves correctly
+with no extra code — `find_visible`'s existing substring match (`name in
+e.name.lower()`) matches `"charm"` against the entity's own name,
+`"charm-string"`, the same way `look pinecone` already matches `"a
+pinecone"`.
+
+**Deliberately deferred**: a dedicated `look charm` ASCII rendering (a
+small glyph-per-item strip, wrapped and separated, insertion-ordered) was
+part of the original design but is being built as a fast-follow, not
+bundled into this pass — it's genuinely new rendering machinery (nothing
+else in the game wraps rows of symbols), while the count-based prose tier
+above already satisfies the feature's own exit criterion on its own:
+threading is a real second choice, and the description already changes as
+the lineage's contribution grows.
+
 ## What keeps it from breaking
 
 - **Invariants** (`check_world`): after any tick, certain things must always be

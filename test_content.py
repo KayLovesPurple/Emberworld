@@ -44,6 +44,9 @@ from content import (
     _curio_groups, _room_lines, _group_look_summary,
     RIVER_LISTEN_LINES, CLAY_NAME_CAP, cmd_shape, ensure_riverbank,
     RIVERBANK_DESCRIPTION,
+    CHARM_STRING_ID, CHARM_ELIGIBLE_ITEMS, CHARM_CAPACITY, CHARM_BANDS,
+    CHARM_STRING_HINT, _charm_string_description, ensure_charm_string, cmd_thread,
+    ensure_shelf,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -530,6 +533,38 @@ def test_a_found_stone_from_the_forest_names_the_cairn_on_look():
     assert "cairn" in w.act(actor, f"look {stone.name}").lower()
 
 
+def test_ensure_shelf_does_not_backfill_the_cairn_hint_onto_a_cat_given_stone():
+    """BUG WE HIT: the STONE_CAIRN_HINT backfill matched any found_* entity
+    named a stone, with no check for whether it was still an actual,
+    reachable curio -- a stone already given to the cat (non-portable, its
+    description already rewritten to a cat-trace by cmd_give) got the hint
+    appended too, reading as "given to the cat and roundly ignored -- it
+    could go on the cairn", which is false: that stone can never be
+    stacked, it's stuck in the room forever. Caught via the identical bug
+    in CHARM_STRING_HINT (see the test below) -- both backfills need the
+    same guard."""
+    w, actor = fresh()
+    trace = w.add(Entity(w.fresh_id("found"), "a smooth grey stone",
+                          "a smooth grey stone, given to the cat and roundly ignored",
+                          location="hut", portable=False,
+                          attrs={"curio": True, "cat_reaction": "ignores"}))
+    ensure_shelf(w)
+    assert "cairn" not in w.get(trace.id).description.lower()
+
+
+def test_ensure_shelf_does_not_backfill_the_charm_hint_onto_a_cat_given_curio():
+    """Same bug, same fix, for CHARM_STRING_HINT -- a button or pebble
+    already given to the cat must never read as threadable, since it's
+    non-portable and can never reach the hut's charm-string again."""
+    w, actor = fresh()
+    trace = w.add(Entity(w.fresh_id("found"), "a pebble of blue glass",
+                          "a pebble of blue glass, given to the cat and roundly ignored",
+                          location="hut", portable=False,
+                          attrs={"curio": True, "cat_reaction": "ignores"}))
+    ensure_shelf(w)
+    assert "charm-string" not in w.get(trace.id).description.lower()
+
+
 def test_a_bloomed_flower_never_mentions_the_cairn():
     """_found_description is reused to build a bloomed flower's description
     (see `blooming`) -- none of BLOOM_KINDS names a stone, and the cairn
@@ -751,6 +786,22 @@ def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_leaves_a_trace():
     assert not any(e.name == "a pinecone" and e.location == actor.id
                    for e in w.contents(actor.id)), "giving it away must consume it from the pack"
     assert "well-battered after a game with the cat" in w.perceive(actor)
+
+
+def test_taking_a_cat_given_trace_refuses_without_a_double_article():
+    """BUG WE HIT: `take`'s non-portable refusal built "The {e.name} won't
+    budge" directly -- e.name already bakes in its own article ("a
+    pinecone", same fact _the() exists to handle), so this read as "The a
+    pinecone won't budge" for exactly the one entity type that can end up
+    both non-portable and reachable again: a curio already given to the
+    cat. Every other message in cmd_take uses _the(); this is the one
+    sentence-initial exception that was missed."""
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    result = w.act(actor, "take pinecone")
+    assert result == "The pinecone won't budge."
+    assert "the a " not in result.lower()
 
 
 def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():
@@ -4230,6 +4281,258 @@ def test_gathering_and_shaping_clay_touch_no_other_maintenance_resource():
     cmd_shape(w, actor, "clay into a squat dish")
 
     assert cat.attrs["hunger"] == 5, "gather/shape must not touch cat hunger"
+    assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10, "must not touch fire-life"
+    assert w.get("bucket").attrs["water"] == 2, "must not touch the bucket"
+    assert actor.attrs["wood"] == 4, "must not touch firewood"
+
+
+# ===========================================================================
+# 16. THE CHARM-STRING -- a fourth fate for found things: a wall-mounted,
+#     collective object in the hut that hands can thread a button or a
+#     glass pebble onto, permanently, using up one twine to do it. Sparse
+#     to rich by count, the cairn's opposite in character (decorative
+#     variety, not monument height) but its sibling in every other way:
+#     collective, one-way, and its own resync-on-load fix.
+# ===========================================================================
+def _give_button(world, actor):
+    return world.add(Entity(world.fresh_id("found"), "a bone button",
+                             "four holes, one thread still knotted through.",
+                             location=actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "ignores"}))
+
+
+def _give_pebble(world, actor):
+    return world.add(Entity(world.fresh_id("found"), "a pebble of blue glass",
+                             "sea-frosted, edges gone soft.",
+                             location=actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "ignores"}))
+
+
+def _give_twine(world, actor):
+    return world.add(Entity(world.fresh_id("found"), "a knot of bleached twine",
+                             "sun-bleached, knotted twice, frayed at both ends.",
+                             location=actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "plays"}))
+
+
+def test_fresh_world_has_an_empty_charm_string_in_the_hut():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    assert charm is not None
+    assert charm.location == "hut"
+    assert charm.attrs["count"] == 0
+    assert charm.description == CHARM_BANDS[0][1]
+
+
+def test_threading_requires_being_in_the_hut():
+    w, actor = fresh()
+    w.act(actor, "go out")
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "bone button on charm-string")
+    assert "no charm-string" in result.lower()
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_threading_with_no_argument_asks_what_to_thread():
+    w, actor = fresh()
+    result = cmd_thread(w, actor, "")
+    assert "thread what" in result.lower()
+
+
+def test_threading_requires_carrying_the_named_item():
+    w, actor = fresh()
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "bone button on charm-string")
+    assert "not something you can thread" in result.lower()
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_threading_a_non_eligible_curio_is_refused():
+    """A pinecone is round but not eligible (no hole, not hangable the way a
+    button or pebble is) -- carrying one and typing thread must not consume
+    it or touch the charm-string."""
+    w, actor = fresh()
+    _give_twine(w, actor)
+    pinecone = w.add(Entity(w.fresh_id("found"), "a pinecone",
+                             "tight and resinous, one scale broken.",
+                             location=actor.id, portable=True,
+                             attrs={"curio": True, "cat_reaction": "plays"}))
+    result = cmd_thread(w, actor, "pinecone on charm-string")
+    assert "not something you can thread" in result.lower()
+    assert w.get(pinecone.id) is not None, "a non-eligible curio must not be consumed"
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_threading_without_twine_is_refused_with_no_state_change():
+    w, actor = fresh()
+    button = _give_button(w, actor)
+    result = cmd_thread(w, actor, "bone button on charm-string")
+    assert "twine" in result.lower()
+    assert w.get(button.id) is not None, "the button must not be consumed without twine"
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_threading_consumes_the_item_and_the_twine_and_increments_count():
+    w, actor = fresh()
+    button = _give_button(w, actor)
+    twine = _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    assert w.get(button.id) is None, "the button must be consumed, not just moved"
+    assert w.get(twine.id) is None, "the twine must be consumed too"
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 1
+
+
+def test_threading_works_without_the_on_charm_string_suffix():
+    w, actor = fresh()
+    _give_pebble(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "pebble of blue glass")
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 1
+
+
+def test_threading_updates_the_charm_strings_description_immediately():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "bone button on charm-string")
+    charm = w.get(CHARM_STRING_ID)
+    assert charm.description != CHARM_BANDS[0][1]
+    assert charm.description in result
+
+
+def test_charm_string_description_bands_match_count():
+    for threshold, line in CHARM_BANDS:
+        assert _charm_string_description(threshold) == line
+    just_below = CHARM_BANDS[1][0] - 1
+    assert _charm_string_description(just_below) == CHARM_BANDS[0][1]
+
+
+def test_charm_string_count_and_description_persist_through_save_load_roundtrip():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    count_before = w.get(CHARM_STRING_ID).attrs["count"]
+    desc_before = w.get(CHARM_STRING_ID).description
+    reloaded = World.from_data(w.to_data())
+    charm_after = reloaded.get(CHARM_STRING_ID)
+    assert charm_after.attrs["count"] == count_before
+    assert charm_after.description == desc_before
+
+
+def test_thread_action_is_offered_only_with_an_eligible_item_and_twine_in_the_hut():
+    w, actor = fresh()
+    assert not any(a.startswith("thread ") for a in w.available_actions(actor))
+    _give_button(w, actor)
+    assert not any(a.startswith("thread ") for a in w.available_actions(actor)), \
+        "no twine yet -- threading can't do anything"
+    _give_twine(w, actor)
+    assert "thread a bone button on charm-string" in w.available_actions(actor)
+
+
+def test_thread_action_is_not_offered_outside_the_hut():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    w.act(actor, "go out")
+    assert not any(a.startswith("thread ") for a in w.available_actions(actor))
+
+
+def test_charm_string_refuses_at_capacity_and_count_never_exceeds_it():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = CHARM_CAPACITY
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "bone button on charm-string")
+    assert "full" in result.lower()
+    assert w.get(CHARM_STRING_ID).attrs["count"] == CHARM_CAPACITY
+
+
+def test_thread_action_is_not_offered_once_the_charm_string_is_at_capacity():
+    w, actor = fresh()
+    w.get(CHARM_STRING_ID).attrs["count"] = CHARM_CAPACITY
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    assert not any(a.startswith("thread ") for a in w.available_actions(actor))
+
+
+def test_no_way_exists_to_take_anything_back_off_the_charm_string():
+    """The charm-string only ever tracks a count -- a threaded item is fully
+    consumed (test_threading_consumes...), so there is structurally nothing
+    left to `take`. This pins that as a real invariant, not an accident:
+    `take charm-string` must fail exactly the way taking a non-portable
+    fixture always does."""
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    result = w.act(actor, "take charm-string")
+    assert "won't budge" in result.lower() or "no 'charm-string'" in result.lower() \
+        or "no 'charm" in result.lower()
+
+
+def test_ensure_charm_string_is_idempotent_and_does_not_reset_count():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    count = w.get(CHARM_STRING_ID).attrs["count"]
+    ensure_charm_string(w)
+    assert w.get(CHARM_STRING_ID).attrs["count"] == count
+
+
+def test_ensure_charm_string_resyncs_a_stale_description_to_current_bands():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID) or ensure_charm_string(w)
+    charm.attrs["count"] = 3
+    charm.description = "some stale description from an old band definition"
+    ensure_charm_string(w)
+    assert w.get(CHARM_STRING_ID).description == _charm_string_description(3)
+
+
+def test_eligible_curio_descriptions_mention_the_charm_string():
+    for name in CHARM_ELIGIBLE_ITEMS:
+        _, look_line, reaction = next(t for t in FOUND_ITEMS if t[0] == name)
+        desc = _found_description(look_line, reaction, name)
+        assert "charm-string" in desc.lower()
+
+
+def test_non_eligible_found_item_descriptions_do_not_mention_the_charm_string():
+    for name, look_line, reaction in FOUND_ITEMS:
+        if name in CHARM_ELIGIBLE_ITEMS:
+            continue
+        desc = _found_description(look_line, reaction, name)
+        assert "charm-string" not in desc.lower(), \
+            f"{name!r} wrongly mentions the charm-string: {desc!r}"
+
+
+def test_ensure_shelf_backfills_the_charm_hint_onto_a_legacy_button():
+    w, actor = fresh()
+    button = _give_button(w, actor)
+    button.description = "four holes, one thread still knotted through."
+    ensure_shelf(w)
+    assert CHARM_STRING_HINT in w.get(button.id).description
+
+
+def test_threading_touches_no_other_maintenance_resource():
+    """Same invariant, same technique, as
+    test_gathering_and_shaping_clay_touch_no_other_maintenance_resource:
+    call cmd_thread directly so an unrelated tick can't muddy the result."""
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cat = w.get("cat")
+    cat.attrs["hunger"] = 5
+    hearth = w.get("hearth")
+    hearth.attrs["lit"], hearth.attrs["fuel"] = True, 10
+    w.get("bucket").attrs["water"] = 2
+    actor.attrs["wood"] = 4
+
+    cmd_thread(w, actor, "bone button on charm-string")
+
+    assert cat.attrs["hunger"] == 5, "threading must not touch cat hunger"
     assert hearth.attrs["lit"] and hearth.attrs["fuel"] == 10, "must not touch fire-life"
     assert w.get("bucket").attrs["water"] == 2, "must not touch the bucket"
     assert actor.attrs["wood"] == 4, "must not touch firewood"
