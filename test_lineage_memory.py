@@ -101,6 +101,19 @@ def test_statue_hint_covers_bare_wishing_entries_without_the_word_statue():
     assert "wishing" in _SYSTEM_PROMPT
 
 
+def test_riverbank_hint_covers_bare_clay_gathering_without_the_word_riverbank():
+    """Third instance of the same shape: gathering clay only ever happens
+    at the riverbank (see cmd_gather's riverbank branch in content.py), so
+    a journal line about digging or working clay should tag the riverbank
+    even without naming it, the same way "planted a potato" tags the
+    patch and "the wishing works better" tags the statue."""
+    assert "riverbank" in KNOWN_ENTITIES
+    assert set(ENTITY_HINTS) == set(KNOWN_ENTITIES)
+    assert "clay" in ENTITY_HINTS["riverbank"]
+    assert "riverbank" in _SYSTEM_PROMPT
+    assert "clay" in _SYSTEM_PROMPT
+
+
 # ===========================================================================
 # 2. STAMP PARSING -- entries are already stamped by day_stamp
 #    (content_common.py): "[Day N]" or "[Day N, Name]". Parsed locally

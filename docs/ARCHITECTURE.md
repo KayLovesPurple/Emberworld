@@ -1480,6 +1480,20 @@ unrelated incidents: any entity with exactly one action mechanically tied
 to it and nothing else in the game is worth this treatment up front,
 rather than waiting for a real journal line to expose the gap.
 
+**Third instance, applied proactively this time.** `riverbank` (the
+clay-gathering location the riverbank/clay feature added — see
+docs/CLAY_SPEC.md) got the same treatment from the moment it was added to
+`KNOWN_ENTITIES`, rather than waiting for a real journal line to expose
+the same gap a third time: gathering, digging, or working clay only ever
+happens at the riverbank (`cmd_gather`'s riverbank branch; `cmd_shape`
+has no location check of its own, but its raw material only ever comes
+from there), so `ENTITY_HINTS["riverbank"]` says so up front. The one
+difference from the patch/statue cases worth noting: `cmd_shape` lets a
+hand carry clay away and shape it anywhere, so "shaping clay" isn't
+strictly a riverbank-*location* action the way planting or wishing are —
+the hint leans on "clay" itself being the identifying word (it's the
+game's only source of it) rather than on a single verb tied to one place.
+
 **Four evidence types, exactly the split
 `docs/LINEAGE_MEMORY_OBSERVATORY.md`'s "V1.5" addendum asked for**:
 `observation` / `interpretation` / `behaviour` / `association`, with the

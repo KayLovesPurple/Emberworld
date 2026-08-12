@@ -34,7 +34,7 @@ LLM_MODEL = "claude-haiku-4-5-20251001"
 # Only ever tag evidence to one of these -- keeps the tracked-entity list
 # small and deliberate rather than letting the LLM invent arbitrary nouns
 # (docs/LINEAGE_MEMORY_OBSERVATORY.md section 13's own caution).
-KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue", "cat", "patch")
+KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue", "cat", "patch", "riverbank")
 
 # BUG WE HIT, found in real use: a stone left "on the flat ground at the
 # forest's edge" (the cairn) got tagged to "patch" instead. The entity
@@ -48,10 +48,11 @@ KNOWN_ENTITIES = ("well", "cairn", "forest", "hearth", "lamp", "shelf", "statue"
 # A recurring shape worth naming: several entities have exactly one
 # action mechanically tied to them and nothing else in the game (planting
 # only ever happens in the patch, wishing only ever happens at the
-# statue). For those, the hint says so explicitly, so a journal line that
-# names the action but never the entity's own name -- "planted a potato,"
-# "the wishing works better" -- still gets tagged correctly instead of
-# needing the literal noun to appear.
+# statue, gathering clay only ever happens at the riverbank). For those,
+# the hint says so explicitly, so a journal line that names the action
+# but never the entity's own name -- "planted a potato," "the wishing
+# works better," "dug up some clay" -- still gets tagged correctly
+# instead of needing the literal noun to appear.
 ENTITY_HINTS = {
     "well": "the well in the yard",
     "cairn": "the small stone landmark at the forest's edge, built by stacking found stones -- not any other rock or ground",
@@ -70,6 +71,12 @@ ENTITY_HINTS = {
               "watering, or harvesting a potato is always patch behaviour, even if the entry "
               "just says \"planted a potato\" without the word \"patch\" -- it's the only place "
               "in the game potatoes are grown, so the action itself identifies the entity"),
+    "riverbank": ("the riverbank -- a second gathering spot beyond the forest's edge, where "
+                  "clay is dug from the bank and shaped into small permanent objects. "
+                  "Gathering, digging, or working clay always refers to this place, even if "
+                  "the entry never says \"riverbank\" -- it's the only source of clay in the "
+                  "game, the same way planting identifies the patch and wishing identifies "
+                  "the statue"),
 }
 
 EVIDENCE_TYPES = ("behaviour", "interpretation", "association", "observation")
