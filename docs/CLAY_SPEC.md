@@ -1,16 +1,16 @@
 # Clay — Design Spec (Cosmetic-only, Stage 1)
 
-*Design spec, not yet built. Follows the test-first workflow in
-ARCHITECTURE.md: observe → diagnose → write tight spec with tests →
-implement.*
+*Design spec. Follows the test-first workflow in ARCHITECTURE.md: observe
+→ diagnose → write tight spec with tests → implement.*
 
 ## Status
 
-Not built. This spec covers the **cosmetic** tier only — see README's
-"Someday" list, which explicitly recommends starting there: "shape + name
-→ a described, persistent object with no mechanics... Cheap, charming,
-low-risk." Functional clay (a pot that truly stores, a dish that changes
-cat behavior) is a separate, later design pass — see "Explicitly NOT in
+**✅ Built — cosmetic tier.** The riverbank, `gather`/`shape clay into
+<name>`, and both calm verbs are live; see ARCHITECTURE.md's "The
+riverbank and clay" for the mechanism and this doc's now-resolved open
+questions below for the decisions actually shipped. Functional clay (a
+pot that truly stores, a dish that changes cat behavior) is a separate,
+later design pass, deliberately not started — see "Explicitly NOT in
 scope" below.
 
 ## Design goals (recap, so this doc stands alone)
@@ -40,8 +40,15 @@ scope" below.
 - New room `"riverbank"`, added as a second branch off the yard, parallel
   to `"forest"`: `yard.exits = {"in": "hut", "forest": "forest_edge",
   "river": "riverbank"}`, with its own `exits={"yard": "yard"}` back.
-- Room description: written at implementation time, in the hut/yard/
-  forest_edge voice (see `build_world`'s existing room prose for register).
+- Room description (as built): "The path from the yard ends at a bend in
+  a slow, brown river, its bank thick with reeds. Grey clay shows through
+  where the current has cut the bank away. Open sky stretches overhead,
+  unbroken by trees." — the last sentence is load-bearing: it's what
+  resolves the "does watch clouds work here" open question below.
+- Backfilled onto older saves by `ensure_riverbank(world)`, same role as
+  `ensure_shelf`/`ensure_cairn` — called from both `build_world()` and
+  `drivers.load_or_build`. `yard.exits.setdefault("river", ...)` so it
+  never clobbers an already-present or hand-edited exit.
 
 ### Calm-axis affordances at the riverbank
 
@@ -58,12 +65,12 @@ verbs with a discarded argument, exactly like now.
   "riverbank"`, mirroring the varied-line-pool approach `LISTEN_LINES`
   already uses (see `test_listen_returns_varied_lines_not_always_the_same_
   one`'s equivalent for the new pool).
-- **`watch clouds`** (`cmd_watch_clouds`) potentially gains `"riverbank"`
-  as a third eligible location — **open question, decide at
-  implementation time**: does the riverbank read as open sky (reuse
-  `WATCH_CLOUD_LINES`/moon logic outright, zero new lines needed) or is it
-  tree-shaded (exclude it from the location tuple, same "no open sky"
-  refusal as the hut)? Pin whichever is chosen with a test either way.
+- **`watch clouds`** (`cmd_watch_clouds`) gains `"riverbank"` as a third
+  eligible location. **Resolved:** the riverbank reads as open sky ("Open
+  sky stretches overhead, unbroken by trees" is in its own room
+  description) — so it reuses `WATCH_CLOUD_LINES`/moon logic outright,
+  zero new lines needed. Pinned by
+  `test_watch_clouds_works_at_the_riverbank`.
 - Both share the existing `world.calm_visits` keying (per-spot, not
   per-verb — see `_calm_visit_ack`). `"riverbank"` becomes a new key
   alongside `"forest_edge"`; the ack fires independently there
@@ -85,40 +92,48 @@ verbs with a discarded argument, exactly like now.
 - No cap on carried raw clay (mirrors wood's no-cap, unlike the shelf's
   `SHELF_CAPACITY`) — the friction point belongs in the shaping choice,
   not in stockpiling raw material.
-- **Open question**: fixed yield per gather (like `WOOD_PER_GATHER = 3`)
-  or exactly one lump per gather? Recommend **one lump per gather** —
-  shaping is a deliberate, occasional act rather than a nightly
-  consumable, so a multi-lump yield would just clutter inventory the way
-  it wouldn't for wood. Flagged for confirmation, not decided here.
+- **Resolved: one lump per gather**, not a `WOOD_PER_GATHER`-style fixed
+  multi-unit yield — shaping is a deliberate, occasional act rather than
+  a nightly consumable, so a bigger yield would just clutter inventory
+  the way it wouldn't for wood. Confirmed with the user before build.
 
 ## Shaping clay
 
-- New verb `shape` → `cmd_shape`. Primary syntax: `shape clay into
-  <name>`. **Open question**: also accept `shape <name>` / `shape clay
-  <name>` as looser phrasings? Precedent: `cmd_name` already accepts both
-  `name cat Shadow` and `name Shadow` — worth the same tolerance here.
+- New verb `shape` → `cmd_shape`. **Resolved: strict syntax, only `shape
+  clay into <name>`** — a plain prefix check on `arg`, no looser
+  `shape <name>` / `shape clay <name>` tolerance (unlike `cmd_name`'s
+  dual acceptance). One clear phrasing to document and test; simplest to
+  implement. Anything else returns "Shape what into what? e.g.  shape
+  clay into a squat dish".
 - Requires a carried raw clay lump (`attrs.get("raw_clay")`); refuses
   in-world with no state change if none is carried — same plain register
   as `cmd_add_wood`'s wood refusal or `cmd_tuck`'s `TUCK_REFUSAL`.
-- Sanitizes `<name>` exactly like `cmd_name`: strip whitespace, drop a
-  leading quote character, keep only the first line (`.split("\n")[0]`,
-  blocking multi-line injection into world prose), and cap the length.
-  Recommend **40 characters** (vs. the cat's 24) — this names a short
-  object phrase, not a proper name, and wants a little more room.
+- Sanitizes `<name>` almost exactly like `cmd_name`: strip whitespace,
+  drop a leading quote character, keep only the first line
+  (`.split("\n")[0]`, blocking multi-line injection into world prose),
+  and cap the length at `CLAY_NAME_CAP = 40` (vs. the cat's 24 — this
+  names a short object phrase, not a proper name, and wants a little
+  more room). One extra step `cmd_name` doesn't need: a leading article
+  (`"a "`/`"an "`) is stripped *before* the cap, discovered as a real bug
+  during manual testing — a hand naturally types `shape clay into a
+  squat dish`, and without the strip the auto-prefix below doubled it
+  into "a clay a squat dish". Pinned by
+  `test_shaping_strips_a_leading_article_so_it_never_doubles`.
 - Consumes the raw clay lump (`world.entities.pop`), creates one new
   entity:
-  - **Open question**: is the sanitized text the *whole* name (typed
-    curio-style, with its own article — "a squat clay dish"), or does the
-    game auto-prefix ("a clay " + sanitized text)? Recommend
-    **auto-prefixing** — it guarantees every shaped object reads as
-    clay-made without relying on the hand to remember to say so, and
-    keeps the input a plain noun phrase rather than a full sentence.
+  - **Resolved: auto-prefix `"a clay "` + the sanitized name** (not the
+    hand typing the whole name, article included) — guarantees every
+    shaped object reads as clay-made, and keeps the input a plain noun
+    phrase. `shape clay into a squat dish` → "a clay squat dish".
   - `location = actor.location` — dropped in the room where it was
     shaped, not carried automatically.
-  - **Open question**: `portable`? Recommend **not portable** (mirrors
-    the cairn's stones and a bloom-before-it-opens: made and left, part
-    of the room from then on) — but flag this for discussion, since a
-    hand may reasonably want to carry a small shaped thing around.
+  - **Resolved: not portable**, for now — mirrors the cairn's stones and
+    a bloom-before-it-opens: made and left, part of the room from then
+    on. The user flagged this as a likely future extension ("start out
+    not portable but we will likely want to extend it later") rather
+    than a permanent decision — worth checking back in on once a
+    lineage has lived with the not-portable version for a while, same
+    "learn before extending" posture as functional clay generally.
   - **Not** tagged `curio=True` — deliberately excluded from the shelf/
     give-to-cat/cairn/tuck ecosystem; see "Why not a curio" below.
   - Permanent: no verb to un-shape, rename, or destroy it, matching the
@@ -140,7 +155,10 @@ invariant). It is explicitly **not**: added to `_room_listing_line`'s
 curio-prefixing special case, offered by `place`/`give`/`stack`/`tuck`, or
 tagged `curio=True`.
 
-## Tests to write first
+## Tests written (test_content.py, "THE RIVERBANK AND CLAY" section)
+
+All of the below are in place and passing, plus the article-doubling
+regression caught during manual testing:
 
 - `gather` at the riverbank creates exactly one carried raw-clay-lump
   entity, and does not touch `actor.attrs["wood"]`.
@@ -148,12 +166,14 @@ tagged `curio=True`.
   regression).
 - `gather` at an unrelated location (hut, yard) refuses in-world, same as
   today.
-- `shape` with no clay carried refuses gracefully, with no state change.
+- `shape` with no clay carried, or with the wrong syntax, refuses
+  gracefully, with no state change.
 - `shape` consumes exactly one raw clay lump and creates exactly one new
   entity, named per the sanitized input.
-- Sanitization: multi-line input keeps only the first line; leading/
-  trailing whitespace and a leading quote are stripped; input longer than
-  the cap is truncated.
+- A leading article in the typed name is stripped so it never doubles
+  with the auto-prefix.
+- Sanitization: multi-line input keeps only the first line; input longer
+  than the cap is truncated.
 - The shaped object is not `curio=True`, and does not appear in the
   shelf/give-to-cat/cairn/tuck's `available_actions` lists.
 - The shaped object survives a save/load round-trip (ordinary entity
@@ -161,19 +181,24 @@ tagged `curio=True`.
 - `listen` at the riverbank returns riverbank-flavored lines, not
   `LISTEN_LINES`; `calm_visits` acks fire per-spot, independently of the
   forest edge's own count.
-- `watch clouds` at the riverbank behaves per whichever "open sky"
-  decision is made — pin the choice with a test either way.
+- `watch clouds` works at the riverbank.
+- `ensure_riverbank` backfills a room/exit missing from an older save,
+  and is idempotent (never clobbers an already-present exit).
+- Gathering/shaping never touch another resource's own state (hearth
+  fuel, bucket water) — same invariant and technique (direct handler
+  calls, not `world.act`, so an unrelated tick can't muddy the result) as
+  `test_giving_or_placing_a_curio_touches_no_maintenance_resource`.
 - Fuzzer (`--fuzz`) terminates cleanly with the new verbs/location
   registered.
 
 ## Exit criteria
 
-A hand can walk to the riverbank, spend a calm turn there independent of
-the forest's edge, gather a lump of clay, and shape it into something of
-their own choosing that becomes a permanent, named fixture of the room —
-without touching the shelf, the cat, the cairn, or the journal, and
-without adding a fifth fate to a curio system that has already asked for
-a presentation-layer fix once.
+**Met.** A hand can walk to the riverbank, spend a calm turn there
+independent of the forest's edge, gather a lump of clay, and shape it
+into something of their own choosing that becomes a permanent, named
+fixture of the room — without touching the shelf, the cat, the cairn, or
+the journal, and without adding a fifth fate to a curio system that has
+already asked for a presentation-layer fix once.
 
 ## Explicitly NOT in scope for this pass
 
