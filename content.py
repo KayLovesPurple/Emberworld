@@ -737,16 +737,31 @@ def cmd_take(world, actor, arg):
     if e.location == actor.id:
         return f"You're already carrying {_the(e.name)}."
     if not e.portable:
+        # A curio already given to the cat is the one entity that's ever
+        # both attrs["curio"] and non-portable at once -- every other
+        # permanent fate (the cairn, the charm-string, the journal-tuck)
+        # consumes the entity outright rather than leaving a claimed trace
+        # behind, and the mystery seed's bloom flips curio/portable
+        # together in the same tick, never separately (see `blooming`).
+        # So this combination safely singles out a cat's trace, and gets
+        # its own, more accurate refusal -- it isn't heavy or fixed in
+        # place, it's just not yours anymore, and "won't budge" was never
+        # really true of it.
+        if e.attrs.get("curio"):
+            return "It's the cat's now, you can't have it."
         # BUG WE HIT: this used to read f"The {e.name} won't budge." --
         # every curio name already bakes in its own article ("a pinecone"),
         # the same fact _the() exists to handle, but every OTHER call site
         # in this function uses "You <verb> {_the(e.name)}", mid-sentence,
         # so the double article ("The a pinecone won't budge") went
         # unnoticed until a hand tried to take back a non-portable
-        # cat-given trace. _the() only ever returns a lowercase "the ...",
-        # so the fix capitalizes just the first character rather than
-        # calling .capitalize() on the whole string, which would silently
-        # lowercase a name that happened to contain a proper noun.
+        # cat-given trace. (That specific case is now handled above, but
+        # the underlying fix still matters for any other non-portable,
+        # article-bearing name.) _the() only ever returns a lowercase
+        # "the ...", so the fix capitalizes just the first character
+        # rather than calling .capitalize() on the whole string, which
+        # would silently lowercase a name that happened to contain a
+        # proper noun.
         text = _the(e.name)
         return f"{text[0].upper()}{text[1:]} won't budge."
     surface = world.get(e.location)

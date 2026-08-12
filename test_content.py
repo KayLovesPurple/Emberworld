@@ -788,20 +788,37 @@ def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_leaves_a_trace():
     assert "well-battered after a game with the cat" in w.perceive(actor)
 
 
-def test_taking_a_cat_given_trace_refuses_without_a_double_article():
-    """BUG WE HIT: `take`'s non-portable refusal built "The {e.name} won't
-    budge" directly -- e.name already bakes in its own article ("a
-    pinecone", same fact _the() exists to handle), so this read as "The a
-    pinecone won't budge" for exactly the one entity type that can end up
-    both non-portable and reachable again: a curio already given to the
-    cat. Every other message in cmd_take uses _the(); this is the one
-    sentence-initial exception that was missed."""
+def test_taking_a_cat_given_trace_names_the_cat_specifically():
+    """`take`'s generic non-portable refusal ("The {thing} won't budge")
+    also covers real fixtures (the cairn, the charm-string, shaped clay) --
+    for those "won't budge" is simply true. A curio already given to the
+    cat is different: it isn't heavy or fixed in place, it's just not
+    yours anymore, so it gets its own, more accurate refusal. A curio
+    already given to the cat is the one entity that's ever both
+    `attrs["curio"]` and non-portable at once -- every other permanent
+    fate (the cairn, the charm-string, the journal-tuck) consumes the
+    entity outright rather than leaving a claimed trace behind, and the
+    mystery seed's bloom flips `curio`/`portable` together in the same
+    tick, never separately -- so that combination is a safe, unambiguous
+    signal, not a name-based guess."""
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
     w.act(actor, "give pinecone to cat")
     result = w.act(actor, "take pinecone")
-    assert result == "The pinecone won't budge."
-    assert "the a " not in result.lower()
+    assert result.splitlines()[0] == "It's the cat's now, you can't have it."
+
+
+def test_taking_a_genuine_fixture_still_says_it_wont_budge():
+    """The generic refusal must still fire for anything non-portable that
+    was never a curio at all -- shaped clay, in this case -- so the
+    cat-specific message doesn't leak onto unrelated fixtures."""
+    w, actor = fresh()
+    w.act(actor, "go out")
+    w.act(actor, "go river")
+    w.act(actor, "gather clay")
+    w.act(actor, "shape clay into a squat dish")
+    result = w.act(actor, "take clay squat dish")
+    assert result.splitlines()[0] == "The clay squat dish won't budge."
 
 
 def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():

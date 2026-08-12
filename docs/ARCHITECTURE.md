@@ -196,6 +196,22 @@ look-line ends "— the cat might bat at it", and `give`/`place` only appear
 in `available_actions` when there's a carried curio (and, for give, a cat)
 to act on — nothing to memorize.
 
+**`take`ing a cat-given trace back gets its own refusal, not the generic
+one.** `cmd_take`'s fallback for anything non-portable is "The {thing}
+won't budge" — true of a real fixture (the cairn, the charm-string, shaped
+clay), but not really true of a curio the cat's already had: it isn't
+heavy, it's just not yours anymore. `attrs["curio"]` still `True` on a
+non-portable entity is a safe, unambiguous signal that it's specifically a
+cat's trace — every other permanent fate (the cairn, the charm-string, the
+journal-tuck) consumes the entity outright rather than leaving a claimed
+one behind, and the mystery seed's bloom flips `curio`/`portable` together
+in the same tick (`blooming`), never separately — so `cmd_take` checks for
+it first and answers "It's the cat's now, you can't have it." before
+falling through to the generic fixture message. Deliberately not fixed by
+making cat-given items portable again, which would reopen a rescue path
+into the cairn/charm-string this design rules out on purpose — give-to-cat
+stays a one-shot, irreversible gesture, the same permanence as those two.
+
 Backward compatibility: `ensure_shelf` backfills `cat_reaction` (by name
 against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
 entity from a save predating this feature, the same way it already
