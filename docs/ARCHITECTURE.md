@@ -558,6 +558,63 @@ shown entry. `read journal all` does the same over every index via
 `enumerate`. Availability follows the usual rule: `journal_actions` only
 offers `tuck <item> in journal` once a tuckable item is actually in hand.
 
+## The riverbank and clay — cosmetic-only, per `docs/CLAY_SPEC.md`
+
+A new room, `"riverbank"`, structurally parallel to the forest's edge: its
+own branch off the yard (`yard.exits["river"]`), not nested inside or
+gated behind forest depth. `ensure_riverbank(world)` backfills both the
+room and the yard's exit onto an older save, same role as
+`ensure_shelf`/`ensure_cairn` — called from `build_world()` and from
+`drivers.load_or_build`'s reload path. The exit backfill uses
+`yard.exits.setdefault("river", ...)`, so it's idempotent and never
+clobbers a hand-edited or already-backfilled exit.
+
+**The two calm verbs needed no new syntax.** `cmd_listen` and
+`cmd_watch_clouds` already discard their `arg` entirely — `watch clouds`
+and bare `watch` have always behaved identically. So `listen` gained a
+second location branch (`RIVER_LISTEN_LINES` at `"riverbank"`, alongside
+`LISTEN_LINES` at `"forest_edge"`) and `cmd_watch_clouds`/`sky_actions`
+simply added `"riverbank"` to their location tuples — reusing the existing
+`WATCH_CLOUD_LINES`/moon logic outright, since the riverbank reads as open
+sky. `_calm_visit_ack` was already keyed by spot rather than verb, so
+`"riverbank"` just became a new key beside `"forest_edge"`, tracked and
+acknowledged (`CALM_ACK_AT`) completely independently.
+
+**`gather` is now a second location-branching verb**, the same shape
+`cmd_add_wood`/`cmd_listen`/`cmd_watch_clouds` already are: at
+`forest_edge` it's untouched (the abstract `actor.attrs["wood"]` counter);
+at `"riverbank"` it creates a discrete carried entity instead — `"a lump
+of raw clay"`, `attrs={"raw_clay": True}` — because shaping needs
+something specific to consume, the same shape as a raw potato existing
+before `cook`. Deliberately one lump per gather, not a
+`WOOD_PER_GATHER`-style multi-unit yield: shaping is an occasional,
+deliberate act, not a nightly consumable, so a bigger yield would only
+clutter a pack with unused lumps.
+
+**`shape clay into <name>` (`cmd_shape`) is deliberately strict** — only
+that one phrasing parses, via a plain prefix check on `arg`
+(`"clay into "`). The name is sanitized exactly like `cmd_name` (the cat's
+own naming verb): strip whitespace, drop a leading quote, keep only the
+first line (blocks multi-line injection into world prose), cap the length
+(`CLAY_NAME_CAP = 40`, more room than the cat's 24 — this names a short
+object phrase, not a proper name). One extra step beyond `cmd_name`: a
+leading article (`"a "`/`"an "`) is stripped *before* the cap, the same
+double-article guard `_the()` already applies to found curios — a hand
+naturally types `shape clay into a squat dish`, and the verb always
+auto-prefixes `"a clay "` itself, so without this guard every shaped
+object would read `"a clay a squat dish"`.
+
+The result is a plain, permanent `Entity` — `portable=False` (matches the
+cairn's stones and a bloom before it opens: made and left, part of the
+room from then on), dropped in `actor.location`. It is **not** tagged
+`curio=True`, and deliberately so: it's authored by the hand's own chosen
+name rather than drawn from a found pool, so it doesn't want a place in
+the shelf/cairn/give-to-cat/tuck-in-journal system at all — that quartet
+is already carrying real weight (see "Curio visual compression" below).
+`riverbank_actions` follows the usual "only offer what can do something"
+rule: `shape clay into <name>` only appears once a raw lump is actually
+carried.
+
 ## The forest, staged — Stage 3: episodic reset, made explicit
 
 Stage 1 already made `forest_depth` a plain runtime attribute, never written

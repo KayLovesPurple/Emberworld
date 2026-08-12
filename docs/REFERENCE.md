@@ -27,9 +27,9 @@
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
 - `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
-- `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall.
+- `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall; at the riverbank, digs up a lump of clay instead.
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
-- `listen` -- listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge).
+- `listen` -- listen -- stop and take in the forest's edge, or the riverbank; a chosen, unpressured turn that changes nothing.
 - `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a full or near-full moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
 - `return` -- return -- fall back toward the forest's edge from wherever you've ventured (past a safe depth, this can land you somewhere other than expected).
@@ -37,6 +37,7 @@
 - `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from).
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
+- `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and stays where it's shaped (not yet portable).
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*

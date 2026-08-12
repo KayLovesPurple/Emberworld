@@ -38,7 +38,7 @@ reads that note and harvests the crop.
 - `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
   without breaking anything.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec.
-- `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (not yet built).
+- `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (cosmetic tier built).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -144,6 +144,17 @@ Several identical curios left loose in a room read as one line ("three
 pinecones", "several feathers") rather than one bullet each — presentation
 only, nothing is merged or lost, and `look <name>` on a group always gives
 the exact count.
+
+**The riverbank, and clay.** A second path off the yard, parallel to the
+forest's edge, with its own quiet: `listen` and `watch clouds` both work
+there, with their own flavor of line. `gather` digs up a lump of raw clay
+instead of wood; `shape clay into <name>` — your own naming, not a fixed
+pool — presses it into something permanent that stays right where you
+shaped it. `shape clay into a squat dish` leaves "a clay squat dish"
+behind, plain and yours, made rather than found — it doesn't join the
+shelf, the cairn, or the cat's gifts; it's just there from then on, part
+of the room. Cosmetic only for now, deliberately: see `docs/CLAY_SPEC.md`
+for the full spec and what's still ahead.
 
 **A seed, for later.** The forest's edge also turns up, now and then, a
 seed unlike anything else you've found — deterministic, not a roll: one
@@ -286,30 +297,44 @@ can't resolve it, so the *journal* becomes where the lineage theorises and
 a shared myth grows around an object that means nothing. The restraint IS
 the feature. Resist every future urge to explain it.
 
-**Clay — the open-material question** *(a design problem, not a quick feature —
-see `docs/CLAY_SPEC.md` for the cosmetic-only riverbank/gather/shape spec).*
-Clay would be the first *open* material: a raw thing the player/agent shapes into
-whatever they intend — a teapot, a dish for the cat's potato, a jar for
-(future) fruit — rather than a verb with one predefined outcome. This is
-categorically bigger than another resource loop, because our whole architecture
-is *closed* (every object is a known Entity, every verb a definite state change),
-and open-ended making collides with that. The core question to resolve BEFORE
-building: how much must made things actually *do*?
-  - **Cosmetic making** (start here): shape + name → a described, persistent
-    object with no mechanics. Meaning comes from the journal and the cat, like
-    the statue. Cheap, charming, low-risk.
-  - **Functional making** (hard): made objects gain real capabilities (a pot that
-    truly stores, a bowl that truly becomes the cat's feeding spot). Needs a real
-    "what can a made thing do" system.
-  - **LLM-defined function** (frontier, risky): the agent describes what it made
-    and the world honours it. Unbounded, hard to test — approach with great care,
-    if ever.
+**Clay — the open-material question** *(cosmetic tier built — see
+`docs/CLAY_SPEC.md` and ARCHITECTURE.md's "The riverbank and clay" for the
+mechanism).* Clay is the first *open* material: a raw thing the player/
+agent shapes into whatever they intend, rather than a verb with one
+predefined outcome. `gather` at the new riverbank (a path off the yard,
+parallel to the forest's edge, with its own `listen`/`watch clouds`
+flavor) digs up a carried lump of raw clay; `shape clay into <name>`
+consumes it and leaves a permanent, freely-named object behind —
+`shape clay into a squat dish` → "a clay squat dish" — wherever it was
+shaped. Cosmetic only, on purpose: shape + name → a described, persistent
+object with no mechanics, no shelf slot, no give-to-cat, no cairn, no
+tuck — a made object is categorically different from a found one (it's
+authored, not drawn from a pool), so it gets its own home rather than a
+fifth fate stacked onto a curio system that's already asked for a
+presentation-layer fix once (see "Curio visual compression" below).
 
-The axis that actually matters here is not safe-to-risky — see the calm-axis invariant for the real line. One thing specific to clay is worth noting here: because only one potato grows at a time, watering has a hard ceiling, so a made thing (think a bigger clay bucket) can make tending quicker but can't make it yield more. A time-saving made object is therefore safe by construction — there's no output for it to scale.
+The core question this deliberately leaves open: how much must made
+things actually *do*?
+  - **Cosmetic making** (done, above): shape + name → a described,
+    persistent object with no mechanics. Meaning comes from the journal
+    and the cat, like the statue. Cheap, charming, low-risk.
+  - **Functional making** (hard, not started): made objects gain real
+    capabilities (a pot that truly stores, a bowl that truly becomes the
+    cat's feeding spot). Needs a real "what can a made thing do" system —
+    deliberately deferred until a lineage has lived with the cosmetic
+    version for a while. One property worth noting when that question
+    comes up: because only one potato grows at a time, watering has a
+    hard ceiling, so a made thing (think a bigger clay bucket) can make
+    tending quicker but can't make it yield more — a time-saving made
+    object is safe by construction, there's no output for it to scale.
+  - **LLM-defined function** (frontier, risky, not started): the agent
+    describes what it made and the world honours it. Unbounded, hard to
+    test — approach with great care, if ever.
 
-Dependencies: wants a source (forest/riverbank), firing (hearth/kiln), and pairs naturally with tea (a thrown teapot) and the cat (its own dish). Downstream of
-the forest and tea. Do NOT spec this like the others — it deserves its own design pass, and should almost certainly start at "cosmetic" and learn from how the
-lineage treats made things before attempting function.
+Firing/kiln mechanics, and any clay object built specifically to pair with
+tea (the "thrown teapot" example — tea itself isn't built), stay out of
+scope for the same reason: a cosmetic-only pass has no functional
+distinction between fired and unfired clay to model.
 
 **A chicken — but a producer, never a second mouth** *(someday, and only framed
 this way).* The tempting version — a hen that gets hungry and needs feeding — is

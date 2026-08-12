@@ -1262,12 +1262,53 @@ BEHAVIORS.update({"seedfall": seedfall, "blooming": blooming})
 # intensification the relocation spec ruled out. This is still the
 # grandfathered hearth-fuel loop; only where it happens moved.
 def cmd_gather(world, actor, arg):
-    """gather wood -- forage the forest's edge for fallen branches and deadfall."""
+    """gather wood -- forage the forest's edge for fallen branches and deadfall; at the riverbank, digs up a lump of clay instead."""
+    if actor.location == "riverbank":
+        world.add(Entity(world.fresh_id("clay"), "a lump of raw clay",
+                          "a lump of raw clay, cool and grey, ready to be shaped",
+                          location=actor.id, portable=True, attrs={"raw_clay": True}))
+        return "You work a lump of clay free from the bank, cool and heavy in your hand."
     if actor.location != "forest_edge":
-        return "There's nothing to forage here -- try the forest's edge."
+        return "There's nothing to forage here -- try the forest's edge, or the riverbank."
     actor.attrs["wood"] = actor.attrs.get("wood", 0) + WOOD_PER_GATHER
     return (f"You gather fallen branches and deadfall from the forest floor. "
             f"You now have {actor.attrs['wood']} wood.")
+
+
+# Deliberately one lump per gather, unlike WOOD_PER_GATHER's stock-up-for-
+# the-night amount -- shaping is a occasional, deliberate act, not a nightly
+# consumable, so a bigger yield would just clutter a pack with unused lumps.
+CLAY_NAME_CAP = 40   # a short object phrase, not a proper name -- more room
+                      # than the cat's 24, same sanitizing recipe as cmd_name.
+
+
+def cmd_shape(world, actor, arg):
+    """shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and stays where it's shaped (not yet portable)."""
+    arg = (arg or "").strip()
+    prefix = "clay into "
+    if not arg.lower().startswith(prefix):
+        return "Shape what into what? e.g.  shape clay into a squat dish"
+    given = arg[len(prefix):].strip().strip('"').split("\n")[0].strip()
+    # a hand naturally types its own article ("shape clay into a squat
+    # dish") -- strip a leading one before prefixing "a clay ", the same
+    # double-article guard _the() applies for found curios. Stripped before
+    # the length cap so the cap measures the name that's actually kept.
+    for article in ("a ", "an "):
+        if given.lower().startswith(article):
+            given = given[len(article):].strip()
+            break
+    given = given[:CLAY_NAME_CAP].strip()
+    if not given:
+        return "Shape it into what? e.g.  shape clay into a squat dish"
+    clay = next((e for e in world.contents(actor.id) if e.attrs.get("raw_clay")), None)
+    if not clay:
+        return "You've no clay in hand to shape. The riverbank has it, if you gather some."
+    world.entities.pop(clay.id, None)
+    full_name = f"a clay {given}"
+    world.add(Entity(world.fresh_id("shaped"), full_name,
+                      f"{full_name}, still faintly damp from the riverbank.",
+                      location=actor.location, portable=False))
+    return f"You work the clay between your hands until it holds its shape: {full_name}."
 
 
 def cmd_add_wood(world, actor, arg):
@@ -1564,17 +1605,31 @@ LISTEN_LINES = (
     "forest, breathing out. Not yet.",
 )
 
+# The riverbank's own pool, same discipline as LISTEN_LINES -- varied,
+# grants nothing, changes nothing. A separate pool rather than folding the
+# riverbank into the forest's edge's: water is a genuinely different
+# texture than trees, and the two places should read as themselves.
+RIVER_LISTEN_LINES = (
+    "Water slides over stone somewhere close, a steady, unhurried sound.",
+    "A moorhen calls once from the reeds and goes quiet again.",
+    "The current catches on something submerged and breaks into a small, "
+    "repeating chuckle.",
+    "Somewhere upstream, gravel shifts underwater, a low grinding hush.",
+    "A dragonfly stitches back and forth over the shallows, and is gone.",
+    "The bank breathes out a cool, mineral smell -- water, and wet stone.",
+)
+
 
 # Calm-axis session acknowledgment. Session-scoped (see world.calm_visits),
 # never saved: how many times THIS hand has chosen a calm act at a given calm
-# spot this visit. "listen" and "watch clouds" share one counter at the
-# forest's edge -- keyed by spot, not by verb -- because this is tracking
-# chosen presence, not mastery of one command; a future calm verb there (e.g.
-# a "look at flowers") should feed the same counter. Only the forest's edge
-# gets this: it's the one place nothing forces a hand to visit, so repeat
-# presence there actually means something chosen. The yard is constant
-# through-traffic for chores, so counting visits there would just be counting
-# the forced loop, not calm -- watch_clouds in the yard stays untouched.
+# spot this visit. "listen" and "watch clouds" share one counter per spot --
+# keyed by spot, not by verb -- because this is tracking chosen presence, not
+# mastery of one command; a future calm verb at a spot should feed the same
+# counter. Only the forest's edge and the riverbank get this: they're the
+# only places nothing forces a hand to visit, so repeat presence there
+# actually means something chosen. The yard is constant through-traffic for
+# chores, so counting visits there would just be counting the forced loop,
+# not calm -- watch_clouds in the yard stays untouched.
 # Fires exactly once, at the third calm act, and never again this visit: not
 # a running status, not a buff, no confirmation of anything beyond that one
 # line -- same discipline as listen/watch_clouds granting nothing, one size
@@ -1591,10 +1646,12 @@ def _calm_visit_ack(world, spot):
 
 
 def cmd_listen(world, actor, arg):
-    """listen -- stop and take in the forest's edge; a chosen, unpressured turn that changes nothing (only at the forest's edge)."""
-    if actor.location != "forest_edge":
-        return "There's nothing in particular to listen for here. Try the forest's edge."
-    return world.rng.choice(LISTEN_LINES) + _calm_visit_ack(world, "forest_edge")
+    """listen -- stop and take in the forest's edge, or the riverbank; a chosen, unpressured turn that changes nothing."""
+    if actor.location == "forest_edge":
+        return world.rng.choice(LISTEN_LINES) + _calm_visit_ack(world, "forest_edge")
+    if actor.location == "riverbank":
+        return world.rng.choice(RIVER_LISTEN_LINES) + _calm_visit_ack(world, "riverbank")
+    return "There's nothing in particular to listen for here. Try the forest's edge, or the riverbank."
 
 
 
@@ -1921,7 +1978,7 @@ def _is_full_moon(world):
 
 def cmd_watch_clouds(world, actor, arg):
     """watch clouds -- pause under open sky and watch the clouds (or, on a full or near-full moon night, the moon itself) move; a chosen, unpressured turn that changes nothing."""
-    if actor.location not in ("yard", "forest_edge"):
+    if actor.location not in ("yard", "forest_edge", "riverbank"):
         return "There's no open sky to watch here."
     phase = world.phase()
     if phase == "night":
@@ -1931,8 +1988,8 @@ def cmd_watch_clouds(world, actor, arg):
         line = world.rng.choice(MOON_LINES if view == "full" else MOON_VIEW_LINES[view])
     else:
         line = world.rng.choice(WATCH_CLOUD_LINES[phase])
-    if actor.location == "forest_edge":
-        line += _calm_visit_ack(world, "forest_edge")
+    if actor.location in ("forest_edge", "riverbank"):
+        line += _calm_visit_ack(world, actor.location)
     return line
 
 
@@ -1982,6 +2039,27 @@ def _cairn_description(height_cm):
         if height_cm >= threshold:
             text = line
     return text
+
+
+RIVERBANK_DESCRIPTION = (
+    "The path from the yard ends at a bend in a slow, brown river, its bank "
+    "thick with reeds. Grey clay shows through where the current has cut "
+    "the bank away. Open sky stretches overhead, unbroken by trees."
+)
+
+
+def ensure_riverbank(world):
+    """Add the riverbank to a world that predates it (fresh build or an
+    older save) -- same backfill role as ensure_shelf/ensure_cairn. Also
+    backfills the yard's own exit to it, since an older save's yard entity
+    was serialized without one -- setdefault so a hand-edited exit (or one
+    already backfilled on a prior load) is never clobbered."""
+    if world.get("riverbank") is None:
+        world.add(Entity("riverbank", "The Riverbank", RIVERBANK_DESCRIPTION,
+                          exits={"yard": "yard"}))
+    yard = world.get("yard")
+    if yard is not None:
+        yard.exits.setdefault("river", "riverbank")
 
 
 def ensure_cairn(world):
@@ -2051,6 +2129,7 @@ VERBS.update({
     # and the parser only looks at the first word -- "feed fire" would collide.
     "add": cmd_add_wood, "stoke": cmd_add_wood,
     "stack": cmd_stack_stone,
+    "shape": cmd_shape,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
 
@@ -2121,10 +2200,23 @@ def forest_actions(world, actor):
     return acts
 
 
+def riverbank_actions(world, actor):
+    """Everything the riverbank offers: gathering clay, listening, and
+    shaping whatever's currently in hand -- the latter only appears once a
+    lump is actually carried, same "only offer what can do something" rule
+    as everywhere but the hearth."""
+    if actor.location != "riverbank":
+        return []
+    acts = ["gather clay", "listen"]
+    if any(e.attrs.get("raw_clay") for e in world.contents(actor.id)):
+        acts.append("shape clay into <name>")
+    return acts
+
+
 def sky_actions(world, actor):
     """Watching the sky, wherever there's open sky to watch -- and at night
     only when there's a moon worth looking up at."""
-    if actor.location in ("yard", "forest_edge") and (
+    if actor.location in ("yard", "forest_edge", "riverbank") and (
             world.phase() != "night" or _moon_view(world) is not None):
         return ["watch clouds"]
     return []
@@ -2211,7 +2303,7 @@ def journal_actions(world, actor):
 # reads the actions in is part of the surface. cat_actions is defined in
 # cat.py with the rest of the cat, and stays last, where it has always been.
 ACTION_SOURCES.extend([
-    core_actions, garden_actions, forest_actions, sky_actions,
+    core_actions, garden_actions, forest_actions, riverbank_actions, sky_actions,
     hearth_actions, carrying_actions, making_actions, journal_actions,
     cat_actions,
 ])
@@ -2390,8 +2482,9 @@ def build_world():
     yard = w.add(Entity("yard", "The Yard",
         "Long grass, wet with evening. A vegetable patch of turned soil runs "
         "along the fence; the dark shape of a well stands near the gate. "
-        "Past the fence, a path leads off toward the forest's edge. Overhead, "
-        "clouds cross an open sky -- worth a moment, watching them go.",
+        "Past the fence, a path leads off toward the forest's edge, and "
+        "another toward the river. Overhead, clouds cross an open sky -- "
+        "worth a moment, watching them go.",
         exits={"in": "hut", "forest": "forest_edge"}))
     yard.attach("wildlife_glimpse")
     forest_edge = w.add(Entity("forest_edge", "The Forest's Edge",
@@ -2405,6 +2498,7 @@ def build_world():
     forest_edge.attach("wildlife_glimpse")
     forest_edge.attach("seedfall")
     ensure_cairn(w)
+    ensure_riverbank(w)
 
     lamp = w.add(Entity("lamp", "lamp", "", location="hut",
         portable=True, attrs={"lit": False, "fuel": 0}))
