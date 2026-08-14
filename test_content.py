@@ -458,7 +458,7 @@ def test_gather_wood_can_turn_up_a_found_item():
     assert len(found) == 1, f"a lucky gather should add exactly one found item: {found}"
     name, look_line, reaction = FOUND_ITEMS[0]
     assert found[0].name == name
-    assert found[0].description == _found_description(look_line, reaction)
+    assert found[0].description == _found_description(look_line, reaction, name)
     assert found[0].portable, "a found item must be carryable"
     assert found[0].attrs.get("curio"), "a found item should be marked as a curio"
     assert found[0].attrs.get("cat_reaction") == reaction
@@ -1978,7 +1978,7 @@ def test_lingering_at_the_forest_edge_can_turn_up_a_curio():
     assert len(found) == 1, f"a lucky turn at the forest's edge should add a curio: {found}"
     name, look_line, reaction = FOUND_ITEMS[0]
     assert found[0].name == name
-    assert found[0].description == _found_description(look_line, reaction)
+    assert found[0].description == _found_description(look_line, reaction, name)
     assert name in result, f"the wait result should name the find: {result!r}"
 
 
@@ -4392,9 +4392,24 @@ def test_threading_requires_carrying_the_named_item():
 
 
 def test_threading_a_non_eligible_curio_is_refused():
-    """A pinecone is round but not eligible (no hole, not hangable the way a
-    button or pebble is) -- carrying one and typing thread must not consume
-    it or touch the charm-string."""
+    """A stone belongs to the cairn, not the charm-string -- carrying one
+    and typing thread must not consume it or touch the charm-string."""
+    w, actor = fresh()
+    _give_twine(w, actor)
+    stone = w.add(Entity(w.fresh_id("found"), "a smooth grey stone",
+                          "river-worn, a pale band round its middle.",
+                          location=actor.id, portable=True,
+                          attrs={"curio": True, "cat_reaction": "ignores"}))
+    result = cmd_thread(w, actor, "stone on charm-string")
+    assert "not something you can thread" in result.lower()
+    assert w.get(stone.id) is not None, "a non-eligible curio must not be consumed"
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_threading_a_pinecone_succeeds():
+    """The broken-scale detail in a pinecone's own look_line is exactly the
+    kind of gap a knot can catch in -- the same physical logic as a
+    button's hole, not just "round like a button" -- so it's eligible too."""
     w, actor = fresh()
     _give_twine(w, actor)
     pinecone = w.add(Entity(w.fresh_id("found"), "a pinecone",
@@ -4402,9 +4417,9 @@ def test_threading_a_non_eligible_curio_is_refused():
                              location=actor.id, portable=True,
                              attrs={"curio": True, "cat_reaction": "plays"}))
     result = cmd_thread(w, actor, "pinecone on charm-string")
-    assert "not something you can thread" in result.lower()
-    assert w.get(pinecone.id) is not None, "a non-eligible curio must not be consumed"
-    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+    assert w.get(pinecone.id) is None, "the pinecone must be consumed"
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 1
+    assert "pinecone" in result.lower()
 
 
 def test_threading_without_twine_is_refused_with_no_state_change():

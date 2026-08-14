@@ -1143,10 +1143,12 @@ STONE_CAIRN_HINT = "it could go on the cairn at the forest's edge"
 # natural hangable quality have a second fate beyond give-to-cat, and the
 # cue belongs on the item itself, not just in the room it's usable in.
 # Deliberately narrow -- a button's hole and a pebble's easy-to-knot shape
-# both plausibly thread; a pinecone hung by a loop is a stretch, and a
-# feather already has its own fate (the journal-tuck). Extend only once the
-# forest generates more qualifying finds.
-CHARM_ELIGIBLE_ITEMS = ("a bone button", "a pebble of blue glass")
+# both plausibly thread. A pinecone qualifies too: its own look_line above
+# ("one scale broken") is exactly the kind of gap a knot can catch in, the
+# same physical logic as a button's hole -- not just "round like a button".
+# A feather still doesn't qualify; it already has its own fate (the
+# journal-tuck). Extend only once the forest generates more qualifying finds.
+CHARM_ELIGIBLE_ITEMS = ("a bone button", "a pebble of blue glass", "a pinecone")
 CHARM_STRING_HINT = "it could be threaded onto the charm-string in the hut"
 
 

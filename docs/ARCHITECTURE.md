@@ -1628,11 +1628,13 @@ threaded item *and* the twine outright (not a location change — there is
 nothing left to `take` back, by construction, the same one-way permanence
 as the cairn), and increments a plain `count` attr on the `charm_string`
 entity rather than tracking the items themselves. `CHARM_ELIGIBLE_ITEMS`
-(`"a bone button"`, `"a pebble of blue glass"`) is deliberately narrow —
-things with an inherent hole or a natural hangable quality, not every
-round curio (a pinecone hung by a loop is a stretch; a feather already has
-its own fate, the journal-tuck) — extend it only once the forest generates
-more qualifying finds.
+(`"a bone button"`, `"a pebble of blue glass"`, `"a pinecone"`) is
+deliberately narrow — things with an inherent hole or a gap a knot can
+catch in, not every round curio. A pinecone qualifies on that same
+physical logic: its own `FOUND_ITEMS` look_line ("one scale broken") is
+exactly that kind of gap, not just "round like a button." A feather still
+doesn't qualify; it already has its own fate, the journal-tuck. Extend
+further only once the forest generates more qualifying finds.
 
 Where it differs from the cairn on purpose: the cairn only ever gets
 taller, same texture every stone. The charm-string is meant to read as
