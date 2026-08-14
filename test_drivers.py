@@ -787,14 +787,17 @@ def test_naming_prompt_discourages_trivial_variations_not_just_verbatim_copies()
         "should explicitly discourage a suffix/prefix tacked onto an example, not just verbatim copies"
 
 
-def test_thistle_is_back_in_the_strange_pool_protected_by_the_instruction():
-    """Round four: Thistle was reinstated by request. Round three's actual
-    fix was the instruction ruling out suffix/prefix derivations generally
-    (see test_naming_prompt_discourages_trivial_variations_not_just_verbatim_copies
-    above) -- excluding the word itself was belt-and-braces on top of that,
-    not the load-bearing part. So Thistle can safely sit in the pool again
-    as long as that instruction still stands guard."""
+def test_thistle_stays_in_the_pool_but_is_now_also_denylisted():
+    """Round four bet that the suffix/prefix instruction alone made Thistle
+    safe to leave in the pool. Round seven's real data (three consecutive
+    sessions all named "Thistle") showed that bet was wrong on its own --
+    but the fix isn't pulling Thistle from the pool again (round three,
+    reverted in round four for good reason: the pool provides real variety,
+    and it's the denylist doing the actual work for Marrow, which was never
+    even a pool entry). Thistle stays in the pool AND is now covered by the
+    same reroll safety net."""
     assert "Thistle" in drv._STRANGE_NAME_EXAMPLES
+    assert drv._is_overused("Thistle")
     prompt = drv._naming_prompt(random.Random(0)).lower()
     assert "suffix" in prompt or "prefix" in prompt or "variation" in prompt
 
@@ -870,6 +873,19 @@ def test_is_overused_matches_the_exact_name_only_not_derivatives():
     assert not drv._is_overused("Cindergate")
     assert not drv._is_overused(None)
     assert not drv._is_overused("")
+
+
+def test_thistle_is_also_overused_now():
+    """BUG WE HIT (round seven): three consecutive real sessions (days
+    51-53) all came back "Thistle" outright -- round four's bet that the
+    suffix/prefix instruction alone made the pool entry safe didn't hold
+    up. Same exact-match-only rule as Marrow: a one-off derivative like
+    "Thistlewick" is still a fine name, only the bare word recurring is
+    the problem."""
+    assert drv._is_overused("Thistle")
+    assert drv._is_overused("thistle")
+    assert not drv._is_overused("Thistlewick")
+    assert not drv._is_overused("Thistledown")
 
 
 class _RecordingSequencedClient(_SequencedClient):

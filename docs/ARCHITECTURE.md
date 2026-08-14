@@ -1933,7 +1933,21 @@ exists (each fixed a real failure we watched happen):
   and only as a nudge, not a veto: if the reroll lands on the same tired
   name again, that's kept rather than discarded. A hand's second,
   deliberate answer is still its answer; naming just isn't allowed to loop
-  forever chasing a "better" one.
+  forever chasing a "better" one. **Gotcha we hit, round seven**: round
+  four's bet — that the suffix/prefix instruction alone made it safe to
+  leave "Thistle" sitting in `_STRANGE_NAME_EXAMPLES` — didn't hold up in
+  real play. Three consecutive real sessions came back "Thistle" outright,
+  the exact verbatim-copy failure round one first diagnosed, on a word the
+  instruction explicitly says not to reuse. That stretch also coincided
+  with the model's per-turn reasoning summaries thinning out again (see
+  `_ask_claude`'s own gotcha on that) — suggestive of effort level being the
+  real variable, same as round one's original theory, though not proven by
+  three data points alone. Rather than pull Thistle from the pool again
+  (round three's fix, reverted in round four on the reasoning that the
+  pool provides real variety and the denylist alone was already enough for
+  Marrow, which was never even a pool entry), it went on `_OVERUSED_NAMES`
+  instead — Thistle stays in the pool for variety, and the same reroll
+  safety net now covers it too.
 - **Attribution lives in the stamp, not a sign-off** (`day_stamp`, in
   content_common.py, imported into content.py as `_day_stamp`): both
   `cmd_write` and `_leave_signoff` build their journal

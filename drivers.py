@@ -552,7 +552,24 @@ def _sanitize_name(raw):
 # reliably landed on it again. Fixed by naming the actual rejected name
 # explicitly in the retry, instead of just hoping -- turns the reroll from
 # a coin-flip into real, targeted feedback.
-_OVERUSED_NAMES = {"marrow"}
+#
+# BUG WE HIT (round seven): round four's bet -- that the suffix/prefix
+# instruction alone was enough to let Thistle stay in _STRANGE_NAME_EXAMPLES
+# safely -- didn't hold up in real play. Three consecutive real sessions
+# (days 51-53) all came back "Thistle" outright, the exact verbatim-copy
+# failure round one first diagnosed ("a low-effort reply just copies
+# whatever's handed to it"), on a word the instruction explicitly tells the
+# model not to reuse. Notably, this stretch coincided with the model's
+# per-turn reasoning summaries thinning out again (see _ask_claude's own
+# BUG WE HIT on that) -- consistent with, though not proof of, effort level
+# being the actual variable, same as round one's original theory. Rather
+# than pull Thistle from the pool again (round three's fix, reverted in
+# round four for good reason -- the pool provides real variety, and
+# Marrow's own fix shows the denylist alone is enough even for a word
+# that's never shown as an example at all), it goes on the denylist instead:
+# same second layer already doing the real work for Marrow, now covering
+# the one pool entry that's evidently still tempting to just echo.
+_OVERUSED_NAMES = {"marrow", "thistle"}
 
 
 def _is_overused(name):
