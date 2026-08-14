@@ -2632,6 +2632,17 @@ def ensure_shelf(world):
                     and CHARM_STRING_HINT not in entity.description:
                 entity.description = entity.description.rstrip(".") \
                     + f" — {CHARM_STRING_HINT}."
+            # BUG WE HIT (real save file): the two guards above only stop a
+            # hint from being ADDED to a cat trace going forward -- a world
+            # saved before either guard shipped already has the wrong text
+            # baked directly into the trace's own .description ("given to
+            # the cat and roundly ignored -- it could go on the cairn"). The
+            # guard alone never heals that, so it has to be actively
+            # stripped here too, every load, same as the addition above is.
+            if not entity.portable:
+                for hint in (STONE_CAIRN_HINT, CHARM_STRING_HINT):
+                    entity.description = entity.description.replace(
+                        f" — {hint}.", ".")
     shelf = world.get("shelf")
     if shelf is None:
         shelf = world.add(Entity("shelf", "shelf",

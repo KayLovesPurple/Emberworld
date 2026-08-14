@@ -264,6 +264,22 @@ also requiring `x.portable`, so the preference now means what `take` is
 actually for: end up holding the thing, not just "some copy that isn't
 already carried."
 
+**BUG WE HIT: the hint-backfill guard stopped new corruption but never
+healed old corruption.** The `entity.portable` guard on the
+`STONE_CAIRN_HINT`/`CHARM_STRING_HINT` backfills (above, in `ensure_shelf`)
+only stops the hint from being *added* to a cat trace going forward — a
+world saved before that guard shipped already had the wrong text baked
+directly into the trace's own `.description` ("given to the cat and
+roundly ignored — it could be threaded onto the charm-string in the
+hut."), and the guard alone never touches text that's already there. Found
+in this project's own live save file: five buttons/pebbles given to the
+cat before the fix, still carrying the stale hint after it. `ensure_shelf`
+now also actively strips either hint from any non-portable curio's
+description on every load (`entity.description.replace(f" — {hint}.",
+".")`), not just refuses to add a new one — the same "resync on every
+load, not only on the next relevant action" pattern `ensure_cairn` already
+uses for `CAIRN_BANDS` drift.
+
 Backward compatibility: `ensure_shelf` backfills `cat_reaction` (by name
 against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
 entity from a save predating this feature, the same way it already

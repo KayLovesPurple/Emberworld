@@ -20,7 +20,7 @@ from world import World, Entity
 from content import (
     WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD, HEARTH_LOW_FUEL,
     hearth_state, FOUND_ITEMS, _found_description,
-    CAIRN_ID, cmd_stack_stone,
+    CAIRN_ID, cmd_stack_stone, STONE_CAIRN_HINT,
     SHELF_CAPACITY, _shelf_description, ensure_shelf,
     BLOOM_KINDS,
     CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
@@ -336,6 +336,42 @@ def test_ensure_shelf_does_not_backfill_the_charm_hint_onto_a_cat_given_curio():
                           attrs={"curio": True, "cat_reaction": "ignores"}))
     ensure_shelf(w)
     assert "charm-string" not in w.get(trace.id).description.lower()
+
+
+def test_ensure_shelf_repairs_a_trace_already_corrupted_before_the_portable_guard():
+    """BUG WE HIT (real save file): the two tests above guard against ADDING
+    a hint to a cat trace going forward, but a world saved before that guard
+    shipped already has the wrong text baked directly into the trace's own
+    .description -- "given to the cat and roundly ignored -- it could be
+    threaded onto the charm-string in the hut." The guard alone never heals
+    that; ensure_shelf must also actively strip a hint it finds on a
+    non-portable curio, not just refuse to add a new one."""
+    w, actor = fresh()
+    stone_trace = w.add(Entity(w.fresh_id("found"), "a smooth grey stone",
+        f"a smooth grey stone, given to the cat and roundly ignored — {STONE_CAIRN_HINT}.",
+        location="hut", portable=False,
+        attrs={"curio": True, "cat_reaction": "ignores"}))
+    button_trace = w.add(Entity(w.fresh_id("found"), "a bone button",
+        f"a bone button, given to the cat and roundly ignored — {CHARM_STRING_HINT}.",
+        location="hut", portable=False,
+        attrs={"curio": True, "cat_reaction": "ignores"}))
+    ensure_shelf(w)
+    assert w.get(stone_trace.id).description == \
+        "a smooth grey stone, given to the cat and roundly ignored."
+    assert w.get(button_trace.id).description == \
+        "a bone button, given to the cat and roundly ignored."
+
+
+def test_ensure_shelf_repair_is_idempotent_and_leaves_a_live_curios_hint_alone():
+    w, actor = fresh()
+    live = w.add(Entity(w.fresh_id("found"), "a bone button",
+        f"four holes, one thread still knotted through — {CHARM_STRING_HINT}.",
+        location="hut", portable=True,
+        attrs={"curio": True, "cat_reaction": "ignores"}))
+    ensure_shelf(w)
+    ensure_shelf(w)
+    assert w.get(live.id).description == \
+        f"four holes, one thread still knotted through — {CHARM_STRING_HINT}."
 
 
 def test_a_bloomed_flower_never_mentions_the_cairn():
