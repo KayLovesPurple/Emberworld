@@ -212,6 +212,24 @@ making cat-given items portable again, which would reopen a rescue path
 into the cairn/charm-string this design rules out on purpose — give-to-cat
 stays a one-shot, irreversible gesture, the same permanence as those two.
 
+**BUG WE HIT: a cat-given trace could shadow a real, takeable copy of the
+same curio.** `cmd_take`'s own top-of-function note already covers the
+"already carrying" version of this — `find_visible`'s match order is here
++ carried + displayed, so a match found earlier in that order shadows a
+better one found later. A cat's trace sits directly in the room (`cmd_give`
+sets `e.location = actor.location`), which comes *before* "displayed" (the
+shelf) — so a pinecone already given to the cat shadowed a completely
+different, still-live pinecone sitting on the shelf: `take pinecone`
+answered "It's the cat's now" even though a real copy was one shelf-slot
+away, discovered live by an LLM hand that had correctly reasoned its way to
+"take a pinecone from the shelf" and then got refused for a reason that had
+nothing to do with the shelf at all. `prefer=lambda x: x.location !=
+actor.id` wasn't enough on its own — it rules out the copy already in
+hand, but says nothing about a copy that can never end up in hand. Fixed by
+also requiring `x.portable`, so the preference now means what `take` is
+actually for: end up holding the thing, not just "some copy that isn't
+already carried."
+
 Backward compatibility: `ensure_shelf` backfills `cat_reaction` (by name
 against `FOUND_ITEMS`, defaulting to `"ignores"`) on any `found_`-prefixed
 entity from a save predating this feature, the same way it already

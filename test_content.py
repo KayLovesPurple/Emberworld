@@ -821,6 +821,32 @@ def test_taking_a_genuine_fixture_still_says_it_wont_budge():
     assert result.splitlines()[0] == "The clay squat dish won't budge."
 
 
+def test_take_prefers_a_real_shelved_curio_over_an_unrelated_cat_given_trace():
+    """Same class of bug as test_stack_stone_finds_a_carried_stone_even_when
+    _a_same_named_item_lies_in_the_room, and the "already carrying" bug
+    documented at the top of cmd_take: find_visible's match order is here +
+    carried + displayed, so a cat's trace sitting directly in the room
+    shadows a same-named, still-live curio sitting on the shelf, even
+    though the shelf item is the one `take` could actually satisfy. `take`
+    must prefer a portable, obtainable copy over an inert trace, the same
+    "prefer one you can actually get" rule already applied to the
+    already-carried case."""
+    w, actor = fresh()
+    actor.location = "hut"
+    w.add(Entity(w.fresh_id("found"), "a pinecone",
+                 "a pinecone, well-battered after a game with the cat",
+                 location="hut", portable=False,
+                 attrs={"curio": True, "cat_reaction": "plays"}))
+    shelf = w.get("shelf")
+    live = w.add(Entity(w.fresh_id("found"), "a pinecone",
+                         "tight and resinous, one scale broken.",
+                         location=shelf.id, portable=True,
+                         attrs={"curio": True, "cat_reaction": "plays"}))
+    result = w.act(actor, "take pinecone")
+    assert result.splitlines()[0] == "You take the pinecone."
+    assert any(e.id == live.id and e.location == actor.id for e in w.contents(actor.id))
+
+
 def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():
     w, actor = fresh()
     _add_curio(w, actor, "a smooth grey stone")

@@ -731,7 +731,19 @@ def cmd_take(world, actor, arg):
     # is getting a copy into your hands, so it must prefer one that ISN'T
     # already there; only fall back to an already-carried match (and the
     # refusal that follows) once no other copy is left to take.
-    e = find_visible(world, actor, arg, prefer=lambda x: x.location != actor.id)
+    #
+    # BUG WE HIT: the same shape of bug, one level further -- a cat-given
+    # trace sits directly in the room (see cmd_give), which comes before
+    # "displayed" (the shelf) in find_visible's match order, so a pinecone
+    # already given to the cat shadowed a completely different, still-live
+    # pinecone sitting on the shelf: `take pinecone` refused with "It's the
+    # cat's now" even though a real copy was one shelf-slot away. `not
+    # x.portable` alone isn't enough here -- a hand's whole reason for
+    # typing `take` is to end up holding the thing, so the preference has
+    # to rule out anything that can never end up in their hands, not just
+    # anything already there.
+    e = find_visible(world, actor, arg,
+                      prefer=lambda x: x.location != actor.id and x.portable)
     if not e:
         return f"There's no '{arg}' here to take."
     if e.location == actor.id:
