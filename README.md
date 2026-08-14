@@ -30,9 +30,13 @@ reads that note and harvests the crop.
   developer-only read of the journal, never fed back into the game.
   LLM-based extraction, manually rebuilt (`--lineage-rebuild`, needs a
   key) rather than automatic, then read anytime with `--lineage-report`.
-- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` /
-  `test_lineage_memory.py` — the safety net, split to match. Each runs with
-  or without pytest; `_test_helpers.py` holds the handful of things they share.
+- `test_world.py` / `test_cat.py` / `test_drivers.py` / `test_lineage_memory.py`
+  / `test_hut_basics.py` / `test_curios.py` / `test_forest_edge.py` /
+  `test_forest_venture.py` / `test_journal_and_seed.py` / `test_riverbank.py`
+  — the safety net, split to match (content.py's own tests split further,
+  by subject, once the combined file outgrew content.py itself). Each runs
+  with or without pytest; `_test_helpers.py` holds the handful of things
+  they share.
 - `docs/REFERENCE.md` — every verb, behavior, and rule. **Generated from the
   code** (`python3 emberworld.py --reference`), so it's always current.
 - `docs/ARCHITECTURE.md` — how it's built, and the recipe for adding a feature
@@ -262,8 +266,10 @@ the world toward farm-optimisation, so think hard before lifting it.
 ## Testing
 
 ```bash
-python3 test_world.py && python3 test_content.py && python3 test_cat.py && python3 test_drivers.py   # built-in runner
-python3 -m pytest -q                                                                                 # if you have pytest
+python3 test_world.py && python3 test_cat.py && python3 test_drivers.py && python3 test_lineage_memory.py && \
+python3 test_hut_basics.py && python3 test_curios.py && python3 test_forest_edge.py && \
+python3 test_forest_venture.py && python3 test_journal_and_seed.py && python3 test_riverbank.py   # built-in runner
+python3 -m pytest -q                                                                               # if you have pytest
 ```
 
 Run the tests before any change. Green means the world still holds together;

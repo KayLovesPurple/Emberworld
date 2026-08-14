@@ -39,9 +39,43 @@ breaking, and the recipe for adding a feature safely.
   `load_or_build`, and the headless fuzzer. Imports content.py and cat.py.
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
   dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
-- `test_world.py` / `test_content.py` / `test_cat.py` / `test_drivers.py` — the
-  test suite, split to match, sharing a couple of helpers via
-  `_test_helpers.py`.
+- `test_world.py` / `test_cat.py` / `test_drivers.py` / `test_lineage_memory.py`
+  — the test suite for those modules. content.py's own tests are split
+  further, by subject, into `test_hut_basics.py`, `test_curios.py`,
+  `test_forest_edge.py`, `test_forest_venture.py`, `test_journal_and_seed.py`,
+  and `test_riverbank.py` (see the split note lower in this doc for why and
+  how). All of it shares a couple of helpers via `_test_helpers.py`.
+
+**test_content.py's split.** It grew to 4,623 lines -- bigger than
+content.py itself -- across 16 numbered sections that already grouped
+cleanly by subject, so it split along those boundaries rather than into a
+`tests/` subfolder: this project keeps everything flat at the repo root on
+purpose, and nesting would have added import friction for no reduction in
+any single file's size, which was the actual problem. Six files came out
+of it, each independently runnable exactly like before
+(`python3 test_curios.py`, etc.), each renumbering its own sections
+sequentially from 1 rather than keeping the original global numbers, which
+would otherwise read as gaps (a file with only sections 8 and 9 in it,
+say). Two helper pairs turned out to be used by tests that landed in
+different files -- `_add_curio`/`_curio_tuple` (curios, forest venture,
+journal/seed) and `_Lucky`/`_Unlucky` (curios, forest edge, forest
+venture) -- and moved into `_test_helpers.py`, the one place already
+shared across every test file; everything else stayed local, defined right
+next to the tests that use it, since that was already true of nearly every
+helper once grouped by section.
+
+BUG WE HIT while doing this by hand with `sed`/text surgery rather than a
+proper refactoring tool: a line-removal script keyed on `startswith("class
+_Lucky")` (meant to delete the `_Lucky`/`_Unlucky` pair once they'd moved)
+also matched `class _LuckyWood:`, a third, unrelated test double defined
+much further down the same section -- silently deleting its whole
+definition while leaving its call sites intact, which only surfaced as a
+`NameError` once the split files were actually run. Caught by running
+every new file and comparing pass counts against the original, not by
+inspection -- worth remembering next time a mechanical split feels safe
+enough to skip that check: diffing the full set of `test_` function names
+between old and new (`344` in, `344` out) is what actually confirmed
+nothing else had gone missing the same way.
 
 The dependency runs one way: **content depends on world, never the reverse.**
 content.py imports `World`/`Entity` to build things; world.py imports nothing
@@ -186,7 +220,7 @@ bucket water, firewood, hearth fuel) or advance the clock themselves; they
 may only add a durable, visible trace. The potato is the one grandfathered
 maintenance loop already in the game; nothing here should become a second
 one. `test_giving_or_placing_a_curio_touches_no_maintenance_resource` in
-test_content.py pins this by calling `cmd_give`/`cmd_place` directly rather
+test_curios.py pins this by calling `cmd_give`/`cmd_place` directly rather
 than through `world.act` — going through the dispatcher would tick the
 world and let unrelated autonomy (hunger rising, fire burning down) muddy
 what the handler itself did or didn't touch.
@@ -441,7 +475,7 @@ its grounded end-of-visit `did` list. A forest fragment that happens to
 contain one of those substrings would make a successful `venture` misread
 as a no-op — caught in review by two fragments that said "you can't place"
 and "there's no stone in sight" before either shipped.
-`test_no_forest_fragment_reads_as_a_refusal_marker` in `test_content.py`
+`test_no_forest_fragment_reads_as_a_refusal_marker` in `test_forest_venture.py`
 guards this directly, and is worth re-running (or extending) whenever new
 fragments are added in later stages.
 
@@ -677,7 +711,7 @@ the current code:
   that the moment it happens, rather than waiting for a depth value to leak
   into someone's save.
 - `test_forest_depth_resets_but_committed_effects_survive_a_mid_visit_reload`
-  (test_content.py) is Stage 3's exit criterion made literal: venture eight
+  (test_forest_edge.py) is Stage 3's exit criterion made literal: venture eight
   deep, find a stone, reload — depth comes back at 0, the stone is still in
   the actor's hands.
 
@@ -706,7 +740,7 @@ that uncertainty is deliberately the entire cost, not a punishment bolted
 onto it.
 
 Two test doubles pin the branch down precisely rather than statistically:
-`_AlwaysOffCourse`/`_AlwaysOffCourseHigh` (test_content.py) both force
+`_AlwaysOffCourse`/`_AlwaysOffCourseHigh` (test_forest_venture.py) both force
 `random()` to always trigger, but pick opposite ends of the candidate list
 (`choice` returns `seq[0]` vs `seq[-1]`), which is what lets the tests prove
 the branch can land at the edge (0) *and* mid-forest, not just one or the
@@ -1728,8 +1762,11 @@ the lineage's contribution grows.
 This is the loop we actually use. Following it is why changes don't cascade into
 mystery bugs. Example: adding fishing.
 
-1. **Write the failing test first.** In `test_content.py` (or `test_world.py`
-   if it's really an engine change), script the new behaviour through
+1. **Write the failing test first.** In whichever `test_*.py` already owns
+   the subject (`test_curios.py`, `test_forest_edge.py`,
+   `test_forest_venture.py`, `test_journal_and_seed.py`, `test_riverbank.py`,
+   `test_hut_basics.py` -- or `test_world.py` if it's really an engine
+   change), script the new behaviour through
    `act()`/`perceive()` and assert the outcome you want
    (`cast → wait → catch → cook → eat`). Run the tests; watch it fail — that
    proves the test actually bites.

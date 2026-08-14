@@ -155,7 +155,7 @@ invariant). It is explicitly **not**: added to `_room_listing_line`'s
 curio-prefixing special case, offered by `place`/`give`/`stack`/`tuck`, or
 tagged `curio=True`.
 
-## Tests written (test_content.py, "THE RIVERBANK AND CLAY" section)
+## Tests written (test_riverbank.py, "THE RIVERBANK AND CLAY" section)
 
 All of the below are in place and passing, plus the article-doubling
 regression caught during manual testing:
