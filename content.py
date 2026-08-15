@@ -2336,7 +2336,7 @@ FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "re
 def core_actions(world, actor):
     """The always-theres: looking, waiting, the exits, and looking at or
     picking up whatever's in the room."""
-    acts = ["look", "actions", "wait"]
+    acts = ["look", "actions", "wait", "map"]
     room = world.get(actor.location)
     for d in room.exits:
         acts.append(f"go {d}")

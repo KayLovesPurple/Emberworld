@@ -1785,6 +1785,19 @@ hut, yard, forest's edge, riverbank. Prompted by a real LLM session
 way exactly, but had no single-glance sense of the world's shape beyond
 what `look`'s own "Exits:" line names one room at a time.
 
+**BUG WE HIT: registering `map` in `VERBS`/`FREE_VERBS` made the command
+work, but never made it discoverable.** `available_actions` isn't driven by
+those registries -- it's assembled from `ACTION_SOURCES`, a list of
+`fn(world, actor) -> [actions]` functions, each offering only what's
+genuinely usable right now (`docs/ARCHITECTURE.md`'s own "THE ONE RULE"
+above `core_actions`). `map` needs no state and works everywhere, so
+without adding it to `core_actions`'s always-there list (`["look",
+"actions", "wait", "map"]`) it simply never appeared in `actions`, the same
+invisible-affordance shape this same session's charm-string/twine hint
+already fixed once above -- a real player caught it by noticing `actions`
+never once listed `map`. Pinned by
+`test_map_is_always_listed_in_available_actions`.
+
 Split into its own file, `map.py`, the same way `forest_text.py` split out
 of `content.py`: `render_map()` takes nothing and returns the whole map as
 one static string — it knows nothing about a `World` or an `Entity`.

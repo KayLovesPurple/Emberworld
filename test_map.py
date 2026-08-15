@@ -70,6 +70,19 @@ def test_map_is_a_free_verb_and_does_not_advance_the_clock():
     assert w.time == before
 
 
+def test_map_is_always_listed_in_available_actions():
+    """`map` can always do something (it's a static, no-state-dependency
+    action), so it belongs in core_actions' always-there list right next to
+    `look`/`actions`/`wait`, not behind some room-specific gate -- BUG WE
+    HIT: it was originally wired only into VERBS/FREE_VERBS, which makes
+    the command work but never surfaces it in `actions`, so a hand had no
+    way to discover it existed."""
+    w, actor = fresh()
+    assert "map" in w.available_actions(actor)
+    run(w, actor, "go out")
+    assert "map" in w.available_actions(actor)
+
+
 # ---------------------------------------------------------------------------
 # Built-in runner, so you don't need pytest installed.
 # ---------------------------------------------------------------------------
