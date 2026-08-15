@@ -1742,6 +1742,26 @@ carrying at least one eligible item, and is carrying twine — the same
 follow, with twine specifically required since threading genuinely can't
 do anything without it (unlike `add wood`'s deliberate exception).
 
+**BUG WE HIT: that same "only offer what can do something" rule made the
+twine requirement itself invisible.** A hand carrying an eligible curio
+but no twine sees no `thread` action at all — indistinguishable from "the
+charm-string has nothing to do with me right now," when actually it's one
+specific, nameable ingredient short. A real session (Tallow, day 55) hit
+this directly: looked at the charm-string twice with a bone button in
+hand, found nothing pointing at twine, never tried `thread` blind to
+discover `cmd_thread`'s own clear refusal ("You need a knot of twine in
+hand..."), and on running out of better ideas gave the button to the cat
+instead, guessing (wrongly) that it might help. Fixed by
+`_charm_string_missing_twine_hint`, checked from `cmd_look`'s
+charm-string branch: when the hand carries an eligible item, is under
+capacity, and has no twine, `look charm-string` appends
+`CHARM_MISSING_TWINE_HINT` to the count-based description, reusing
+`cmd_thread`'s own wording so the sentence is authored in one place. The
+hint only fires on that half-satisfied state — carrying nothing eligible,
+already carrying twine too, or the string being full all suppress it, so
+it never turns into noise on top of an affordance that's either not
+relevant yet or already fully offered.
+
 `look charm` (not just `look charm-string`) already resolves correctly
 with no extra code — `find_visible`'s existing substring match (`name in
 e.name.lower()`) matches `"charm"` against the entity's own name,
@@ -1756,6 +1776,60 @@ else in the game wraps rows of symbols), while the count-based prose tier
 above already satisfies the feature's own exit criterion on its own:
 threading is a real second choice, and the description already changes as
 the lineage's contribution grows.
+
+## The outer-world map — `map.py`, a hand-drawn ASCII layout
+
+`map` (`cmd_map`, a free verb) prints an ASCII diagram of the outer world —
+hut, yard, forest's edge, riverbank. Prompted by a real LLM session
+(`sessions/20260814-234841_tallow_day-55_10-turns.md`) that never lost its
+way exactly, but had no single-glance sense of the world's shape beyond
+what `look`'s own "Exits:" line names one room at a time.
+
+Split into its own file, `map.py`, the same way `forest_text.py` split out
+of `content.py`: `render_map()` takes nothing and returns the whole map as
+one static string — it knows nothing about a `World` or an `Entity`.
+`content.py` stays the one place with entities and design notes; `map.py`
+is presentation only.
+
+**Deliberately hand-drawn, not laid out from the room graph
+algorithmically.** The outer world is one simple hub shape — yard, with the
+other three as spokes off it — and a real graph-layout algorithm would be
+solving a harder problem than the one that exists. Growth risk (the stated
+worry when this was proposed) is handled the same way `REFERENCE.md`
+guards against verb/behavior docstrings going stale: not by generating the
+picture from the graph, but by a completeness test
+(`test_map_completeness_against_the_live_room_graph` in `test_map.py`) that
+asserts every entity the world actually has with a non-empty `exits` dict
+(the same trait `look`'s "Exits:" line relies on) has a label in
+`ROOM_LABELS`. Add a room without updating `map.py` and this test fails
+loudly, rather than the map silently going stale in the reader's hand.
+
+**Deliberately no "you are here" marker.** An early version of `render_map`
+took the actor's current room and marked its box `(you)`. Dropped once it
+was pointed out that this reads as a hand-drawn map the hero is carrying,
+and a drawn map doesn't know where you're standing — that's a live-GPS
+convention, not a parchment one. It also wasn't solving a real gap: `look`
+already states the current room, every single turn, in its own header.
+Removing the marker turned `render_map` into a fully static function (no
+actor parameter at all) — pinned by `test_render_map_has_no_position_marker`
+and `test_render_map_is_deterministic`.
+
+**The forest gets a shape, not a room.** The first cut of this feature drew
+only the four rooms with real exits, on the theory that anything more would
+violate `docs/FOREST_SPEC.md`'s "No forest map, ever." Revisited once it
+was pointed out that the objection was about *precision*, not *presence* —
+a crisp `+---+` box claims the same surveyed exactness as the four real
+rooms, but a shape that's visibly rough and larger than anything else on
+the page claims the opposite. `_forest_shape` draws a dotted-border,
+oversized rectangle labeled only "the forest," linked to Forest's Edge by a
+`:` instead of the real rooms' solid `|` — connected, but the connection
+itself reads uncertain. It carries no new information (the room's own
+description already says the forest is there); it just renders that same
+already-known fact into the picture instead of leaving it as a gap. It is
+never a room: no exit, no entry in `ROOM_LABELS`, invisible to the
+completeness test, and it never will gain any of those, on purpose — see
+`docs/FOREST_SPEC.md`'s own "No forest map, ever" and this module's
+docstring.
 
 ## What keeps it from breaking
 

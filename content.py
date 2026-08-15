@@ -16,6 +16,7 @@ from world import (World, Entity, VERBS, FREE_VERBS, BEHAVIORS, ACTION_SOURCES,
 from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, cat_actions
 from forest_text import (FOREST_FRAGMENTS, FOREST_AMBIENT, FOREST_AMBIENT_CHANCE,
                          _forest_band, describe_forest, _forest_ambient)
+from map import render_map
 from content_common import (
     ACTOR_HUNGER_CAP, ACTOR_HUNGER_HUNGRY, actor_hunger_line,
     _the, _is_raw, _is_cooked, LAST_POTATO_BEAT, _patch_has_crop,
@@ -680,6 +681,10 @@ def cmd_look(world, actor, arg):
             summary = _group_look_summary(target.name, _room_here(world, actor, room))
             if summary:
                 return summary
+        if target.id == CHARM_STRING_ID:
+            hint = _charm_string_missing_twine_hint(world, actor, target)
+            if hint:
+                return f"{target.description} {hint}"
         return target.description
     stamp = world.timestr()
     if world.is_dark(room.id):
@@ -696,6 +701,11 @@ def cmd_look(world, actor, arg):
             _exit_label(room.id, d) for d in room.exits)]
     lines += ["", _carried_line(world, actor)]
     return "\n".join(lines)
+
+
+def cmd_map(world, actor, arg):
+    """map -- show a hand-drawn layout of the outer world (hut/yard/forest's edge/riverbank), plus a hint of the unmapped forest beyond its edge."""
+    return render_map()
 
 
 def cmd_go(world, actor, arg):
@@ -2202,6 +2212,32 @@ def _charm_string_description(count):
     return text
 
 
+# BUG WE HIT: a hand carrying an eligible curio but no twine had no way to
+# discover that twine was the missing half of the recipe -- carrying_actions
+# only lists "thread ..." once BOTH ingredients are in hand, so with just
+# the curio the affordance was simply absent, indistinguishable from "there's
+# nothing to do here." A real session (Tallow, day 55) hit exactly this:
+# looked at the charm-string twice, never tried `thread` blind, and ended up
+# giving its only curio to the cat on the theory that might help instead.
+# Surfaced here on `look charm-string`, reusing cmd_thread's own refusal
+# wording so there's only one place that sentence is authored.
+CHARM_MISSING_TWINE_HINT = (
+    "You have something that could go on it, but you'll need a knot of "
+    "twine in hand to thread it."
+)
+
+
+def _charm_string_missing_twine_hint(world, actor, charm):
+    if charm.attrs["count"] >= CHARM_CAPACITY:
+        return ""
+    carried = world.contents(actor.id)
+    if any("twine" in e.name.lower() for e in carried):
+        return ""
+    if not any(e.name in CHARM_ELIGIBLE_ITEMS for e in carried):
+        return ""
+    return CHARM_MISSING_TWINE_HINT
+
+
 def ensure_charm_string(world):
     """Add the hut's charm-string to a world that predates it (fresh build
     or an older save) -- same backfill role, and same resync-on-load fix
@@ -2257,6 +2293,7 @@ def cmd_save(world, actor, arg):
 
 VERBS.update({
     "look": cmd_look, "l": cmd_look, "examine": cmd_look, "x": cmd_look,
+    "map": cmd_map,
     "go": cmd_go, "move": cmd_go,
     "take": cmd_take, "get": cmd_take, "grab": cmd_take,
     "drop": cmd_drop,
@@ -2277,7 +2314,7 @@ VERBS.update({
     "shape": cmd_shape,
     "thread": cmd_thread,
 })
-FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save"})
+FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save", "map"})
 
 
 # ---------------------------------------------------------------------------

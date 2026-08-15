@@ -26,7 +26,8 @@ from content import (
     CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
     _curio_groups, _group_look_summary,
     CHARM_STRING_ID, CHARM_ELIGIBLE_ITEMS, CHARM_CAPACITY, CHARM_BANDS,
-    CHARM_STRING_HINT, _charm_string_description, ensure_charm_string, cmd_thread,
+    CHARM_STRING_HINT, CHARM_MISSING_TWINE_HINT,
+    _charm_string_description, ensure_charm_string, cmd_thread,
 )
 from _test_helpers import fresh, run, _add_curio, _Unlucky
 
@@ -1312,6 +1313,43 @@ def test_thread_action_is_not_offered_outside_the_hut():
     _give_twine(w, actor)
     w.act(actor, "go out")
     assert not any(a.startswith("thread ") for a in w.available_actions(actor))
+
+
+def test_look_charm_string_hints_at_missing_twine_when_carrying_an_eligible_curio():
+    """An eligible curio in hand with no twine is a half-satisfied recipe --
+    `carrying_actions` won't list `thread` at all (see the test above), so
+    without this hint the missing ingredient is invisible: a hand can only
+    ever discover it by blind-guessing the exact `thread` syntax. Surfaced
+    on `look charm-string` instead, reusing cmd_thread's own wording. Checks
+    for the specific hint phrase, not just the word "twine" -- the band-0
+    description ("a bare length of twine hangs on the wall") already
+    contains that word on its own."""
+    w, actor = fresh()
+    _give_button(w, actor)
+    result = w.act(actor, "look charm-string")
+    assert CHARM_MISSING_TWINE_HINT in result
+
+
+def test_look_charm_string_has_no_hint_without_an_eligible_curio_carried():
+    w, actor = fresh()
+    result = w.act(actor, "look charm-string")
+    assert CHARM_MISSING_TWINE_HINT not in result
+
+
+def test_look_charm_string_has_no_hint_once_twine_is_also_carried():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    result = w.act(actor, "look charm-string")
+    assert CHARM_MISSING_TWINE_HINT not in result
+
+
+def test_look_charm_string_has_no_hint_at_capacity():
+    w, actor = fresh()
+    w.get(CHARM_STRING_ID).attrs["count"] = CHARM_CAPACITY
+    _give_button(w, actor)
+    result = w.act(actor, "look charm-string")
+    assert CHARM_MISSING_TWINE_HINT not in result
 
 
 def test_charm_string_refuses_at_capacity_and_count_never_exceeds_it():

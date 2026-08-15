@@ -24,6 +24,11 @@ reads that note and harvests the crop.
   fragment pools and the ambient lines, plus the two small functions that
   compose them. Pure writing, no world state; split out because it's the
   largest block of prose in the game and gets edited as prose.
+- `map.py` — the outer world's ASCII layout (`map` in-game), a hand-drawn
+  diagram of hut/yard/forest's edge/riverbank plus a hazy, unmapped shape
+  for the forest beyond its edge. No "you are here" marker, on purpose —
+  `look` already says where you are. Pure presentation, no world state,
+  split out the same way `forest_text.py` was.
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
   the persistence-loading glue, and the headless fuzzer.
 - `lineage_memory.py` — the Lineage Memory Observatory: a one-way,
@@ -32,7 +37,8 @@ reads that note and harvests the crop.
   key) rather than automatic, then read anytime with `--lineage-report`.
 - `test_world.py` / `test_cat.py` / `test_drivers.py` / `test_lineage_memory.py`
   / `test_hut_basics.py` / `test_curios.py` / `test_forest_edge.py` /
-  `test_forest_venture.py` / `test_journal_and_seed.py` / `test_riverbank.py`
+  `test_forest_venture.py` / `test_journal_and_seed.py` / `test_riverbank.py` /
+  `test_map.py`
   — the safety net, split to match (content.py's own tests split further,
   by subject, once the combined file outgrew content.py itself). Each runs
   with or without pytest; `_test_helpers.py` holds the handful of things
@@ -88,7 +94,13 @@ turn. These local transcripts are ignored by Git.
 
 Type `help` in-game for the verb list, or see `docs/REFERENCE.md` for everything.
 Type `actions` at any point to see the actions currently available to you; it
-is free and does not advance time.
+is free and does not advance time. Type `map` for a hand-drawn ASCII layout
+of the outer world (hut/yard/forest's edge/riverbank) — also free, and
+deliberately without a "you are here" marker, since `look` already says
+where you are every turn and a drawn map wouldn't know either way. The
+forest beyond its edge gets only a hazy, oversized shape labeled "the
+forest," never a room of its own; see `docs/FOREST_SPEC.md`'s "No forest
+map, ever."
 
 **Light and dark.** The **hearth** is what cooks; the tin **lamp** is your
 only portable light, kindled (or re-kindled, to top it back up) from a lit
@@ -268,7 +280,8 @@ the world toward farm-optimisation, so think hard before lifting it.
 ```bash
 python3 test_world.py && python3 test_cat.py && python3 test_drivers.py && python3 test_lineage_memory.py && \
 python3 test_hut_basics.py && python3 test_curios.py && python3 test_forest_edge.py && \
-python3 test_forest_venture.py && python3 test_journal_and_seed.py && python3 test_riverbank.py   # built-in runner
+python3 test_forest_venture.py && python3 test_journal_and_seed.py && python3 test_riverbank.py && \
+python3 test_map.py                                                                                # built-in runner
 python3 -m pytest -q                                                                               # if you have pytest
 ```
 
