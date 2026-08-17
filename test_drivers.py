@@ -985,6 +985,36 @@ def test_extract_command_falls_back_to_last_line_when_no_verb_matches():
         "hmm, tricky, let me think about this"
 
 
+def test_extract_command_does_not_pick_a_line_for_a_human_only_single_letter_alias():
+    """BUG WE HIT: a reply that was really just prose -- "I feel ravenous,
+    and I should cook a potato..." -- got matched as a real command line,
+    because its first word "I" lowercases to "i", a genuine VERBS key (the
+    single-letter inventory alias meant only for a human typing at a
+    keyboard; the LLM is never told it exists). The matching loop must skip
+    single-character "verbs" like this."""
+    reply = "I feel ravenous, and I should cook a potato to eat while also taking care of Ember."
+    assert drv._extract_command(reply) == reply   # no OTHER line to prefer -- see below
+
+
+def test_is_unparseable_reply_catches_the_human_only_alias_collision():
+    """Skipping the line in the matching loop (above) is only half the fix:
+    with no other line to prefer, _extract_command's fallback still returns
+    the same prose verbatim, first word "I" and all -- world.act's own
+    parsing (shared with real human play, where "i" must keep meaning
+    inventory) would resolve it exactly the same way regardless. The LLM
+    loop checks _is_unparseable_reply against _extract_command's actual
+    output before ever calling world.act, so this is the check that
+    actually stops the misfire."""
+    reply = "I feel ravenous, and I should cook a potato to eat while also taking care of Ember."
+    choice = drv._extract_command(reply)
+    assert drv._is_unparseable_reply(choice)
+    # real commands, including ones that start with a real multi-letter verb
+    # spelled like a human alias's neighbor, must never be flagged
+    for good in ("go out", "cook potato", "inventory", "look", "wait",
+                 "give a pinecone to Ember", "plant potato"):
+        assert not drv._is_unparseable_reply(good), good
+
+
 # ===========================================================================
 # 4. THE SYSTEM PROMPT -- standing, once-per-visit instructions to the agent.
 # ===========================================================================

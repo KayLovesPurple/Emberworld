@@ -363,20 +363,54 @@ def _recent_block(history):
     return "\n".join(lines)
 
 
+# Single-letter conveniences for a human at a real keyboard (i/l/x/z below) --
+# the system prompt never mentions them, so the LLM has no legitimate reason
+# to ever "choose" one. See _extract_command and _is_unparseable_reply for the
+# collision this closes: ordinary prose ("I feel ravenous...") starts with
+# "I", which lowercases to the inventory alias "i".
+_HUMAN_ONLY_ALIASES = {"i", "l", "x", "z"}
+
+
 def _extract_command(text):
     # the agent sometimes reasons in prose before stating the command, e.g.
     # "I'll plant a potato...\n\nplant potato" -- taking the first word of the
     # raw reply ("i'll") silently fails to parse and wastes the turn. Prefer
     # the first line that actually starts with a known verb; if none does,
     # fall back to the last non-empty line (still better than the first).
+    #
+    # BUG WE HIT: a turn where the model replied with a full sentence instead
+    # of a command -- "I feel ravenous, and I should cook a potato..." -- got
+    # taken whole as the command, because its first word, "I", lowercases to
+    # "i", a real VERBS key (see _HUMAN_ONLY_ALIASES above). The turn silently
+    # ran an inventory check instead of anything the model asked for, no
+    # error, nothing in the log to flag it. The `len(words[0]) > 1` guard
+    # below stops the matching loop from picking a line FOR that reason, but
+    # it's only half the fix: with no other line to prefer, the fallback
+    # below still returns that same prose line verbatim, first word "I" and
+    # all -- world.act's own parsing (shared with real human play, where "i"
+    # must keep working) resolves it the exact same way regardless of what
+    # this function decided. See _is_unparseable_reply, checked by the caller
+    # against THIS function's actual output before it ever reaches world.act.
     lines = [ln.strip().strip("`\"'") for ln in text.splitlines() if ln.strip()]
     if not lines:
         return text.strip()
     for ln in lines:
         words = ln.split()
-        if words and words[0].lower().strip(string.punctuation) in VERBS:
+        if words and len(words[0]) > 1 \
+                and words[0].lower().strip(string.punctuation) in VERBS:
             return ln
     return lines[-1]
+
+
+def _is_unparseable_reply(choice):
+    """True when `choice` (whatever _extract_command settled for) would
+    resolve to a human-only alias once world.act splits off its first word --
+    i.e. prose that was never a real command, just unlucky enough to start
+    with a word like "I". Checked by the LLM loop before calling world.act,
+    so this turn fails loudly (skipped, logged) instead of silently running
+    whatever the alias happens to mean."""
+    words = choice.split()
+    return bool(words) and words[0].lower().strip(string.punctuation) in _HUMAN_ONLY_ALIASES
 
 
 def _journal_excerpt(entries, keep=5, older=2):
@@ -764,6 +798,12 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
                 print(f"(a turn slipped away: {ex})")
                 session_log.write(f"## Turn {i + 1}\n\n"
                                   f"_The API call failed: {ex}_\n\n")
+                session_log.flush()
+                continue
+            if _is_unparseable_reply(choice):
+                print(f"(a turn slipped away: reply wasn't a command -- {choice!r})")
+                session_log.write(f"## Turn {i + 1}\n\n"
+                                  f"_Reply wasn't a parseable command: {choice!r}_\n\n")
                 session_log.flush()
                 continue
             print(_paint(f">>> {choice}", "1;36", color))     # bold cyan
