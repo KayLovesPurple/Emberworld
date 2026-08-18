@@ -6,7 +6,6 @@
 
 - `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
-- `name` -- name cat <name> -- name the cat; the name is kept for every future visit.
 - `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions".  _(free -- costs no time)_
 - `map` -- map -- show a hand-drawn layout of the outer world (hut/yard/forest's edge/riverbank), plus a hint of the unmapped forest beyond its edge.  _(free -- costs no time)_
 - `go` / `move` -- go <exit> -- move through a named exit (you can also just type the exit name; "inside" works anywhere "in" does).
@@ -19,7 +18,7 @@
 - `snuff` -- snuff <thing> -- put out a lit flame.
 - `plant` -- plant <potato|seed> -- press a raw potato into the vegetable patch, or set the seed you found in the ground by the fence.
 - `harvest` -- harvest -- lift a ripened crop from the patch for its potatoes.
-- `cook` / `broil` -- cook potato -- broil a potato at a lit cooking fire, making it edible.
+- `cook` / `broil` -- cook potato / cook egg -- cook a raw potato or egg at a lit cooking fire, making it edible.
 - `eat` -- eat <thing> -- eat cooked food to ease your hunger.
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
 - `read` -- read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot; anything tucked into a shown entry (see `tuck`) is named alongside it.  _(free -- costs no time)_
@@ -40,6 +39,7 @@
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 - `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and stays where it's shaped (not yet portable).
 - `thread` -- thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it.
+- `name` -- name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has).
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
@@ -48,6 +48,8 @@
 - **cat_hunger** -- Autonomous: the cat slowly gets hungry (capped, never harmed), shows it in its own description once hungry, and occasionally meows to be fed.
 - **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle cat-thing -- purely cosmetic ambient life, never while it's hungry.
 - **cat_replay** -- Autonomous: rarely, if something the cat has already played with (a curio previously given away, see cmd_give's "plays" reaction) is lying in its current room, the cat bats at it again.
+- **chicken_idle** -- Autonomous: ambient yard-life, purely cosmetic.
+- **chicken_lay** -- Autonomous: now and then, an egg.
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice as fast on any tick it spends a unit of stored water.
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it, including whether it was just watered.

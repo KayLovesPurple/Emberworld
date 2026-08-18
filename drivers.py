@@ -18,7 +18,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, ensure_cairn, ensure_riverbank, ensure_charm_string, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, journal_view
+from content import build_world, ensure_shelf, ensure_cairn, ensure_riverbank, ensure_charm_string, ensure_chicken, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, journal_view
 from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
 from content_common import actor_self_care_note
 
@@ -94,6 +94,7 @@ def load_or_build(quiet=False):
             ensure_cairn(w)
             ensure_riverbank(w)
             ensure_charm_string(w)
+            ensure_chicken(w)
             ensure_cat_replay(w)
             actor = w.get("you")
             if actor:

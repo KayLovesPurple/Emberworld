@@ -1,8 +1,8 @@
 """
 content.py -- Emberworld itself: the verbs, the autonomous behaviors, and the
 world as assembled fresh. world.py's engine is generic; this is where
-anything specific to hearths, potatoes, and journals lives. The cat is its
-own self-contained subsystem -- see cat.py.
+anything specific to hearths, potatoes, and journals lives. The cat and the
+chicken are each their own self-contained subsystem -- see cat.py/chicken.py.
 
 Growing the game = adding entries here. New verbs go in VERBS with a
 one-line docstring; new autonomy goes in BEHAVIORS; new content goes in
@@ -13,7 +13,9 @@ import random
 
 from world import (World, Entity, VERBS, FREE_VERBS, BEHAVIORS, ACTION_SOURCES,
                    SAVE, SAVE_VERSION, DAY_LENGTH)
-from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, cat_actions
+from cat import CAT_HUNGER_CAP, CAT_MEOW_THRESHOLD, build_cat, _cat_cap, _cat_description, cat_actions
+from chicken import (build_chicken, ensure_chicken, chicken_actions,
+                     _chicken_cap, _chicken_description)
 from forest_text import (FOREST_FRAGMENTS, FOREST_AMBIENT, FOREST_AMBIENT_CHANCE,
                          _forest_band, describe_forest, _forest_ambient)
 from map import render_map
@@ -122,8 +124,10 @@ HEARTH_LOW_FUEL = HEARTH_FUEL_START // 4    # below this, it reads as dying
 
 def _cook_hint(world, hearth):
     """Appended to the hearth's own description exactly when cooking would
-    actually work right now -- lit, and a hand standing right here holding a
-    raw potato. BUG WE HIT (see sessions/20260817-213212_thistlewick_day-56_
+    actually work right now -- lit, and a hand standing right here holding
+    something raw and cookable (COOKABLES, below -- a potato originally,
+    generalized to cover the egg once the chicken made cmd_cook itself
+    generic). BUG WE HIT (see sessions/20260817-213212_thistlewick_day-56_
     35-turns.md): a hand spent something like ten turns wandering yard/hut/
     forest re-checking `actions`, unable to tell WHY `cook`/`eat` weren't
     listed, because nothing said the missing piece was simply "stand at a
@@ -139,9 +143,11 @@ def _cook_hint(world, hearth):
     actor = world.get("you")
     if actor is None or actor.location != hearth.location:
         return ""
-    if not any(_is_raw(e) and "potato" in e.name for e in world.contents(actor.id)):
+    kind = next((k for e in world.contents(actor.id) if _is_raw(e)
+                 for k in COOKABLES if k in e.name), None)
+    if not kind:
         return ""
-    return " -- you could cook that potato here"
+    return f" -- you could cook that {kind} here"
 
 
 def hearth_state(world, hearth):
@@ -919,6 +925,42 @@ def cmd_give(world, actor, arg):
     return _CAT_GIVE_REACTIONS[reaction].format(cap=cap, thing=thing)
 
 
+# Which animal a bare "name <name>" defaults to, and the refusal each one
+# uses. Dict order matters: cat is checked (and defaults to) first, so
+# "name Shadow" with no prefix keeps naming the cat exactly as it always
+# has -- only "name chicken <name>" needs the explicit prefix, since
+# there was no bare-name precedent to preserve for the chicken.
+_NAMEABLE_ANIMALS = {
+    "cat": "There's no cat here to name.",
+    "chicken": "There's no chicken here to name.",
+}
+
+
+def _animal_description(species, animal):
+    return _cat_description(animal) if species == "cat" else _chicken_description(animal)
+
+
+def cmd_name(world, actor, arg):
+    """name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has)."""
+    arg = arg.strip()
+    species = "cat"
+    for candidate in _NAMEABLE_ANIMALS:
+        if arg.lower().startswith(candidate + " "):
+            species = candidate
+            arg = arg[len(candidate) + 1:].strip()
+            break
+    animal = world.get(species)
+    if animal is None or animal.location != actor.location:
+        return _NAMEABLE_ANIMALS[species]
+    given = arg.strip().strip('"').split("\n")[0][:24].strip()
+    if not given:
+        return f"Name it what? e.g.  name {species} Shadow"
+    animal.attrs["given_name"] = given
+    animal.name = given
+    animal.description = _animal_description(species, animal)
+    return f"The {species} considers you a moment, then accepts the name {given}."
+
+
 def cmd_inventory(world, actor, arg):
     """inventory -- list what you're carrying and how hungry you feel."""
     names = _carried_names(world, actor)
@@ -1422,28 +1464,57 @@ def cmd_add_wood(world, actor, arg):
 # raising this in step reproduces the same bug at a different scale.
 POTATO_FOOD_VALUE = 60
 
+# Half a potato -- an egg reads as the smaller meal. See docs/CHICKEN_SPEC.md.
+EGG_FOOD_VALUE = 15
+
+# What cmd_cook knows how to turn raw into edible. Keyed by the substring
+# it matches in a carried item's name (mirrors find_visible's own
+# substring convention); first table entry to gain a second member since
+# the chicken's egg -- see docs/CHICKEN_SPEC.md's "generalize cmd_cook,
+# don't parallel-copy it."
+COOKABLES = {
+    "potato": {
+        "cooked_name": "broiled potato",
+        # "ready to eat" made explicit rather than left implied by
+        # "steaming" -- the observed transcript this pass came from
+        # actually handled this fine on its own (cook then eat, no
+        # hesitation), so this is a small belt-and-braces addition, not a
+        # fix for a demonstrated failure the way the hearth's cook-hint
+        # (_cook_hint above) is.
+        "cooked_desc": "a hot broiled potato, skin blistered and steaming -- ready to eat",
+        "food_value": POTATO_FOOD_VALUE,
+        "cook_line": "You bury the potato in the embers. Soon it's blistered and steaming.",
+    },
+    "egg": {
+        "cooked_name": "boiled egg",
+        "cooked_desc": "a hard-boiled egg, shell cracked and cooling",
+        "food_value": EGG_FOOD_VALUE,
+        "cook_line": "You lower the egg into the hot water. Soon it's hard-boiled and cooling.",
+    },
+}
+
 
 def cmd_cook(world, actor, arg):
-    """cook potato -- broil a potato at a lit cooking fire, making it edible."""
+    """cook potato / cook egg -- cook a raw potato or egg at a lit cooking fire, making it edible."""
     e = find_visible(world, actor, arg or "potato", prefer=_is_raw)
-    if not e or "potato" not in e.name:
-        return "You can only cook a potato here (for now)."
+    kind = next((k for k in COOKABLES if k in e.name), None) if e else None
+    if not e or not kind:
+        return "You can only cook a potato or an egg here (for now)."
     if e.attrs.get("food", 0) > 0:
         return f"The {e.name} is already cooked."
     fire = next((f for f in world.contents(actor.location)
                  if f.attrs.get("lit") and f.attrs.get("cooks")), None)
     if not fire:
         return "You need a lit cooking fire. The hearth, if you light it."
-    e.name = "broiled potato"
-    # "ready to eat" made explicit rather than left implied by "steaming" --
-    # the observed transcript this pass came from actually handled this
-    # fine on its own (cook then eat, no hesitation), so this is a small
-    # belt-and-braces addition, not a fix for a demonstrated failure the way
-    # the hearth's cook-hint (_cook_hint above) is.
-    e.description = "a hot broiled potato, skin blistered and steaming -- ready to eat"
-    e.attrs["food"] = POTATO_FOOD_VALUE
-    return ("You bury the potato in the embers. Soon it's blistered and steaming."
-            + _last_potato_beat(world, actor, consumed_was_raw=True))
+    recipe = COOKABLES[kind]
+    e.name = recipe["cooked_name"]
+    e.description = recipe["cooked_desc"]
+    e.attrs["food"] = recipe["food_value"]
+    # the last-raw-potato pang is potato-specific -- an egg was never seed,
+    # so it never feeds that beat (same reasoning _last_potato_beat's own
+    # docstring already applies to cooked food generally).
+    beat = _last_potato_beat(world, actor, consumed_was_raw=True) if kind == "potato" else ""
+    return recipe["cook_line"] + beat
 
 
 def cmd_eat(world, actor, arg):
@@ -2344,6 +2415,7 @@ VERBS.update({
     "stack": cmd_stack_stone,
     "shape": cmd_shape,
     "thread": cmd_thread,
+    "name": cmd_name,
 })
 FREE_VERBS.update({"look", "l", "examine", "x", "inventory", "i", "actions", "read", "save", "map"})
 
@@ -2490,11 +2562,15 @@ def making_actions(world, actor):
     room = world.get(actor.location)
     here = _room_here(world, actor, room)
     carried = world.contents(actor.id)
+    lit_fire_here = any(f.attrs.get("cooks") and f.attrs.get("lit") for f in here)
     if any("potato" in e.name and e.attrs.get("food", 0) == 0 for e in carried):
         if _patch_in(world, room.id) and not _crop_in(world, room.id):
             acts.append("plant potato")
-        if any(f.attrs.get("cooks") and f.attrs.get("lit") for f in here):
+        if lit_fire_here:
             acts.append("cook potato")
+    if lit_fire_here and any(e.name == "an egg" and e.attrs.get("food", 0) == 0
+                              for e in carried):
+        acts.append("cook egg")
     if room.id == "yard" and any(e.attrs.get("seed") for e in carried) \
             and _mystery_plant(world) is None:
         acts.append("plant seed")
@@ -2520,12 +2596,13 @@ def journal_actions(world, actor):
 
 # Registered here, in one place and one deliberate order, rather than each
 # module appending its own on import: this is a list, and the order a hand
-# reads the actions in is part of the surface. cat_actions is defined in
-# cat.py with the rest of the cat, and stays last, where it has always been.
+# reads the actions in is part of the surface. cat_actions/chicken_actions
+# are defined in cat.py/chicken.py with the rest of each animal, and stay
+# last, where cat_actions has always been.
 ACTION_SOURCES.extend([
     core_actions, garden_actions, forest_actions, riverbank_actions, sky_actions,
     hearth_actions, carrying_actions, making_actions, journal_actions,
-    cat_actions,
+    cat_actions, chicken_actions,
 ])
 
 
@@ -2783,6 +2860,7 @@ def build_world():
     ensure_charm_string(w)
 
     build_cat(w)
+    build_chicken(w)
 
     patch = w.add(Entity("patch", "vegetable patch",
         "a strip of turned soil, dark and ready", location="yard"))
