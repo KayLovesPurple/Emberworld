@@ -49,6 +49,7 @@ reads that note and harvests the crop.
   without breaking anything.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec.
 - `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (cosmetic tier built).
+- `docs/CHICKEN_SPEC.md` — design spec for the chicken and eggs (not yet built).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -371,7 +372,8 @@ scope for the same reason: a cosmetic-only pass has no functional
 distinction between fired and unfired clay to model.
 
 **A chicken — but a producer, never a second mouth** *(someday, and only framed
-this way).* The tempting version — a hen that gets hungry and needs feeding — is
+this way — see `docs/CHICKEN_SPEC.md` for the full spec, not yet built).*
+The tempting version — a hen that gets hungry and needs feeding — is
 a TRAP, and the trap is worth understanding before anyone builds it. The world
 already has one care-loop (the cat's hunger) that reliably crowds out everything
 else: every run, potatoes flow to the loud, legible hungry thing and the hand
