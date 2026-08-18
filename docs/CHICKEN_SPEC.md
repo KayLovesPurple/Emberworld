@@ -95,15 +95,13 @@ change proposes any of these, it has misread this doc.
 - **Eating**: `cmd_eat` already works on anything with `attrs["food"] >
   0` regardless of name, so a cooked egg needs no changes there at all —
   it becomes edible for free once `cmd_cook` sets its `food` attr.
-- **Open question — egg's food value.** Recommend a value distinct from
-  `POTATO_FOOD_VALUE` (30) — an egg reads as a smaller meal than a
-  potato. Proposing **15** (half a potato) as a starting point, but this
-  is exactly the kind of pacing number this codebase tunes carefully
-  after real play (see `ACTOR_HUNGER_CAP`'s own tuning history) — flagged
-  for confirmation, not decided here.
-- **Open question — cooked name/flavor.** Proposing `"boiled egg"` /
-  "a hard-boiled egg, shell cracked and cooling" to sit alongside
-  `"broiled potato"`, but this is just a first pass at the prose.
+- **Resolved: egg's food value is 15** (half `POTATO_FOOD_VALUE`'s 30) —
+  confirmed with the user; an egg reads as a smaller meal than a potato.
+  Same tuning caveat as any pacing number here: revisit after real play
+  the way `ACTOR_HUNGER_CAP` itself has been.
+- **Resolved: cooked name is `"boiled egg"`**, description "a hard-boiled
+  egg, shell cracked and cooling", sitting alongside `"broiled potato"`.
+  Confirmed with the user.
 
 ## Why this isn't a second cat, and isn't a curio
 
