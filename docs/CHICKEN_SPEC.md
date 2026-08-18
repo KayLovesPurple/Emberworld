@@ -65,9 +65,20 @@ change proposes any of these, it has misread this doc.
     ambient tick, independent of anything the hand is doing, discoverable
     by being in the room the way a low hearth is, not by a roll on a
     deliberate forage action.
-- No `pet chicken` / `name chicken` in this pass — see "Explicitly NOT in
-  scope" below. Cheap to add later; deliberately not bundled in now to
-  keep this pass to exactly "producer of eggs and atmosphere."
+- **`name chicken <name>`** — nameable, same as the cat: reuses
+  `cmd_name`'s exact shape (sanitizing, `given_name` attr, sticks for
+  every future visit) rather than writing a parallel verb. The cleanest
+  path is generalizing `cmd_name` to look up whichever named animal is
+  present in the room (cat or chicken) instead of hardcoding
+  `world.get("cat")`, the same kind of table-driven generalization
+  `cmd_cook` is already getting for eggs below — not a second `cmd_name_
+  chicken` copy-pasted from the cat's. `_cat_cap`-equivalent capitalization
+  (name if given, else "The chicken") needed for its own announce lines.
+  `available_actions` offers `name chicken <name>` only once the chicken
+  is unnamed, same gate the cat's own listing uses.
+- No `pet chicken` in this pass — see "Explicitly NOT in scope" below.
+  Cheap to add later; deliberately not bundled in now to keep the rest of
+  this pass to exactly "producer of eggs and atmosphere."
 
 ## Eggs
 
@@ -135,6 +146,16 @@ the world on a schedule, not discovered and disposed of).
   equivalent potato-pileup test if one exists, or is written alongside
   this).
 - The chicken and any eggs survive a save/load round-trip.
+- `name chicken <name>` sticks (persists across save/load, same as
+  `name cat`), and the chicken's own announce lines use the given name
+  once set; `name cat` is unaffected by whatever generalization
+  `cmd_name` gets (regression test, same shape as `cook potato`'s).
+- `name chicken <name>` requires the chicken to be present (mirrors
+  `name cat`'s own requirement) — trivially true here since the chicken
+  never leaves the yard, but worth pinning as an explicit test rather
+  than an assumption.
+- `available_actions` offers `name chicken <name>` only while the
+  chicken is unnamed, same gate the cat's listing already uses.
 - Fuzzer (`--fuzz`) terminates cleanly with the chicken registered.
 
 ## Exit criteria
@@ -151,9 +172,9 @@ penalty for ignoring them.
 
 - **Any hunger, feeding, or neediness on the chicken's part** — this is
   the whole point of the design; see "A trap explicitly not being built."
-- **`pet chicken` / `name chicken`** — cheap to add later, deliberately
-  not bundled into this pass so it stays exactly "producer of eggs and
-  atmosphere," nothing more.
+- **`pet chicken`** — cheap to add later, deliberately not bundled into
+  this pass. (`name chicken` IS in scope — see "The chicken itself"
+  above; only petting stays out.)
 - **Wandering** — yard-only, permanently, not just for this pass. A
   future change should not casually attach a `chicken_wander` behavior
   without revisiting this doc's design-goal #5.
