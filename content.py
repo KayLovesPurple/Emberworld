@@ -18,7 +18,7 @@ from forest_text import (FOREST_FRAGMENTS, FOREST_AMBIENT, FOREST_AMBIENT_CHANCE
                          _forest_band, describe_forest, _forest_ambient)
 from map import render_map
 from content_common import (
-    ACTOR_HUNGER_CAP, ACTOR_HUNGER_HUNGRY, actor_hunger_line,
+    ACTOR_HUNGER_CAP, ACTOR_HUNGER_FINE, actor_hunger_line,
     _the, _is_raw, _is_cooked, LAST_POTATO_BEAT, _patch_has_crop,
     _last_potato_beat, day_stamp as _day_stamp,
 )
@@ -120,13 +120,38 @@ HEARTH_FUEL_START = 60      # the hearth's starting fuel, in build_world -- rais
 HEARTH_LOW_FUEL = HEARTH_FUEL_START // 4    # below this, it reads as dying
 
 
+def _cook_hint(world, hearth):
+    """Appended to the hearth's own description exactly when cooking would
+    actually work right now -- lit, and a hand standing right here holding a
+    raw potato. BUG WE HIT (see sessions/20260817-213212_thistlewick_day-56_
+    35-turns.md): a hand spent something like ten turns wandering yard/hut/
+    forest re-checking `actions`, unable to tell WHY `cook`/`eat` weren't
+    listed, because nothing said the missing piece was simply "stand at a
+    lit hearth holding a raw potato." Same principle as the stone's cairn
+    mention and the shelf's capacity line: the affordance travels with the
+    moment it's true, not buried in a command list a hand has to already
+    know to check against. Text only -- cmd_cook's own precondition (lit
+    AND "cooks") is duplicated here for the hint, not reused as the source
+    of truth, so a change to cooking's real rules can't silently change what
+    the hint claims without also changing what it's describing."""
+    if not hearth.attrs.get("lit"):
+        return ""
+    actor = world.get("you")
+    if actor is None or actor.location != hearth.location:
+        return ""
+    if not any(_is_raw(e) and "potato" in e.name for e in world.contents(actor.id)):
+        return ""
+    return " -- you could cook that potato here"
+
+
 def hearth_state(world, hearth):
     """Autonomous: the hearth's description bands by fuel level whether lit
     or not -- a cold hearth used to say nothing about how much fuel it was
     holding, so a hand couldn't tell "unlit but stocked" from "unlit and
     empty" without trying to light it and failing. Banded the same way a lit
     hearth already shows dying-low vs steady, so the standing perception
-    carries the fact before it's needed."""
+    carries the fact before it's needed. Also carries the cook-hint (see
+    _cook_hint) when lit and a raw potato is in hand."""
     fuel = hearth.attrs.get("fuel", 0)
     if hearth.attrs.get("lit"):
         if fuel <= HEARTH_LOW_FUEL:
@@ -134,6 +159,7 @@ def hearth_state(world, hearth):
         else:
             hearth.description = hearth.attrs.get(
                 "lit_desc", "the hearth, full of red embers and low flame")
+        hearth.description += _cook_hint(world, hearth)
         return
     if fuel <= 0:
         hearth.description = hearth.attrs.get(
@@ -1389,12 +1415,12 @@ def cmd_add_wood(world, actor, arg):
     return "You stack wood in the cold hearth, ready for a light."
 
 
-# 75% of ACTOR_HUNGER_CAP (content_common.py), not the 40% it used to be --
-# see that constant's own comment for the "one meal from the cap still
-# left the nag firing" bug this fixes. Keep the two numbers read together;
-# raising the cap without raising this in step reproduces the same bug at
-# a different scale.
-POTATO_FOOD_VALUE = 30
+# 75% of ACTOR_HUNGER_CAP (content_common.py), same ratio held through both
+# retunes -- see that constant's own comment (the "one meal from the cap
+# still left the nag firing" bug, then the pacing retune that doubled the
+# cap again). Keep the two numbers read together; raising the cap without
+# raising this in step reproduces the same bug at a different scale.
+POTATO_FOOD_VALUE = 60
 
 
 def cmd_cook(world, actor, arg):
@@ -1409,7 +1435,12 @@ def cmd_cook(world, actor, arg):
     if not fire:
         return "You need a lit cooking fire. The hearth, if you light it."
     e.name = "broiled potato"
-    e.description = "a hot broiled potato, skin blistered and steaming"
+    # "ready to eat" made explicit rather than left implied by "steaming" --
+    # the observed transcript this pass came from actually handled this
+    # fine on its own (cook then eat, no hesitation), so this is a small
+    # belt-and-braces addition, not a fix for a demonstrated failure the way
+    # the hearth's cook-hint (_cook_hint above) is.
+    e.description = "a hot broiled potato, skin blistered and steaming -- ready to eat"
     e.attrs["food"] = POTATO_FOOD_VALUE
     return ("You bury the potato in the embers. Soon it's blistered and steaming."
             + _last_potato_beat(world, actor, consumed_was_raw=True))
@@ -2573,8 +2604,8 @@ def generate_reference():
             f"- Your own hunger is capped at **{ACTOR_HUNGER_CAP}** and comes "
             "to no harm either -- but unlike the cat's, it says nothing on "
             "its own until you `look` or check `inventory`. Both surface "
-            f"the same mood, from \"stuffed\" up to \"ravenous\" at **"
-            f"{ACTOR_HUNGER_HUNGRY}**.",
+            f"the same mood, from \"stuffed\" up to a persistent \"hungry\" "
+            f"at **{ACTOR_HUNGER_FINE}** (it never escalates further).",
             f"- The cat stays content (and may do small idle things) below "
             f"hunger **{CAT_MEOW_THRESHOLD}**; at or above it, it starts "
             "meowing to be fed.",

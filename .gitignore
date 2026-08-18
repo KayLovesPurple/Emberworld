@@ -2,6 +2,6 @@
 __pycache__/
 *.pyc
 emberworld_save.json
-lineage_memory.json
+lineage_memory*.json
 sessions/*.md
 CLAUDE.md

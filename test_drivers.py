@@ -660,18 +660,24 @@ def test_tending_note_does_not_flag_a_still_growing_crop():
 
 
 def test_tending_note_includes_actor_hunger():
-    from content_common import ACTOR_HUNGER_HUNGRY
+    from content_common import ACTOR_HUNGER_FINE
     w, actor = fresh()
-    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
-    assert "you're ravenous" not in drv._tending_note(w)
-    assert "you're getting hungry" in drv._tending_note(w)
+    actor.attrs["hunger"] = ACTOR_HUNGER_FINE
+    assert "you're hungry" in drv._tending_note(w)
 
 
-def test_tending_note_calls_actor_hunger_ravenous_at_the_top_band():
+def test_tending_note_never_escalates_past_hungry_even_at_the_cap():
+    """The "ravenous" tier was removed in the pacing retune (see
+    content_common.py's ACTOR_HUNGER_CAP comment) -- a hand narrating its own
+    body that way tended to treat it as urgent above nearly everything else,
+    independent of the zero mechanical stakes involved. "hungry" persists at
+    the top instead."""
     from content_common import ACTOR_HUNGER_CAP
     w, actor = fresh()
     actor.attrs["hunger"] = ACTOR_HUNGER_CAP
-    assert "you're ravenous" in drv._tending_note(w)
+    note = drv._tending_note(w)
+    assert "you're hungry" in note
+    assert "ravenous" not in note
 
 
 # ===========================================================================

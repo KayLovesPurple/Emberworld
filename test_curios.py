@@ -19,7 +19,7 @@ import re
 from world import World, Entity
 from content import (
     WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD, HEARTH_LOW_FUEL,
-    hearth_state, FOUND_ITEMS, _found_description,
+    hearth_state, _cook_hint, FOUND_ITEMS, _found_description,
     CAIRN_ID, cmd_stack_stone, STONE_CAIRN_HINT,
     SHELF_CAPACITY, _shelf_description, ensure_shelf,
     BLOOM_KINDS,
@@ -161,6 +161,65 @@ def test_hearth_description_moves_healthy_low_spent_across_a_real_burn():
         w.act(actor, "wait")
     spent = hearth.description.lower()
     assert "ash" in spent, f"spent hearth should still read as ash: {hearth.description!r}"
+
+
+def test_lit_hearth_hints_at_cooking_when_a_raw_potato_is_in_hand():
+    """BUG WE HIT (see sessions/20260817-213212_thistlewick_day-56_35-turns.md):
+    a hand spent something like ten turns re-checking `actions` across yard/
+    hut/forest, unable to tell why `cook`/`eat` weren't listed, because
+    nothing said the missing piece was simply "stand at a lit hearth holding
+    a raw potato." The hint travels with the moment it's true, the same
+    legibility principle as the stone's cairn mention and the shelf's
+    capacity line."""
+    w, actor = fresh()
+    w.act(actor, "light hearth")
+    hearth = w.get("hearth")
+    assert "cook" not in hearth.description.lower(), \
+        f"hint shouldn't appear with no raw potato in hand: {hearth.description!r}"
+
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                  location=actor.id, portable=True))
+    w.act(actor, "wait")
+    assert "cook" in hearth.description.lower(), \
+        f"hint should appear once a raw potato is in hand: {hearth.description!r}"
+
+
+def test_cook_hint_disappears_once_the_hearth_or_the_potato_is_gone():
+    w, actor = fresh()
+    w.act(actor, "light hearth")
+    hearth = w.get("hearth")
+    raw = w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                        location=actor.id, portable=True))
+    w.act(actor, "wait")
+    assert "cook" in hearth.description.lower()
+
+    w.act(actor, "drop potato")
+    w.act(actor, "wait")
+    assert "cook" not in hearth.description.lower(), \
+        f"hint should clear once the raw potato leaves the actor's hands: {hearth.description!r}"
+
+
+def test_cook_hint_ignores_an_already_cooked_potato():
+    w, actor = fresh()
+    w.act(actor, "light hearth")
+    hearth = w.get("hearth")
+    w.add(Entity(w.fresh_id("potato"), "broiled potato",
+                  "a hot broiled potato, skin blistered and steaming -- ready to eat",
+                  location=actor.id, portable=True, attrs={"food": 1}))
+    w.act(actor, "wait")
+    assert "cook" not in hearth.description.lower(), \
+        f"an already-cooked potato shouldn't trigger the cook hint: {hearth.description!r}"
+
+
+def test_cook_hint_requires_an_unlit_actor_here_check_via_direct_call():
+    """Direct call, mirroring how hearth_state's own tests exercise banding
+    without a full tick -- an unlit hearth never hints regardless of what's
+    carried."""
+    w, actor = fresh()
+    hearth = w.get("hearth")
+    w.add(Entity(w.fresh_id("potato"), "potato", "a firm potato",
+                  location=actor.id, portable=True))
+    assert _cook_hint(w, hearth) == "", "an unlit hearth must never hint at cooking"
 
 
 def test_gather_and_add_wood_are_surfaced_in_available_actions():

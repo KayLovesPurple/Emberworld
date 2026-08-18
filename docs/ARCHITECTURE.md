@@ -1334,6 +1334,54 @@ threshold), not any single number, so a future edit to the cap or the
 food value in isolation fails loudly instead of quietly reintroducing the
 chase.
 
+### Player-hunger pacing — the second retune, and a discoverability fix alongside it
+
+[A real 35-turn session](sessions/20260817-213212_thistlewick_day-56_35-turns.md)
+surfaced two more problems in the same area, found together but fixed for
+different reasons.
+
+**The pacing problem: even the retuned numbers above escalated too fast
+for a real visit, and "ravenous" itself was the sharper issue.** The
+session went fine → hungry by turn 3 and hungry → ravenous by turn 18 —
+nearly half a 35-turn budget spent escalating before the hand even reached
+a ripe potato, let alone cooked and ate one. The fix repeats the same
+ratio-preserving move as the first retune: `ACTOR_HUNGER_CAP` doubles
+again (40 → 80), `ACTOR_HUNGER_STUFFED`/`_FINE` and `POTATO_FOOD_VALUE`
+move in step so "one meal clears the nag with real margin" still holds
+exactly. But timing wasn't the only problem: "ravenous" is a strong word,
+and a hand narrating its *own body* that way tended to treat it as
+something to resolve above nearly everything else — unlike the cat's
+hunger, which describes an external creature's need, not the hand's own
+stated condition, so the same escalating language doesn't carry the same
+pull. Rather than just delay the top tier, it's removed outright:
+`actor_hunger_mood` now has exactly three bands (stuffed/fine/hungry), and
+"hungry" persists all the way to the cap instead of building toward a
+stronger word, so the language stops overstating stakes the mechanic never
+had. `ACTOR_HUNGER_HUNGRY` is gone along with it —
+`test_hunger_never_escalates_past_hungry_even_at_the_cap` pins the
+new ceiling directly, and `test_hunger_at_any_level_never_blocks_other_
+actions_or_causes_harm` re-confirms the pre-existing "descriptive only,
+never mechanical" guarantee still holds through the retune.
+
+**The discoverability problem: nothing said what "ready to cook" actually
+required.** The same session spent something like ten turns wandering
+yard/hut/forest, re-checking `actions` over and over, unable to tell *why*
+`cook`/`eat` weren't listed — because nothing on screen ever named the
+missing piece: stand at a lit hearth, holding a raw potato. This is the
+same invisible-affordance shape as the charm-string's missing-twine hint
+above (`CHARM_MISSING_TWINE_HINT`) — a half-satisfied recipe with no verb
+listed and no text explaining what the other half is. `_cook_hint`
+(content.py) appends `" -- you could cook that potato here"` to the
+hearth's own description, via `hearth_state`, exactly when it's lit and
+the actor standing there is carrying a raw potato — checked directly
+against `cmd_cook`'s own precondition, not derived from it, so the hint
+can never silently drift from what actually works. `cmd_cook`'s own output
+also picked up a small, unforced improvement from the same pass: the
+broiled potato's description now says "ready to eat" explicitly rather
+than leaving it implied by "steaming" — belt-and-braces, not a fix for a
+demonstrated failure, since the observed transcript actually handled
+cook-then-eat fine on its own.
+
 ## Curio visual compression — a presentation pass, not a mechanic
 
 Curios are deliberately persistent: nothing decays, nothing auto-clears.

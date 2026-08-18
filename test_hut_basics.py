@@ -792,25 +792,25 @@ def test_look_still_examines_a_real_thing_named_actions_free_of_the_alias():
 #     _carried_line -- so the two views can't drift apart again.
 # ===========================================================================
 def test_look_surfaces_actor_hunger_when_hungry():
-    from content_common import ACTOR_HUNGER_HUNGRY
+    from content_common import ACTOR_HUNGER_FINE
     w, actor = fresh()
-    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    actor.attrs["hunger"] = ACTOR_HUNGER_FINE
     assert "You feel hungry." in w.act(actor, "look")
 
 
 def test_look_in_the_dark_still_surfaces_actor_hunger():
-    from content_common import ACTOR_HUNGER_HUNGRY
+    from content_common import ACTOR_HUNGER_FINE
     w, actor = fresh()
     while w.phase() != "night":
         w.act(actor, "wait")
-    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    actor.attrs["hunger"] = ACTOR_HUNGER_FINE
     assert "You feel hungry." in w.act(actor, "look")
 
 
 def test_inventory_and_look_report_the_same_hunger_mood():
-    from content_common import ACTOR_HUNGER_HUNGRY
+    from content_common import ACTOR_HUNGER_FINE
     w, actor = fresh()
-    actor.attrs["hunger"] = ACTOR_HUNGER_HUNGRY - 1
+    actor.attrs["hunger"] = ACTOR_HUNGER_FINE
     inv = w.act(actor, "inventory")
     look = w.act(actor, "look")
     assert "You feel hungry." in inv and "You feel hungry." in look
@@ -819,12 +819,13 @@ def test_inventory_and_look_report_the_same_hunger_mood():
 # BUG WE HIT (real lineage transcript, see sessions/20260808-113503_*): once
 # the hunger line above went live, a hand arriving at (or near) the cap ate
 # a single cooked potato and was STILL told "you're getting hungry" a turn
-# or two later -- the meal (food=8) didn't drop hunger below the nag
-# threshold (ACTOR_HUNGER_FINE=10), so the now-visible note kept firing and
-# the hand cooked and ate three more times chasing it. The relationship
-# between the cap, the nag threshold, and one meal's restore is what
-# matters, not any single constant in isolation -- pin it directly so a
-# future tweak to any one of them can't silently reintroduce the chase.
+# or two later -- the meal didn't drop hunger below the nag threshold. The
+# relationship between the cap, the nag threshold, and one meal's restore is
+# what matters, not any single constant in isolation -- pin it directly so a
+# future tweak to any one of them can't silently reintroduce the chase. (The
+# cap/threshold/food-value numbers all doubled again in the later pacing
+# retune -- see content_common.py's ACTOR_HUNGER_CAP comment -- but the
+# ratio, and so this test, held unchanged through that.)
 def test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note():
     from content_common import ACTOR_HUNGER_CAP, ACTOR_HUNGER_FINE, actor_self_care_note
     w, actor = fresh()
@@ -834,6 +835,44 @@ def test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note():
     assert actor.attrs["hunger"] < ACTOR_HUNGER_FINE, \
         f"one meal from the cap left hunger at {actor.attrs['hunger']}, still >= the nag threshold"
     assert actor_self_care_note(actor) == "", "the note should be fully clear after one meal from the cap"
+
+
+# THE RETUNE (see sessions/20260817-213212_thistlewick_day-56_35-turns.md,
+# and content_common.py's ACTOR_HUNGER_CAP comment): even at the hunger cap,
+# with no mechanical stakes ever attached, "ravenous" read as urgent enough
+# that a hand narrating its own body that way tended to drop nearly
+# everything else to resolve it. The top tier is removed rather than just
+# delayed -- "hungry" persists all the way to the cap instead of escalating
+# into a stronger word.
+def test_hunger_never_escalates_past_hungry_even_at_the_cap():
+    from content_common import ACTOR_HUNGER_CAP, actor_hunger_line, actor_self_care_note
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_CAP
+    assert actor_hunger_line(actor) == "You feel hungry."
+    assert actor_self_care_note(actor) == "you're hungry"
+    assert "ravenous" not in w.act(actor, "look").lower()
+    assert "ravenous" not in w.act(actor, "inventory").lower()
+
+
+def test_hunger_at_any_level_never_blocks_other_actions_or_causes_harm():
+    """Same "zero mechanical penalty" guarantee as before this pass --
+    confirmed correct, not being revisited, so pinned directly: hunger
+    affects only descriptive text, never blocks an action, never forces one,
+    however high it climbs."""
+    from content_common import ACTOR_HUNGER_CAP
+    w, actor = fresh()
+    actor.attrs["hunger"] = ACTOR_HUNGER_CAP
+    for _ in range(10):
+        w.act(actor, "wait")
+    assert actor.attrs["hunger"] == ACTOR_HUNGER_CAP, "hunger must cap, never overflow"
+    # BUG WE HIT: cat_wander is free to move the cat between hut/yard on any
+    # of the ten waits above, so "pet cat" flaked whenever the cat happened
+    # to be elsewhere -- a false failure with nothing to do with hunger.
+    # Pin the cat's location directly, the same way test_cat.py's own tests
+    # do, so this test is only ever exercising what it claims to.
+    w.get("cat").location = actor.location
+    result = w.act(actor, "pet cat")
+    assert "purrs" in result, "an ordinary action must still succeed normally at max hunger"
 
 
 # ---------------------------------------------------------------------------

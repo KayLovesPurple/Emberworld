@@ -23,22 +23,42 @@ can be expressed as pure functions on World/Entity.
 # meal clears the nag with real margin, from anywhere, in one bite. See
 # test_one_meal_from_the_hunger_cap_clears_the_getting_hungry_note, which
 # pins the relationship directly rather than any one constant alone.
-ACTOR_HUNGER_CAP = 40
+#
+# THE RETUNE (see sessions/20260817-213212_thistlewick_day-56_35-turns.md):
+# even with that fix, a real 35-turn visit went fine -> hungry by turn 3 and
+# hungry -> ravenous by turn 18 -- nearly half a visit's budget spent
+# escalating before the hand even reached a ripe potato, let alone cooked
+# and ate one. Same lever as before (the ratio, doubled again: cap 40 -> 80,
+# stuffed and the one remaining threshold doubled in step, food value
+# doubled too so "one meal clears with real margin" still holds exactly).
+# But timing wasn't the only problem: "ravenous" is a strong word, and a
+# hand narrating its OWN body as ravenous tends to treat that as something
+# to resolve above nearly everything else, independent of whether the game
+# mechanically punishes waiting -- unlike the cat's hunger, which is an
+# external creature's need, not the hand's own stated condition. The top
+# tier is dropped entirely rather than just delayed: hunger now has exactly
+# one elevated mood ("hungry") that persists once reached rather than
+# escalating further, so the language itself stops adding urgency the
+# design (zero mechanical stakes) never intended. See docs/ARCHITECTURE.md's
+# "Player-hunger pacing" section for the full reasoning.
+ACTOR_HUNGER_CAP = 80
 # Bands shared by inventory, look, and the LLM tending note (drivers.py).
-ACTOR_HUNGER_STUFFED = 6
-ACTOR_HUNGER_FINE = 20
-ACTOR_HUNGER_HUNGRY = 32
+ACTOR_HUNGER_STUFFED = 12
+ACTOR_HUNGER_FINE = 40
 
 
 def actor_hunger_mood(hunger):
-    """One word mood label for the actor's current hunger level."""
+    """One word mood label for the actor's current hunger level. Only three
+    bands on purpose -- see the RETUNE comment above ACTOR_HUNGER_CAP for why
+    a fourth, escalating tier ("ravenous") was removed rather than just
+    delayed: "hungry" persists at the top instead of building toward a
+    stronger word, so the language stops overstating stakes the game itself
+    never had."""
     if hunger < ACTOR_HUNGER_STUFFED:
         return "stuffed"
     if hunger < ACTOR_HUNGER_FINE:
         return "fine"
-    if hunger < ACTOR_HUNGER_HUNGRY:
-        return "hungry"
-    return "ravenous"
+    return "hungry"
 
 
 def actor_hunger_line(actor):
@@ -48,12 +68,11 @@ def actor_hunger_line(actor):
 
 
 def actor_self_care_note(actor):
-    """Short phrase for the LLM tending note when self-care needs attention."""
+    """Short phrase for the LLM tending note when self-care needs attention.
+    One tier, matching actor_hunger_mood -- see its docstring."""
     hunger = actor.attrs.get("hunger", 0)
-    if hunger >= ACTOR_HUNGER_HUNGRY:
-        return "you're ravenous"
     if hunger >= ACTOR_HUNGER_FINE:
-        return "you're getting hungry"
+        return "you're hungry"
     return ""
 
 
