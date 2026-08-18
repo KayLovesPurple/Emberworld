@@ -1,8 +1,11 @@
 """
 cat.py -- the cat, as its own self-contained subsystem: its constants, its
-autonomous behaviors (wandering, hunger, idle), its verbs (feed, pet, name),
-and how it's added to a fresh world. Split out of content.py once it grew
-into its own coherent slice -- see ARCHITECTURE.md's "Where to go next".
+autonomous behaviors (wandering, hunger, idle), its verbs (feed, pet), and
+how it's added to a fresh world. Split out of content.py once it grew into
+its own coherent slice -- see ARCHITECTURE.md's "Where to go next".
+Naming (name cat <name> / name chicken <name>) lives in content.py, the
+one place allowed to know about both the cat and chicken subsystems at
+once -- see content.py's cmd_name.
 
 GENTLE GUARANTEE: the cat's hunger is capped and drives nothing but meowing
 and wanting food. There is no starvation, no damage, no harm state it can
@@ -187,25 +190,8 @@ def cmd_pet(world, actor, arg):
             "and is the entire point.")
 
 
-def cmd_name(world, actor, arg):
-    """name cat <name> -- name the cat; the name is kept for every future visit."""
-    cat = world.get("cat")
-    if cat is None or cat.location != actor.location:
-        return "There's no cat here to name."
-    arg = arg.strip()
-    if arg.lower().startswith("cat "):        # allow "name cat Shadow" or "name Shadow"
-        arg = arg[4:].strip()
-    given = arg.strip().strip('"').split("\n")[0][:24].strip()
-    if not given:
-        return "Name it what? e.g.  name cat Shadow"
-    cat.attrs["given_name"] = given
-    cat.name = given
-    cat.description = _cat_description(cat)
-    return f"The cat considers you a moment, then accepts the name {given}."
-
-
 VERBS.update({
-    "feed": cmd_feed, "pet": cmd_pet, "stroke": cmd_pet, "name": cmd_name,
+    "feed": cmd_feed, "pet": cmd_pet, "stroke": cmd_pet,
 })
 
 

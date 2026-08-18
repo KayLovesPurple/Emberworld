@@ -26,9 +26,13 @@ breaking, and the recipe for adding a feature safely.
   below and the cat.py paragraph further down for why it exists.
 - `cat.py` — the cat as its own self-contained subsystem: its constants
   (`CAT_HUNGER_CAP`, `CAT_MEOW_THRESHOLD`), its behaviors (wander/hunger/idle),
-  its verbs (feed/pet/name), and `build_cat`. Split out of content.py once it
+  its verbs (feed/pet), and `build_cat`. Split out of content.py once it
   grew into a coherent slice on its own — see "Where to go next" below for why,
-  and why it split before a registration pattern did.
+  and why it split before a registration pattern did. (Naming — `name cat
+  <name>` — lives in content.py, not here; see "The chicken" below for why.)
+- `chicken.py` — the chicken, `cat.py`'s sibling subsystem: a gentle
+  producer (never a second hungry mouth), its two behaviors (idle/lay),
+  and `build_chicken`/`ensure_chicken`. See "The chicken" below.
 - `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
   sound, undergrowth, smell), the ambient lines, and `describe_forest` /
   `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
@@ -39,8 +43,8 @@ breaking, and the recipe for adding a feature safely.
   `load_or_build`, and the headless fuzzer. Imports content.py and cat.py.
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
   dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
-- `test_world.py` / `test_cat.py` / `test_drivers.py` / `test_lineage_memory.py`
-  — the test suite for those modules. content.py's own tests are split
+- `test_world.py` / `test_cat.py` / `test_chicken.py` / `test_drivers.py` /
+  `test_lineage_memory.py` — the test suite for those modules. content.py's own tests are split
   further, by subject, into `test_hut_basics.py`, `test_curios.py`,
   `test_forest_edge.py`, `test_forest_venture.py`, `test_journal_and_seed.py`,
   and `test_riverbank.py` (see the split note lower in this doc for why and
@@ -698,6 +702,76 @@ is already carrying real weight (see "Curio visual compression" below).
 `riverbank_actions` follows the usual "only offer what can do something"
 rule: `shape clay into <name>` only appears once a raw lump is actually
 carried.
+
+## The chicken — a producer, per `docs/CHICKEN_SPEC.md`
+
+A new subsystem file, `chicken.py`, structurally the sibling of `cat.py`:
+its own constants, its own two autonomous behaviors, `build_chicken`, and
+`ensure_chicken` (backfill, same role as `ensure_riverbank`/`ensure_shelf`
+— called from both `build_world()` and `drivers.load_or_build`). Built
+into every fresh world in the yard, the same way `build_cat` adds the cat
+to the hut.
+
+**THE CONSTRAINT THAT MUST NEVER BREAK**, stated at the top of
+`chicken.py` itself the same register as the cat's own GENTLE GUARANTEE:
+no `hunger` attr, ever, at any point in the chicken's lifecycle. The
+chicken is the deliberate *opposite* of the cat — pure source, never
+cost — and a hunger attr is exactly the trap `docs/CHICKEN_SPEC.md`'s "A
+trap explicitly not being built" names. `chicken_idle` (ambient flavor,
+mirrors `cat_idle`) has no hunger gate to check, unlike the cat's own —
+there's nothing to gate on. `chicken_lay` is a second, independent
+per-tick roll (`CHICKEN_LAY_CHANCE`) that creates one `"an egg"` entity in
+the chicken's room and announces it — deliberately **not** a found-roll
+riding on another action the way `forest_finds` rides on `gather wood`;
+an egg is discoverable by being in the room, not by a chance on a
+deliberate forage action. No `chicken_wander` exists — the chicken stays
+in the yard, permanently, by the simple absence of any behavior that
+would move it (mirrors how the cat's own wander is confined to the
+in/out exit pair `_cat_go` knows how to narrate — an unwritten behavior
+is the actual mechanism keeping the chicken in place, not a location
+check anywhere).
+
+**Eggs are not curios.** Same reasoning as raw/shaped clay: an egg is
+produced by the world on its own schedule, not found-and-disposed-of, so
+it stays off the shelf/cairn/give-to-cat/tuck-in-journal system entirely
+— no `curio=True`, not offered by `give`/`stack`/`tuck`. (The shelf
+itself is permissive of any portable item regardless of the `curio` flag
+— pre-existing behavior, not something eggs or clay changed — so `place
+egg on shelf` still works exactly as `place knife on shelf` always has;
+what's excluded is specifically give-to-cat/cairn/tuck, which DO gate on
+`curio=True`.) Eggs pile up with no cap, the same shape unharvested
+potatoes already have — no new capacity mechanic needed.
+
+**`cmd_cook` generalized from a potato-only hardcode into a small table**
+(`COOKABLES`, keyed by the substring `find_visible` matches in a carried
+item's name — the same substring convention `find_visible` itself
+already uses) rather than writing a parallel `cmd_cook_egg`. Each entry
+carries its own `cooked_name`/`cooked_desc`/`food_value`/`cook_line`, so
+`cook potato` is byte-identical to before (same table entry, same
+strings) and `cook egg` follows the identical path with its own. The
+lit-hearth requirement stays a single shared check, not duplicated per
+recipe. `_last_potato_beat` (the one-shot "last raw potato" pang) is
+gated to fire only for the `"potato"` key — an egg was never seed, so it
+never owes that beat, the same reasoning the pang's own docstring already
+states for cooked food generally. `cmd_eat` needed **no changes at all**:
+it already works on anything with `attrs["food"] > 0` regardless of name.
+
+**Naming moved out of `cat.py` into `content.py`.** `cmd_name` used to be
+cat-only, hardcoded to `world.get("cat")`, living in `cat.py` alongside
+`cmd_feed`/`cmd_pet`. Now that a second nameable animal exists,
+duplicating it into a parallel `chicken.py` copy would let the two drift
+apart for no reason — instead `cmd_name` generalized and moved to
+`content.py`, the one place already allowed to know about both
+subsystems at once (the same placement `cmd_give` — cat-specific but
+content.py-resident — already established). `_NAMEABLE_ANIMALS` is a
+small dict (`{"cat": ..., "chicken": ...}`) whose **iteration order is
+load-bearing**: cat is checked first, so a bare `name <name>` with no
+prefix keeps defaulting to the cat exactly as it always has — only
+`name chicken <name>` needs its explicit prefix, since there was no
+bare-name precedent to preserve for the chicken. `_animal_description`
+dispatches to `_cat_description`/`_chicken_description` (both still
+species-owned, imported into `content.py`) to refresh the right entity's
+standing description after naming.
 
 ## The forest, staged — Stage 3: episodic reset, made explicit
 

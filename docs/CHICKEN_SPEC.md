@@ -1,15 +1,15 @@
 # The Chicken — Design Spec
 
-*Design spec, not yet built. Follows the test-first workflow in
-ARCHITECTURE.md: observe → diagnose → write tight spec with tests →
-implement.*
+*Design spec. Follows the test-first workflow in ARCHITECTURE.md: observe
+→ diagnose → write tight spec with tests → implement.*
 
 ## Status
 
-Not built. Design fully resolved through conversation before this doc was
-written — see README's "A chicken — but a producer, never a second mouth"
-for the original framing, and the decisions below for what's actually
-being built.
+**✅ Built.** `chicken.py` (cat.py's sibling subsystem), `cmd_cook`
+generalized into a `COOKABLES` table, and `cmd_name` generalized and
+moved into content.py — see ARCHITECTURE.md's "The chicken" for the
+mechanism, and README's "A chicken — but a producer, never a second
+mouth" for the original framing this spec resolved.
 
 ## Design goals (recap, so this doc stands alone)
 

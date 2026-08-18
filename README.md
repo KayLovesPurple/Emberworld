@@ -20,6 +20,8 @@ reads that note and harvests the crop.
   the world as assembled fresh.
 - `cat.py` — the cat as its own self-contained subsystem: its constants,
   behaviors, verbs, and how it's built into a fresh world.
+- `chicken.py` — the chicken, cat.py's sibling subsystem: a gentle
+  producer of eggs and atmosphere, never a second hungry mouth.
 - `forest_text.py` — the forest's generated texture: the near/mid/deep
   fragment pools and the ambient lines, plus the two small functions that
   compose them. Pure writing, no world state; split out because it's the
@@ -35,10 +37,10 @@ reads that note and harvests the crop.
   developer-only read of the journal, never fed back into the game.
   LLM-based extraction, manually rebuilt (`--lineage-rebuild`, needs a
   key) rather than automatic, then read anytime with `--lineage-report`.
-- `test_world.py` / `test_cat.py` / `test_drivers.py` / `test_lineage_memory.py`
-  / `test_hut_basics.py` / `test_curios.py` / `test_forest_edge.py` /
-  `test_forest_venture.py` / `test_journal_and_seed.py` / `test_riverbank.py` /
-  `test_map.py`
+- `test_world.py` / `test_cat.py` / `test_chicken.py` / `test_drivers.py` /
+  `test_lineage_memory.py` / `test_hut_basics.py` / `test_curios.py` /
+  `test_forest_edge.py` / `test_forest_venture.py` / `test_journal_and_seed.py` /
+  `test_riverbank.py` / `test_map.py`
   — the safety net, split to match (content.py's own tests split further,
   by subject, once the combined file outgrew content.py itself). Each runs
   with or without pytest; `_test_helpers.py` holds the handful of things
@@ -49,7 +51,7 @@ reads that note and harvests the crop.
   without breaking anything.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec.
 - `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (cosmetic tier built).
-- `docs/CHICKEN_SPEC.md` — design spec for the chicken and eggs (not yet built).
+- `docs/CHICKEN_SPEC.md` — design spec for the chicken and eggs (built).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -122,6 +124,16 @@ own hunger rises the same slow, capped way the cat's does, and now shows
 up everywhere the cat's does too — `look` and `inventory` both say how
 you feel, so it isn't only the cat's hunger that's visible when there's a
 potato spare.
+
+**The chicken.** A hen, always in the yard, doing small yard-things on
+her own (scratching, dust-bathing) — and, now and then, an egg turns up
+on her own schedule, no gathering required. Cook it at a lit hearth, same
+as a potato, then eat it; leave it and it just sits there, harmless,
+piling up right alongside any potatoes you haven't gotten to yet. She's
+nameable (`name chicken <name>`, same as the cat), but that's the whole
+of it — no hunger, no feeding, nothing she ever needs from you. See
+`docs/CHICKEN_SPEC.md`'s "A trap explicitly not being built" for why
+that restraint is the entire point of her.
 
 **The forest's edge.** A path off the yard leads there, and that's where
 the wood comes from now too: gather fallen branches and deadfall and add
@@ -371,30 +383,33 @@ tea (the "thrown teapot" example — tea itself isn't built), stay out of
 scope for the same reason: a cosmetic-only pass has no functional
 distinction between fired and unfired clay to model.
 
-**A chicken — but a producer, never a second mouth** *(someday, and only framed
-this way — see `docs/CHICKEN_SPEC.md` for the full spec, not yet built).*
-The tempting version — a hen that gets hungry and needs feeding — is
-a TRAP, and the trap is worth understanding before anyone builds it. The world
-already has one care-loop (the cat's hunger) that reliably crowds out everything
-else: every run, potatoes flow to the loud, legible hungry thing and the hand
-rarely cooks for itself or does anything else. A second hungry animal doesn't add
-variety; it doubles down on the exact imbalance we keep fighting, and the whole
-visit becomes feeding animals with time for nothing else.
+**A chicken — but a producer, never a second mouth** *(built — see "The
+chicken" above and `docs/CHICKEN_SPEC.md` for the full spec).* The
+tempting version — a hen that gets hungry and needs feeding — was a TRAP,
+worth naming even now that it's built the other way, so a future change
+doesn't reach for it by accident. The world already has one care-loop
+(the cat's hunger) that reliably crowds out everything else: every run,
+potatoes flow to the loud, legible hungry thing and the hand rarely cooks
+for itself or does anything else. A second hungry animal wouldn't add
+variety; it would double down on the exact imbalance the pacing rebalance
+already fought once.
 
-The fix is to make the chicken the OPPOSITE of the cat. The cat is pure cost —
-it consumes potatoes and returns a purr. A chicken should be a gentle *source*:
-it pecks about the yard (ambient life, like the cat's idle behaviours) and every
-so often lays an egg — giving the world food instead of draining it. That
-*eases* the "nothing to eat but the cat's potatoes" pressure rather than
-worsening it, and eggs become an ingredient the cozy downstream stuff wants
-(tea, cooking, a future breakfast). A hen scratching in the grass is also exactly
-the kind of yard-life that makes the world feel inhabited.
+The fix: the chicken is the OPPOSITE of the cat. The cat is pure cost —
+it consumes potatoes and returns a purr. The chicken is a gentle
+*source*: she pecks about the yard (ambient life, like the cat's idle
+behaviours) and every so often lays an egg — giving the world food
+instead of draining it. That *eases* the "nothing to eat but the cat's
+potatoes" pressure rather than worsening it. A hen scratching in the
+grass is also exactly the kind of yard-life that makes the world feel
+inhabited.
 
-So: yes to a chicken, but as a low-key producer of eggs and atmosphere — no
-hunger loop, no feeding chore, nothing that competes with the cat for the hand's
-scarce turns. If it ever needs anything at all, make it something trivially
-met (or self-sustaining), never a second potato-mouth. The design constraint IS
-the feature; a needy chicken is the one version not to build.
+So: a low-key producer of eggs and atmosphere, exactly as designed — no
+hunger loop, no feeding chore, nothing that competes with the cat for the
+hand's scarce turns, and nothing she ever needs at all. The design
+constraint IS the feature; a needy chicken is the one version that was
+never going to get built. `pet chicken` and any egg-based recipe beyond
+plain cooking (tea, a future breakfast) stay deliberately out of scope
+for this pass — see `docs/CHICKEN_SPEC.md`'s "Explicitly NOT in scope."
 
 **A standing legibility fix worth doing anytime** *(built — see "Food and
 the cat" above)*: surface the *player's own hunger* in the standing
