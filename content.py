@@ -1462,8 +1462,34 @@ def cmd_shape(world, actor, arg):
     return f"You work the clay between your hands until it holds its shape: {full_name}."
 
 
+# `add`/`stoke` both dispatch to cmd_add_wood however the command was
+# phrased ("add wood", bare "stoke", "stoke fire", ...) -- these are the
+# hand-authored phrasings that actually mean that, same discipline as
+# _PUT_WOOD_IN_HEARTH just above cmd_place. Anything else after "add"
+# isn't a wood-adding command at all and must say so, not get treated as
+# one anyway -- see ADD_NOT_WOOD_REFUSAL's own note.
+_ADD_WOOD_ARGS = {"", "wood", "the wood", "some wood",
+                   "fire", "the fire", "hearth", "the hearth"}
+
+# BUG WE HIT, from a real session: cmd_add_wood used to ignore its own arg
+# completely, so "add <anything>" -- a hand guessing at how to decorate the
+# charm-string, typing "add moss" or "add a pinecone" -- silently misfired
+# as "You've no wood. It comes from the forest's edge.", fabricating a
+# wood requirement that has nothing to do with what was typed. Worse than
+# a missing affordance: it read as a real, specific system response,
+# confirming a wrong guess instead of correcting it. One session's false
+# "the charm-string wants wood" theory, seeded this way, made it into the
+# journal and sent the *next* hand gathering wood over a dozen times.
+def _add_not_wood_refusal(arg):
+    return (f"'{arg}' isn't wood -- `add wood` (or `stoke`) feeds the "
+            f"hearth. If you're trying to decorate the charm-string, "
+            f"that's `thread <item> on charm-string` instead.")
+
+
 def cmd_add_wood(world, actor, arg):
     """add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from)."""
+    if arg.lower().strip() not in _ADD_WOOD_ARGS:
+        return _add_not_wood_refusal(arg)
     hearth = find_visible(world, actor, "hearth")
     if not hearth:
         return "There's no hearth here to feed."
@@ -1772,7 +1798,10 @@ def _journal_entry_index(world, journal):
     entries = journal.attrs.setdefault("entries", [])
     if idx is not None and idx < len(entries):
         return idx
-    entries.append(f"{_day_stamp(world)} — nothing written, just left something pressed here.")
+    # No mention of "pressed" here -- _tucked_line's own parenthetical,
+    # which always follows a placeholder entry (this is only ever called
+    # from cmd_tuck, right before it records the tuck), already says that.
+    entries.append(f"{_day_stamp(world)} — nothing written this visit.")
     idx = len(entries) - 1
     world.journal_entry_index = idx
     world.journal_entry_is_placeholder = True

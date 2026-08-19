@@ -621,8 +621,8 @@ is *the one active this visit* — `world.journal_entry_index`, a new
 it's session-scoped and never persists. `cmd_write` sets it to the entry
 it just appended; `_journal_entry_index` (used only by `cmd_tuck`) reuses
 that same index if one's already active this visit, or creates a
-placeholder entry ("— nothing written, just left something pressed
-here.") and activates that instead. This is why a visit that only tucks
+placeholder entry ("— nothing written this visit.") and activates that
+instead. This is why a visit that only tucks
 and never writes still works, and why two tucks in one visit with no write
 land on the *same* placeholder rather than each minting their own.
 
@@ -634,14 +634,24 @@ real session tucked a feather, then wrote a real entry a couple of turns
 later, and `cmd_write` — which always appended a fresh entry and pointed
 `journal_entry_index` at it, with no awareness of what was already active —
 left the feather's note stranded on the throwaway placeholder ("— nothing
-written, just left something pressed here.") while the actual entry sat
-right next to it, feather-less. A new `VisitState` field,
+written this visit.") while the actual entry sat right next to it,
+feather-less. A new `VisitState` field,
 `journal_entry_is_placeholder`, marks whether the currently active entry is
 still a bare tuck placeholder; `cmd_write` now checks it and, if so,
 overwrites that placeholder's text in place instead of appending a second
 entry, then clears the flag. Net effect: tuck-then-write and write-then-
 tuck now land on the *same* entry either way, which is the behavior a
 reader would assume without knowing the ordering mattered internally.
+
+**A wording redundancy caught right after, from the same real transcript.**
+The placeholder's original text ("— nothing written, just left something
+pressed here.") described the tuck itself, but `_tucked_line`'s own
+parenthetical *always* follows a placeholder entry — this function is only
+ever called from `cmd_tuck`, immediately before it records the tuck — so
+the two sentences said "pressed" twice in one short line: "...pressed
+here. (a small brown feather is pressed into this page.)" Reworded to
+"— nothing written this visit.", which says only what the parenthetical
+doesn't already cover.
 
 **No duplication, by construction, not by a check.** `cmd_tuck` calls
 `world.entities.pop(e.id, None)` — same move as `cmd_stack_stone` — so a
@@ -1975,6 +1985,35 @@ with no extra code — `find_visible`'s existing substring match (`name in
 e.name.lower()`) matches `"charm"` against the entity's own name,
 `"charm-string"`, the same way `look pinecone` already matches `"a
 pinecone"`.
+
+**BUG WE HIT, the one that actually explained the wood-hoarding session:
+`add <anything>` silently misfired as a wood check.** `world.act` only
+ever splits a command on its first word (`verb, _, arg =
+command.partition(" ")`), so `"add"` is a single dispatch key regardless
+of what follows it — `cmd_add_wood` used to ignore `arg` entirely, no
+matter what it was. A hand (Wick, day 60) tried `add moss`, `add
+feather`, `add pinecone` — reasonable guesses at decorating the
+charm-string, since it never had twine and never saw `thread` offered —
+and got "You've no wood. It comes from the forest's edge." every time.
+That's not a missing affordance, which reads as silence; it's a specific,
+confident-sounding response that happens to be about the wrong thing
+entirely, and it reads exactly like a real rule. Wick wrote it up as one
+("the charm-string only wants wood from beyond the yard"), and the *next*
+hand (Wrenlow, day 60) spent a chunk of a 50-turn visit gathering wood
+into the double digits chasing a mechanic that never existed. `cmd_place`
+already had the right shape for this — it only redirects to
+`cmd_add_wood` when the arg matches `_PUT_WOOD_IN_HEARTH`'s hand-authored
+set, falling through to its own (correct) "you aren't carrying that"
+otherwise — `cmd_add_wood` just never got the same treatment for its own
+verb. Fixed the same way: `_ADD_WOOD_ARGS` is the hand-authored set of
+phrasings that actually mean "add wood" (`""`, `"wood"`, `"the wood"`,
+`"fire"`, `"the fire"`, `"hearth"`, `"the hearth"`, plus their close
+variants) or "stoke" bare; anything else gets `_add_not_wood_refusal(arg)`,
+which names what was actually typed and points at `thread` if a curio's
+what's meant, instead of asserting a false wood requirement. Both
+`cmd_place`'s wood-alias (`cmd_add_wood(world, actor, "")`) and cat.py's
+`feed hearth` alias pass `""`, which is in the accepted set, so neither
+alias path was affected.
 
 **Phase 2, built as its own fast-follow: a dedicated `look charm`/`look
 charm-string` ASCII rendering**, distinct from the room's own standing

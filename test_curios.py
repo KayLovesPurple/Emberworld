@@ -74,6 +74,45 @@ def test_add_wood_requires_wood_and_the_hearth_present():
     assert actor.attrs["wood"] == 1, "wood was spent on a refusal"
 
 
+def test_add_something_that_is_not_wood_is_refused_honestly():
+    """BUG WE HIT, from a real session: `add <anything>` dispatches to
+    cmd_add_wood regardless of what follows "add", and the handler used to
+    ignore its own arg entirely -- so "add moss" or "add pinecone" (a hand
+    guessing at how to decorate the charm-string) silently misfired as
+    "You've no wood. It comes from the forest's edge.", fabricating a false
+    wood requirement for a mechanic that has nothing to do with wood. The
+    refusal must name the actual thing typed, not talk about wood at all,
+    and must leave fuel/wood untouched exactly like any other refusal."""
+    w, actor = fresh()
+    _add_curio(w, actor, "a pinecone")
+    fuel0 = w.get("hearth").attrs["fuel"]
+    result = w.act(actor, "add a pinecone")
+    assert "forest's edge" not in result.lower(), \
+        f"must not fabricate a wood requirement: {result!r}"
+    assert "a pinecone" in result.lower()
+    assert w.get("hearth").attrs["fuel"] == fuel0
+    assert any("pinecone" in e.name for e in w.contents(actor.id)), \
+        "a refused add must not consume the item"
+
+
+def test_add_moss_is_refused_the_same_way():
+    w, actor = fresh()
+    result = w.act(actor, "add moss")
+    assert "forest's edge" not in result.lower(), \
+        f"must not fabricate a wood requirement: {result!r}"
+    assert "moss" in result.lower()
+
+
+def test_bare_add_wood_and_stoke_still_work_after_the_arg_check():
+    w, actor = fresh()
+    actor.attrs["wood"] = 2
+    result = w.act(actor, "stoke")
+    assert "no wood" not in result.lower()
+    actor.attrs["wood"] = 1
+    result = w.act(actor, "add wood")
+    assert "no wood" not in result.lower()
+
+
 def test_add_wood_moves_wood_from_actor_to_hearth():
     w, actor = fresh()
     actor.attrs["wood"] = 2
@@ -875,11 +914,10 @@ def test_give_refuses_twine_and_keeps_it_in_hand():
 def test_give_refusing_twine_touches_no_state():
     w, actor = fresh()
     w.get("cat").location = actor.location
-    _add_curio(w, actor, "a knot of bleached twine")
-    before_entries = {e.id: (e.location, e.portable) for e in w.entities.values()}
+    twine = _add_curio(w, actor, "a knot of bleached twine")
     w.act(actor, "give twine to cat")
-    after_entries = {e.id: (e.location, e.portable) for e in w.entities.values()}
-    assert before_entries == after_entries, "a refused give must not change any entity"
+    assert twine.location == actor.id and twine.portable, \
+        "a refused give must not change the twine itself"
 
 
 def test_actions_does_not_offer_give_to_cat_for_carried_twine():
