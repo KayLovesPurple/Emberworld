@@ -213,7 +213,9 @@ def cat_actions(world, actor):
     if any("potato" in e.name for e in carried):
         acts.append(f"feed {cat.name}")
     for e in carried:
-        if e.attrs.get("curio"):
+        # Twine is always refused by cmd_give -- reserved for the
+        # charm-string's own threading recipe. See GIVE_TWINE_REFUSAL.
+        if e.attrs.get("curio") and "twine" not in e.name.lower():
             acts.append(f"give {e.name} to {cat.name}")
     if not cat.attrs.get("given_name"):
         acts.append("name cat <name>")

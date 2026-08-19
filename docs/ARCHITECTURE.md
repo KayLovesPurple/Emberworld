@@ -626,6 +626,23 @@ here.") and activates that instead. This is why a visit that only tucks
 and never writes still works, and why two tucks in one visit with no write
 land on the *same* placeholder rather than each minting their own.
 
+**BUG WE HIT, spotted from a session transcript: tuck-then-write split the
+feather's note away from the entry it belonged with.** The paragraph above
+covers write-then-tuck (the tuck reuses the write's entry) and tuck-then-
+nothing (the placeholder stands alone). It didn't cover tuck-then-write: a
+real session tucked a feather, then wrote a real entry a couple of turns
+later, and `cmd_write` — which always appended a fresh entry and pointed
+`journal_entry_index` at it, with no awareness of what was already active —
+left the feather's note stranded on the throwaway placeholder ("— nothing
+written, just left something pressed here.") while the actual entry sat
+right next to it, feather-less. A new `VisitState` field,
+`journal_entry_is_placeholder`, marks whether the currently active entry is
+still a bare tuck placeholder; `cmd_write` now checks it and, if so,
+overwrites that placeholder's text in place instead of appending a second
+entry, then clears the flag. Net effect: tuck-then-write and write-then-
+tuck now land on the *same* entry either way, which is the behavior a
+reader would assume without knowing the ordering mattered internally.
+
 **No duplication, by construction, not by a check.** `cmd_tuck` calls
 `world.entities.pop(e.id, None)` — same move as `cmd_stack_stone` — so a
 tucked item stops existing as an entity at all the instant it's tucked.
@@ -1930,6 +1947,28 @@ hint only fires on that half-satisfied state — carrying nothing eligible,
 already carrying twine too, or the string being full all suppress it, so
 it never turns into noise on top of an affordance that's either not
 relevant yet or already fully offered.
+
+**Twine is exempt from `give ... to cat`, protecting the other half of the
+recipe.** The Tallow-day-55 fix above covers a hand holding an eligible
+curio with no twine. A later session (Marrow, day 59) hit the state that
+fix can't reach: by day 59, *every* eligible curio and *both* knots of
+twine already in the world had been given to the cat by earlier hands,
+leaving nothing to thread and nothing pointing anywhere — `look
+charm-string` just returned the bare ASCII rendering, turn after turn.
+Twine was never special-cased before; it rolled off the same `FOUND_ITEMS`
+table as every other curio and was just as giveable. Rather than try to
+hint a hand out of a state with literally nothing to work with (no other
+system in the game proactively points back at the forest to restock), the
+fix removes the cause: `cmd_give` now refuses twine outright
+(`GIVE_TWINE_REFUSAL`, checked by name right alongside the existing
+non-curio redirect to `feed cat`), so a knot can only ever be spent on
+`thread`, never given away. Twine isn't decorative the way a button or
+pebble is — it's the means, not the find — so keeping it out of the give
+economy is a difference in kind, not an arbitrary restriction. Both ends
+guarded the same way the map-discoverability bug (below) was: `cat_actions`
+(`cat.py`) excludes twine from the `give <item> to cat` actions it offers,
+so the refusal in `cmd_give` is a backstop, never something a hand can
+actually trigger through a listed action.
 
 `look charm` (not just `look charm-string`) already resolves correctly
 with no extra code — `find_visible`'s existing substring match (`name in

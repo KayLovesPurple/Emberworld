@@ -315,6 +315,36 @@ def test_a_tucked_item_attaches_to_the_entry_just_written_this_visit():
     assert tucked[str(len(entries) - 1)] == ["a jay's feather"]
 
 
+def test_a_tuck_placeholder_is_upgraded_by_a_later_write_in_the_same_visit():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    before = len(w.get("journal").attrs["entries"])
+    w.act(actor, "tuck jay's feather in journal")
+    w.act(actor, "write a quiet day")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == before + 1, \
+        "the write should upgrade the tuck's placeholder, not add a second entry"
+    assert entries[-1].endswith("a quiet day")
+    tucked = w.get("journal").attrs["tucked"]
+    assert tucked[str(len(entries) - 1)] == ["a jay's feather"]
+    result = w.act(actor, "read journal all")
+    assert "a jay's feather is pressed into this page" in result
+    assert "a quiet day" in result
+    assert "nothing written" not in result
+
+
+def test_a_second_write_after_the_tuck_upgrade_still_adds_a_fresh_entry():
+    w, actor = fresh()
+    _add_curio(w, actor, "a jay's feather")
+    w.act(actor, "tuck jay's feather in journal")
+    w.act(actor, "write a quiet day")
+    before = len(w.get("journal").attrs["entries"])
+    w.act(actor, "write and then a nap")
+    entries = w.get("journal").attrs["entries"]
+    assert len(entries) == before + 1
+    assert entries[-1].endswith("and then a nap")
+
+
 def test_there_is_no_take_verb_for_a_tucked_item():
     w, actor = fresh()
     _add_curio(w, actor, "a jay's feather")

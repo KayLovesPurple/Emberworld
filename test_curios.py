@@ -862,6 +862,35 @@ def test_give_redirects_a_non_curio_to_feed():
         "a redirected give must not consume the item"
 
 
+def test_give_refuses_twine_and_keeps_it_in_hand():
+    w, actor = fresh()
+    w.get("cat").location = actor.location
+    _add_curio(w, actor, "a knot of bleached twine")
+    result = w.act(actor, "give twine to cat")
+    assert "twine" in result.lower()
+    assert any("twine" in e.name for e in w.contents(actor.id)), \
+        "a refused give must not consume the twine"
+
+
+def test_give_refusing_twine_touches_no_state():
+    w, actor = fresh()
+    w.get("cat").location = actor.location
+    _add_curio(w, actor, "a knot of bleached twine")
+    before_entries = {e.id: (e.location, e.portable) for e in w.entities.values()}
+    w.act(actor, "give twine to cat")
+    after_entries = {e.id: (e.location, e.portable) for e in w.entities.values()}
+    assert before_entries == after_entries, "a refused give must not change any entity"
+
+
+def test_actions_does_not_offer_give_to_cat_for_carried_twine():
+    w, actor = fresh()
+    w.get("cat").location = actor.location
+    _add_curio(w, actor, "a knot of bleached twine")
+    actions = w.available_actions(actor)
+    assert not any(a.startswith("give ") and "twine" in a for a in actions), \
+        "give-to-cat shouldn't be offered for twine, since it's always refused"
+
+
 def test_give_requires_a_cat_in_the_room():
     w, actor = fresh()          # actor starts in the hut; move the cat out
     _add_curio(w, actor, "a pinecone")

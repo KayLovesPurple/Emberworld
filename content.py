@@ -919,6 +919,8 @@ def cmd_give(world, actor, arg):
         return f"You aren't carrying any '{arg}'."
     if not e.attrs.get("curio"):
         return "That's not something to give the cat like this -- food goes through `feed cat`."
+    if "twine" in e.name.lower():
+        return GIVE_TWINE_REFUSAL
     reaction = e.attrs.get("cat_reaction", "ignores")
     cap, thing, name = _cat_cap(cat), _the(e.name), e.name
     e.location = actor.location
@@ -1230,6 +1232,21 @@ STONE_CAIRN_HINT = "it could go on the cairn at the forest's edge"
 # journal-tuck). Extend only once the forest generates more qualifying finds.
 CHARM_ELIGIBLE_ITEMS = ("a bone button", "a pebble of blue glass", "a pinecone")
 CHARM_STRING_HINT = "it could be threaded onto the charm-string in the hut"
+
+# Twine is the OTHER half of the threading recipe (cmd_thread consumes one),
+# found through the same FOUND_ITEMS roll as everything else and just as
+# giveable to the cat on paper -- but a real session (Marrow, day 59) found
+# every eligible curio AND both knots of twine already given away by earlier
+# hands, leaving the charm-string permanently stuck for that visit with no
+# hint pointing anywhere, since the missing-twine hint only fires once an
+# eligible curio is already in hand. Rather than try to hint a hand out of a
+# fully-empty state, refuse the give itself: twine is a means (the knot that
+# attaches something), not a decorative end the way a button or pebble is,
+# so it never enters the give-to-cat economy in the first place. Guards both
+# ends the same way the map-discoverability bug did -- cat_actions (cat.py)
+# must not offer `give ... to cat` for twine either, or the refusal below
+# would just be a second copy of that same "offered but doesn't work" bug.
+GIVE_TWINE_REFUSAL = "You hold the twine back -- it's too useful for the charm-string to give away."
 
 
 def _found_description(look_line, reaction, name=""):
@@ -1580,9 +1597,20 @@ def cmd_write(world, actor, arg):
     if not arg:
         return "Write what? e.g.  write planted two potatoes near the fence."
     entries = journal.attrs.setdefault("entries", [])
-    entries.append(f"{_day_stamp(world)} {arg}")
+    idx = world.journal_entry_index
+    # A tuck earlier this visit with nothing written yet left a placeholder
+    # entry ("nothing written, just left something pressed here.") -- upgrade
+    # it in place instead of appending a second entry, so the write and the
+    # tucked item's note end up on the same line rather than split across two.
+    if (world.journal_entry_is_placeholder and idx is not None
+            and idx < len(entries)):
+        entries[idx] = f"{_day_stamp(world)} {arg}"
+    else:
+        entries.append(f"{_day_stamp(world)} {arg}")
+        idx = len(entries) - 1
     # the entry a same-visit `tuck` attaches to -- see _journal_entry_index.
-    world.journal_entry_index = len(entries) - 1
+    world.journal_entry_index = idx
+    world.journal_entry_is_placeholder = False
     return "You write in the journal. The ink dries slowly. It will keep."
 
 
@@ -1747,6 +1775,7 @@ def _journal_entry_index(world, journal):
     entries.append(f"{_day_stamp(world)} — nothing written, just left something pressed here.")
     idx = len(entries) - 1
     world.journal_entry_index = idx
+    world.journal_entry_is_placeholder = True
     return idx
 
 

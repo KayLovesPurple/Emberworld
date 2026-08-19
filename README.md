@@ -185,7 +185,9 @@ whoever threaded a given button — but where the cairn only ever grows
 of twine, waiting, becomes a single found thing, then a small scatter,
 then — given enough hands, enough visits — a charm-string crowded with
 found things. A feather still doesn't qualify: it already has its own
-fate above.
+fate above. Twine itself can't be given to the cat — it's the knot the
+recipe needs, not a decorative find in its own right, so `give twine to
+cat` is always refused, keeping it available for threading instead.
 
 Several identical curios left loose in a room read as one line ("three
 pinecones", "several feathers") rather than one bullet each — presentation

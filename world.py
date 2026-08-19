@@ -57,6 +57,7 @@ class VisitState:
     calm_visits: dict = field(default_factory=dict)
     hand_name: str | None = None
     journal_entry_index: int | None = None
+    journal_entry_is_placeholder: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +159,14 @@ class World:
     @journal_entry_index.setter
     def journal_entry_index(self, value):
         self.visit.journal_entry_index = value
+
+    @property
+    def journal_entry_is_placeholder(self):
+        return self.visit.journal_entry_is_placeholder
+
+    @journal_entry_is_placeholder.setter
+    def journal_entry_is_placeholder(self, value):
+        self.visit.journal_entry_is_placeholder = value
 
     # --- bookkeeping -------------------------------------------------------
     def add(self, e):
