@@ -11,7 +11,8 @@ each is used by tests that now live in different files.
 """
 
 from world import Entity
-from content import build_world, FOUND_ITEMS, _found_description
+from content import build_world
+from curios import FOUND_ITEMS, _found_description
 
 
 def fresh():

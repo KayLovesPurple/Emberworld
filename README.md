@@ -22,6 +22,12 @@ reads that note and harvests the crop.
   behaviors, verbs, and how it's built into a fresh world.
 - `chicken.py` — the chicken, cat.py's sibling subsystem: a gentle
   producer of eggs and atmosphere, never a second hungry mouth.
+- `curios.py` — the found-curio economy as its own self-contained
+  subsystem: the shelf, the cairn, the charm-string, give-to-cat,
+  tuck-in-journal, and the room-listing compression that keeps a
+  well-visited room readable. Split out of content.py the same way
+  cat.py/chicken.py were, once it had grown into the largest coherent
+  slice left in the file.
 - `forest_text.py` — the forest's generated texture: the near/mid/deep
   fragment pools and the ambient lines, plus the two small functions that
   compose them. Pure writing, no world state; split out because it's the

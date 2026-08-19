@@ -19,16 +19,19 @@ import re
 
 from world import World, Entity, check_world, DAY_LENGTH
 from content import (
-    WOOD_PER_GATHER, FOUND_ITEMS, _found_description,
+    WOOD_PER_GATHER,
     FOREST_FIND_CHANCE, _STRAY_WOOD_SHARE, WOOD_PER_STRAY_FIND,
     LISTEN_LINES, cmd_listen,
     WATCH_CLOUD_LINES, WATCH_CLOUDS_NIGHT_MSG, cmd_watch_clouds,
     CALM_ACK_AT, CALM_ACK_LINE,
-    CAIRN_ID, CAIRN_GROWTH_CM, CAIRN_BANDS, _cairn_description,
-    ensure_cairn, cmd_stack_stone,
     MOON_CYCLE_DAYS, MOON_LINES, _is_full_moon,
     MOON_PHASE_OFFSET, MOON_VIEW_LINES, _moon_view,
     WILDLIFE_LINES, wildlife_glimpse,
+)
+from curios import (
+    FOUND_ITEMS, _found_description,
+    CAIRN_ID, CAIRN_GROWTH_CM, CAIRN_BANDS, _cairn_description,
+    ensure_cairn, cmd_stack_stone,
 )
 from _test_helpers import fresh, run, _Lucky, _Unlucky
 

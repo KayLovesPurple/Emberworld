@@ -1,9 +1,14 @@
 """
-content_common.py -- helpers shared by content.py, cat.py, and drivers.py
-without importing either module (breaks the cat<->content import cycle).
+content_common.py -- helpers shared by content.py, cat.py, curios.py, and
+drivers.py without importing any of them (breaks the import cycles a
+subject module would otherwise create with content.py, the hub).
 
 Keep this file free of verb handlers and build_world knowledge except what
-can be expressed as pure functions on World/Entity.
+can be expressed as pure functions on World/Entity. find_visible/_carrying/
+_room_here moved here from content.py when curios.py needed them too --
+they're name-resolution infrastructure every verb in the game reaches
+through, not curio-specific, so they belong at this shared layer rather
+than in either subject module.
 """
 
 # Actor hunger rises 1/tick via content.py's hungering behavior; cap matches
@@ -74,6 +79,92 @@ def actor_self_care_note(actor):
     if hunger >= ACTOR_HUNGER_FINE:
         return "you're hungry"
     return ""
+
+
+# Which entities are actually present where they nominally live. Nearly all
+# of them simply are; a couple are conditional, and those register a rule
+# here -- keyed by entity id, fn(world, actor) -> bool -- from whichever
+# part of the game owns them. Same idea as VERBS/BEHAVIORS/ACTION_SOURCES:
+# the general machinery asks, the specific subsystem answers.
+PRESENCE_RULES = {}
+
+# Ids that, when they ARE present, sit at the end of the listing rather than
+# wherever insertion order would put them. Only the statue, and deliberately:
+# it reads as a beat at the end of what you can see, after the ordinary
+# furniture of the clearing, rather than as one item among them. The original
+# hand-rolled version of this function got that for free by filtering the
+# statue out and re-appending it; keeping it explicit here means the ordering
+# survived the rewrite instead of quietly changing the day someone dropped a
+# curio at the edge after finding the statue.
+PRESENCE_LAST = {"statue"}
+
+
+def _always_present(world, actor):
+    return True
+
+
+def _room_here(world, actor, room):
+    """The entities actually present in `room` right now -- ordinarily just
+    world.contents(room.id), minus anything whose PRESENCE_RULE says it
+    isn't really here at the moment.
+
+    The rules exist because the forest's edge doubles as every forest depth
+    (venturing is a session-scoped counter, not a real room change --
+    actor.location never leaves "forest_edge"), so a flat content list makes
+    things visible and reachable from anywhere in the whole forest rather
+    than only where they belong:
+
+    BUG WE HIT: once discovered, the statue appeared in the forest_edge room
+    description forever after for the rest of the session -- even back at
+    depth 0, right at the edge, contradicting its own "resists the system"
+    design (it should never be a standing fixture you just look around and
+    see). The cairn had the milder version of the same bug: it was reachable
+    (via `look cairn`, even `stack stone on cairn`) from any depth, when
+    it's meant to be a landmark you pass specifically AT the edge.
+
+    Used by cmd_look, the action sources, AND find_visible, so a hand can't
+    reach past a rule just by typing the object's name directly instead of
+    picking it from the action list.
+
+    This used to name the statue and the cairn inline, by id, which put
+    knowledge of the forest inside the helper every verb in the game reaches
+    through to find anything at all. The rules now live with the forest.
+    """
+    here, trailing = [], []
+    for e in world.contents(room.id):
+        if not PRESENCE_RULES.get(e.id, _always_present)(world, actor):
+            continue
+        (trailing if e.id in PRESENCE_LAST else here).append(e)
+    return here + trailing
+
+
+def find_visible(world, actor, name, prefer=None):
+    """Find the nearest thing matching `name`. When several match (e.g. a
+    raw and a broiled potato both contain "potato"), `prefer` -- a
+    predicate(entity) -> bool -- picks the one that actually satisfies the
+    caller's need. If none of the matches satisfy it, falls back to the
+    first match anyway, so the caller's own refusal message still fires
+    against a sensible target instead of silently finding nothing."""
+    name = name.lower().strip()
+    if not name:
+        return None
+    room = world.get(actor.location)
+    here = _room_here(world, actor, room) if room else []
+    displayed = [item for surface in here if surface.attrs.get("display_surface")
+                 for item in world.contents(surface.id)]
+    matches = [e for e in here + world.contents(actor.id) + displayed
+               if e.id != actor.id and (name in e.name.lower() or name == e.id)]
+    if not matches:
+        return None
+    if prefer:
+        for e in matches:
+            if prefer(e):
+                return e
+    return matches[0]
+
+
+def _carrying(world, actor, e):
+    return e is not None and e.location == actor.id
 
 
 def _the(name):

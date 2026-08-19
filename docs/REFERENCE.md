@@ -6,6 +6,11 @@
 
 - `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
+- `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
+- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
+- `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
+- `thread` -- thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it.
+- `tuck` -- tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn.
 - `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions".  _(free -- costs no time)_
 - `map` -- map -- show a hand-drawn layout of the outer world (hut/yard/forest's edge/riverbank), plus a hint of the unmapped forest beyond its edge.  _(free -- costs no time)_
 - `go` / `move` -- go <exit> -- move through a named exit (you can also just type the exit name; "inside" works anywhere "in" does).
@@ -23,12 +28,9 @@
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
 - `read` -- read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot; anything tucked into a shown entry (see `tuck`) is named alongside it.  _(free -- costs no time)_
 - `save` -- save -- write the world to disk (also happens automatically on quit).  _(free -- costs no time)_
-- `tuck` -- tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn.
 - `draw` -- draw water -- fill the bucket from the well (holds up to its capacity).
 - `water` -- water crop -- pour a bucket's stored water onto the planted crop here.
-- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
 - `gather` -- gather wood -- forage the forest's edge for fallen branches and deadfall; at the riverbank, digs up a lump of clay instead.
-- `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
 - `listen` -- listen -- stop and take in the forest's edge, or the riverbank; a chosen, unpressured turn that changes nothing.
 - `watch` -- watch clouds -- pause under open sky and watch the clouds (or, on a full or near-full moon night, the moon itself) move; a chosen, unpressured turn that changes nothing.
 - `venture` -- venture -- push a little further into the forest, past the edge.
@@ -36,9 +38,7 @@
 - `mark` -- mark trail -- mark your current depth in the forest as a safe checkpoint, so return only risks landing off-course beyond this point, not the whole way back.
 - `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from).
-- `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 - `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and yours to carry.
-- `thread` -- thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it.
 - `name` -- name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has).
 
 ## Autonomous behaviors

@@ -17,11 +17,16 @@ breaking, and the recipe for adding a feature safely.
 - `content.py` — Emberworld itself. The verbs, the autonomous behaviors,
   `build_world`, and the self-documenting reference generator. Imports
   `World`/`Entity` from world.py and fills in its registries.
-- `content_common.py` — pure helpers shared by content.py, cat.py, and
-  drivers.py without any of them importing each other: `_the`, `_is_raw`/
-  `_is_cooked`, `_last_potato_beat`, `day_stamp`, and the actor's own
-  hunger bands (`ACTOR_HUNGER_*`, `actor_hunger_line`,
-  `actor_self_care_note`). Imports nothing — that's what lets three
+- `content_common.py` — pure helpers shared by content.py, cat.py,
+  curios.py, and drivers.py without any of them importing each other:
+  `_the`, `_is_raw`/`_is_cooked`, `_last_potato_beat`, `day_stamp`, the
+  actor's own hunger bands (`ACTOR_HUNGER_*`, `actor_hunger_line`,
+  `actor_self_care_note`), and the general entity-lookup trio
+  `find_visible`/`_carrying`/`_room_here` plus the `PRESENCE_RULES`
+  machinery they run on. That lookup trio moved here from content.py when
+  curios.py needed it too — every verb in the game reaches through it to
+  resolve what a typed name refers to, so it's shared-layer infrastructure,
+  not any one subject module's own. Imports nothing — that's what lets
   otherwise-cyclic modules all reach it at module level. See "Actor hunger"
   below and the cat.py paragraph further down for why it exists.
 - `cat.py` — the cat as its own self-contained subsystem: its constants
@@ -33,6 +38,15 @@ breaking, and the recipe for adding a feature safely.
 - `chicken.py` — the chicken, `cat.py`'s sibling subsystem: a gentle
   producer (never a second hungry mouth), its two behaviors (idle/lay),
   and `build_chicken`/`ensure_chicken`. See "The chicken" below.
+- `curios.py` — the found-curio economy as its own self-contained
+  subsystem: the shelf, the cairn, the charm-string, give-to-cat,
+  tuck-in-journal, and the visual-compression grouping that keeps a
+  well-visited room's listing readable, plus `FOUND_ITEMS` and
+  `_found_description`. Split out of content.py the same way cat.py/
+  chicken.py were, once it had grown into the single largest coherent
+  slice left in the file (~3000 lines at the time). See "The curio-economy
+  split" below for the full as-built reasoning, including what stayed in
+  content.py and why.
 - `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
   sound, undergrowth, smell), the ambient lines, and `describe_forest` /
   `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
@@ -106,7 +120,9 @@ in one deliberate order instead of leaving it to import order. When you add
 a feature, add to the source that already owns its subject, or write a new
 one beside it.
 
-`PRESENCE_RULES` (content.py) is the fifth, and the same move one layer down:
+`PRESENCE_RULES` (content_common.py, alongside `find_visible` -- see "The
+curio-economy split" below for why it moved there) is the fifth, and the
+same move one layer down:
 `_room_here` — the helper `find_visible` and every verb that resolves a name
 reach through — used to name the statue and the cairn by id, so the forest's
 rules lived inside the game's most basic visibility check. Now a conditional
@@ -143,6 +159,76 @@ module. One fewer deferred import is a small win on its own; the larger one
 is that the next feature needing something both cat.py and content.py agree
 on (tea, more curios, whatever) now has an obvious home instead of a choice
 between growing the cycle or duplicating the helper.
+
+## The curio-economy split
+
+content.py had grown to 3032 lines by the time this happened — the single
+largest coherent subject left in the file was the found-curio economy
+(shelf, cairn, charm-string, give-to-cat, tuck-in-journal, plus the visual
+compression that groups repeated curios in a room listing), the same
+subject `test_curios.py` had already been split out around back when
+test_content.py broke apart. `curios.py` gives it the cat.py/chicken.py
+treatment: its own constants, its own verbs, its own `ensure_*` backfills,
+registering directly into the shared `VERBS` dict itself (`VERBS.update(
+{"give": cmd_give, "place": cmd_place, ...})`) rather than content.py
+importing each handler just to register it — the same pattern cat.py/
+chicken.py already use.
+
+**Why `find_visible`/`_carrying`/`_room_here` moved to content_common.py
+first, as a prerequisite.** These three (plus the `PRESENCE_RULES`/
+`PRESENCE_LAST`/`_always_present` scaffolding `_room_here` runs on) resolve
+what a typed name refers to — every verb in the game reaches through them,
+not just curio verbs. They lived in content.py. A new curios.py sitting
+alongside cat.py/chicken.py can't import them from content.py without
+recreating the exact content.py<->cat.py cycle `content_common.py` already
+exists to prevent (see the paragraph above this section). Rather than give
+curios.py a pile of deferred, function-body imports for something this
+central, they moved to content_common.py itself — the same move
+`_the`/`_is_raw`/`_last_potato_beat`/`day_stamp` already made for the same
+reason. content.py now imports them back from content_common.py exactly
+like everything else there.
+
+**What stayed in content.py, and why.** Three things that touch curios
+without being curio-*disposal* themselves:
+- `cmd_look` — a general verb (looking at a room, a lamp, the well, a
+  curio, the charm-string, all go through it) that happens to call into
+  `_group_look_summary`/`_charm_string_ascii`/`_charm_string_missing_twine_hint`
+  for its curio-aware branches. The branches' own logic moved; the verb
+  that dispatches to them didn't.
+- `_room_lines`/`_room_listing_line` — the general room-bullet renderer,
+  called from `cmd_look`'s whole-room path for every entity in a room, not
+  just curios. It calls into curios.py's `_curio_groups`/`_group_count_line`
+  for the curio-grouping case and falls back to its own
+  `_room_listing_line` otherwise. `_spell`/`_NUMBER_WORDS` moved to
+  curios.py *with* the grouping functions that are their only callers, so
+  no cross-import was needed for those two.
+- The journal itself (`cmd_write`, `cmd_read`, `_journal_entry_index`,
+  `_journal_missing_message`, `_tucked_line`) — tuck-in-journal writes into
+  the journal's own entry bookkeeping, but the bookkeeping is the
+  journal's, shared with `cmd_write`/`cmd_read` which are not curio verbs.
+
+**Two deferred, function-body imports, both following cat.py's existing
+`cmd_feed`/`cmd_add_wood` precedent exactly** (a real verb handler that has
+to stay in content.py, reached for from inside another module's function
+body rather than at module level, to avoid a cycle):
+- `curios.py`'s `cmd_place` reaches for content.py's `cmd_add_wood` for the
+  `"put wood in hearth"` alias (`_PUT_WOOD_IN_HEARTH`, which moved to
+  curios.py alongside `cmd_place` itself — it's pure data, no cycle risk).
+- `curios.py`'s `cmd_tuck` reaches for content.py's `_journal_entry_index`
+  and `_journal_missing_message`.
+
+**Net result:** content.py: 3032 → 2266 lines (25% smaller). curios.py:
+761 lines. content_common.py: 132 → 222 lines (the promoted lookup
+helpers). Verified the same way any change here is: full test suite green
+(568 tests across 12 files, three re-run to rule out the pre-existing
+cat-wander flake), the 8-seed×5000-step fuzzer clean, `docs/REFERENCE.md`
+regenerated (byte-identical content, verb entries reordered since
+curios.py's `VERBS.update` now runs at a different point in the import
+chain — cosmetic, not a test-covered ordering guarantee), and a manual
+`world.act` smoke test of every moved verb (give/place/stack/thread/tuck)
+plus the tuck-then-write interplay from earlier the same session, to
+directly confirm nothing moved-but-silently-broke that the test suite
+happened not to cover.
 
 ## The core model
 

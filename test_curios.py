@@ -19,10 +19,13 @@ import re
 from world import World, Entity
 from content import (
     WOOD_PER_GATHER, HEARTH_FUEL_START, FUEL_PER_WOOD, HEARTH_LOW_FUEL,
-    hearth_state, _cook_hint, FOUND_ITEMS, _found_description,
+    hearth_state, _cook_hint,
+    BLOOM_KINDS,
+)
+from curios import (
+    FOUND_ITEMS, _found_description,
     CAIRN_ID, cmd_stack_stone, STONE_CAIRN_HINT,
     SHELF_CAPACITY, _shelf_description, ensure_shelf,
-    BLOOM_KINDS,
     CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
     _curio_groups, _group_look_summary,
     CHARM_STRING_ID, CHARM_ELIGIBLE_ITEMS, CHARM_CAPACITY, CHARM_BANDS,
@@ -951,7 +954,7 @@ def test_giving_or_placing_a_curio_touches_no_maintenance_resource():
     directly rather than through world.act -- going through act() would tick
     the world and let unrelated autonomous behaviors (hunger rising, fire
     burning down) muddy exactly what THIS handler did or didn't touch."""
-    from content import cmd_give, cmd_place
+    from curios import cmd_give, cmd_place
     handlers = {"give": (cmd_give, "to cat"), "put": (cmd_place, "on shelf")}
     for verb, item in (("give", "a pinecone"), ("give", "a smooth grey stone"),
                        ("put", "a bone button")):
