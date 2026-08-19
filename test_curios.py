@@ -667,15 +667,13 @@ def test_taking_a_cat_given_trace_names_the_cat_specifically():
 
 def test_taking_a_genuine_fixture_still_says_it_wont_budge():
     """The generic refusal must still fire for anything non-portable that
-    was never a curio at all -- shaped clay, in this case -- so the
-    cat-specific message doesn't leak onto unrelated fixtures."""
+    was never a curio at all -- the hut's tin pot, in this case -- so the
+    cat-specific message doesn't leak onto unrelated fixtures. (Shaped
+    clay used to be this test's example; it became portable in this same
+    pass -- see test_riverbank.py -- so it no longer fits here.)"""
     w, actor = fresh()
-    w.act(actor, "go out")
-    w.act(actor, "go river")
-    w.act(actor, "gather clay")
-    w.act(actor, "shape clay into a squat dish")
-    result = w.act(actor, "take clay squat dish")
-    assert result.splitlines()[0] == "The clay squat dish won't budge."
+    result = w.act(actor, "take pot")
+    assert result.splitlines()[0] == "The tin pot won't budge."
 
 
 def test_take_prefers_a_real_shelved_curio_over_an_unrelated_cat_given_trace():

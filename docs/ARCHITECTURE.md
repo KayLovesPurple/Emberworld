@@ -692,16 +692,35 @@ naturally types `shape clay into a squat dish`, and the verb always
 auto-prefixes `"a clay "` itself, so without this guard every shaped
 object would read `"a clay a squat dish"`.
 
-The result is a plain, permanent `Entity` — `portable=False` (matches the
-cairn's stones and a bloom before it opens: made and left, part of the
-room from then on), dropped in `actor.location`. It is **not** tagged
-`curio=True`, and deliberately so: it's authored by the hand's own chosen
-name rather than drawn from a found pool, so it doesn't want a place in
-the shelf/cairn/give-to-cat/tuck-in-journal system at all — that quartet
-is already carrying real weight (see "Curio visual compression" below).
-`riverbank_actions` follows the usual "only offer what can do something"
-rule: `shape clay into <name>` only appears once a raw lump is actually
-carried.
+The result is a plain, permanent `Entity`, added directly into the
+actor's own hands (`location=actor.id`) rather than the room. It is
+**not** tagged `curio=True`, and deliberately so: it's authored by the
+hand's own chosen name rather than drawn from a found pool, so it doesn't
+want a place in the shelf/cairn/give-to-cat/tuck-in-journal system at all
+— that quartet is already carrying real weight (see "Curio visual
+compression" below). `riverbank_actions` follows the usual "only offer
+what can do something" rule: `shape clay into <name>` only appears once a
+raw lump is actually carried.
+
+**BUG WE HIT, caught in real play: `portable=False` (v1's choice) meant a
+hand couldn't take away the thing it had just made.** A real session
+shaped a clay cup at the riverbank, looked at it, then tried to carry it
+back and found no `take` offered at all — because v1 placed the object in
+`actor.location` and marked it non-portable on purpose, reading "made and
+left, part of the room" the same way a cairn stone or an unopened bloom
+is. The difference the original design missed: those are *collective or
+timed* — the cairn belongs to the whole lineage, a bloom is deliberately
+not yours to rush — while a clay object is a hand's own, freely-named,
+private thing, closer in spirit to a found curio than to either. Fixed by
+flipping `portable=True` and placing it straight in the actor's hands
+instead of the room, so shaping something no longer requires a separate
+`take` step to actually keep it. Still not `curio=True`, so still outside
+the shelf/cairn/give-to-cat/tuck disposal system on purpose — but since
+`cmd_place` (the shelf) was never curio-gated in the first place (the
+lamp and knife could already be shelved), a shaped object can now sit on
+the shelf too, for free, with no new code. Still not usable for anything
+beyond that: no functional making, per the open question `README.md`'s
+"Someday" section still leaves deliberately unresolved.
 
 ## The chicken — a producer, per `docs/CHICKEN_SPEC.md`
 
@@ -1455,6 +1474,34 @@ broiled potato's description now says "ready to eat" explicitly rather
 than leaving it implied by "steaming" — belt-and-braces, not a fix for a
 demonstrated failure, since the observed transcript actually handled
 cook-then-eat fine on its own.
+
+### The tin pot — a decorative fixture, grounding "boiled" in something real
+
+**BUG WE HIT, spotted from a session transcript: the egg's own cook_line
+described boiling in water that didn't exist anywhere in the model.** The
+potato's cook_line ("You bury the potato in the embers") is grounded — the
+hearth and its fuel are real, tracked state. The egg's original line
+("You lower the egg into the hot water") wasn't: there was no vessel, no
+water, nothing a hand could `look` at that the sentence was describing. A
+real reader noticed and asked outright — *"what did it boil the egg in?!"*
+
+Fixed with `POT_ID`/`ensure_pot`, a plain, permanent, non-portable `Entity`
+in the hut (`"a battered tin pot, sitting empty by the hearth"`),
+present from world creation the same way the hearth and shelf are.
+**Deliberately given no state of its own** — no water level, no filling
+verb, nothing to maintain — the calm-axis invariant rules out a second
+thing to tend, and this fixture exists purely so the egg's cook_line
+("You fill the tin pot and set it over the embers, then lower the egg
+in...") has something real to point at. `ensure_pot` backfills it onto
+any world/save that predates this pass, called alongside
+`ensure_shelf`/`ensure_charm_string` in both `build_world` and
+`drivers.load_or_build` — no resync step needed, unlike `ensure_cairn`'s
+or `ensure_charm_string`'s own, since a flat description with no dynamic
+state can never drift.
+
+Also lays groundwork for tea (README's "Someday" list), which will need
+this exact same "boiled in something real" grounding once it's built —
+one fixture serving both, rather than reopening the same gap later.
 
 ## Curio visual compression — a presentation pass, not a mechanic
 

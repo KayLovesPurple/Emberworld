@@ -125,15 +125,15 @@ verbs with a discarded argument, exactly like now.
     hand typing the whole name, article included) — guarantees every
     shaped object reads as clay-made, and keeps the input a plain noun
     phrase. `shape clay into a squat dish` → "a clay squat dish".
-  - `location = actor.location` — dropped in the room where it was
-    shaped, not carried automatically.
-  - **Resolved: not portable**, for now — mirrors the cairn's stones and
-    a bloom-before-it-opens: made and left, part of the room from then
-    on. The user flagged this as a likely future extension ("start out
-    not portable but we will likely want to extend it later") rather
-    than a permanent decision — worth checking back in on once a
-    lineage has lived with the not-portable version for a while, same
-    "learn before extending" posture as functional clay generally.
+  - `location = actor.id` — lands directly in the hand that shaped it,
+    carried like anything else. **Superseded**: v1 shipped non-portable
+    (`location = actor.location`, dropped in the room), flagged at the
+    time as a likely future extension rather than a permanent decision —
+    "worth checking back in on once a lineage has lived with the
+    not-portable version for a while." A real session did exactly that,
+    hit the wall directly (made a cup, couldn't take it away), and it was
+    revisited on that evidence. See `docs/ARCHITECTURE.md`'s "The
+    riverbank and clay" section for the full BUG WE HIT writeup.
   - **Not** tagged `curio=True` — deliberately excluded from the shelf/
     give-to-cat/cairn/tuck ecosystem; see "Why not a curio" below.
   - Permanent: no verb to un-shape, rename, or destroy it, matching the
@@ -149,11 +149,16 @@ because loose curios were cluttering room descriptions before clay was
 ever on the table. A shaped clay object is categorically different from a
 found one anyway: it's authored by the hand's own chosen name, not drawn
 from a fixed pool, so it doesn't need a generic disposal system at all —
-it just *is* the thing it was shaped into, sitting wherever it was made,
-the plainest possible "richer, not reset" move (README's reset-or-richer
+it's simply the thing it was shaped into, now the hand's own to carry, the
+plainest possible "richer, not reset" move (README's reset-or-richer
 invariant). It is explicitly **not**: added to `_room_listing_line`'s
-curio-prefixing special case, offered by `place`/`give`/`stack`/`tuck`, or
-tagged `curio=True`.
+curio-prefixing special case, offered by `give`/`stack`/`tuck`, or tagged
+`curio=True`. `place` (the shelf) is the one exception, and not a
+deliberate one — `cmd_place` was never curio-gated to begin with (the
+lamp and knife could always be shelved), so now that a shaped object is
+portable it can reach the shelf too, for free, with no new code written
+for it. Worth knowing, not worth closing off: sitting on the shelf is the
+same passive, non-functional register as being carried at all.
 
 ## Tests written (test_riverbank.py, "THE RIVERBANK AND CLAY" section)
 
@@ -175,9 +180,15 @@ regression caught during manual testing:
 - Sanitization: multi-line input keeps only the first line; input longer
   than the cap is truncated.
 - The shaped object is not `curio=True`, and does not appear in the
-  shelf/give-to-cat/cairn/tuck's `available_actions` lists.
+  give-to-cat/cairn/tuck's `available_actions` lists.
 - The shaped object survives a save/load round-trip (ordinary entity
   persistence — no new save-format bit needed).
+- *(Added when portability was revisited, see "Why not a curio" above)*
+  The shaped object lands directly in the actor's hands and is still
+  carried after changing rooms; it can be set on the shelf (no new code
+  needed for that — `cmd_place` was never curio-gated), and the generic
+  "won't budge" fixture-refusal test was moved off shaped clay (no longer
+  a valid example of a non-portable fixture) onto the hut's tin pot.
 - `listen` at the riverbank returns riverbank-flavored lines, not
   `LISTEN_LINES`; `calm_visits` acks fire per-spot, independently of the
   forest edge's own count.

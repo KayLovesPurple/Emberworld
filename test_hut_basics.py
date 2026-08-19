@@ -22,6 +22,7 @@ from content import (
     LAMP_FUEL_START, LAMP_LOW_FUEL,
     PATCH_VOLUNTEER_TURNS,
     WAIT_DARK_HUT_LINES, WAIT_DARK_CAT_LINE, _wait_dark_lines,
+    POT_ID, POT_DESCRIPTION, ensure_pot,
 )
 from cat import CAT_HUNGER_CAP
 from _test_helpers import fresh, run
@@ -873,6 +874,48 @@ def test_hunger_at_any_level_never_blocks_other_actions_or_causes_harm():
     w.get("cat").location = actor.location
     result = w.act(actor, "pet cat")
     assert "purrs" in result, "an ordinary action must still succeed normally at max hunger"
+
+
+# ===========================================================================
+# THE TIN POT -- a decorative-only hut fixture grounding the egg's "boiled"
+# cook_line (content.py's COOKABLES) in something real. No state, no
+# maintenance, present from world creation like the hearth and shelf.
+# ===========================================================================
+def test_fresh_world_has_a_tin_pot_in_the_hut():
+    w, actor = fresh()
+    pot = w.get(POT_ID)
+    assert pot is not None
+    assert pot.location == "hut"
+    assert pot.description == POT_DESCRIPTION
+
+
+def test_the_pot_is_not_portable():
+    w, actor = fresh()
+    result = w.act(actor, "take pot")
+    assert "won't budge" in result.lower()
+    assert w.get(POT_ID).location == "hut"
+
+
+def test_ensure_pot_backfills_a_world_missing_it():
+    w, actor = fresh()
+    del w.entities[POT_ID]
+    assert w.get(POT_ID) is None
+    ensure_pot(w)
+    assert w.get(POT_ID) is not None
+
+
+def test_ensure_pot_is_idempotent():
+    w, actor = fresh()
+    ensure_pot(w)
+    ensure_pot(w)
+    assert sum(1 for e in w.entities.values() if e.id == POT_ID) == 1
+
+
+def test_pot_survives_a_save_load_roundtrip():
+    w, actor = fresh()
+    reloaded = World.from_data(w.to_data())
+    pot = reloaded.get(POT_ID)
+    assert pot is not None and pot.location == "hut"
 
 
 # ---------------------------------------------------------------------------

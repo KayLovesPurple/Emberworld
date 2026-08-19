@@ -99,8 +99,8 @@ def test_shaping_clay_consumes_the_lump_and_creates_one_new_permanent_object():
     assert not any(e.attrs.get("raw_clay") for e in w.entities.values()), \
         "the raw lump must be gone once shaped"
     made = next(e for e in w.entities.values() if e.name == "a clay squat dish")
-    assert made.location == "riverbank"
-    assert made.portable is False
+    assert made.location == actor.id
+    assert made.portable is True
     assert made.description == "a clay squat dish, still faintly damp from the riverbank."
 
 
@@ -130,6 +130,36 @@ def test_shaped_name_keeps_only_the_first_line_and_is_capped():
     assert len(made.name) <= len("a clay ") + CLAY_NAME_CAP
 
 
+def test_shaped_clay_can_be_carried_away_from_the_riverbank():
+    """Portable as of this pass -- a real session made a cup here, then got
+    stuck trying to take it away, since it used to stay put by design. Now
+    it lands straight in the hand (no separate `take` needed), and travels
+    normally with the actor."""
+    w, actor = fresh()
+    _go_riverbank(w, actor)
+    w.act(actor, "gather clay")
+    w.act(actor, "shape clay into a squat dish")
+    made = next(e for e in w.entities.values() if e.name == "a clay squat dish")
+    assert made.location == actor.id
+    run(w, actor, "go yard", "go in")
+    assert made.location == actor.id, "must still be carried after changing rooms"
+
+
+def test_shaped_clay_can_be_set_on_the_shelf():
+    """cmd_place has no curio restriction of its own -- any carried,
+    portable thing can go there (the lamp and knife already could). Now
+    that clay is portable, this falls out for free, with no new code."""
+    w, actor = fresh()
+    _go_riverbank(w, actor)
+    w.act(actor, "gather clay")
+    w.act(actor, "shape clay into a squat dish")
+    run(w, actor, "go yard", "go in")
+    result = w.act(actor, "place a clay squat dish on shelf")
+    assert "you set" in result.lower()
+    made = next(e for e in w.entities.values() if e.name == "a clay squat dish")
+    assert made.location == "shelf"
+
+
 def test_shaped_clay_is_not_a_curio_and_stays_off_the_disposal_systems():
     w, actor = fresh()
     _go_riverbank(w, actor)
@@ -149,7 +179,8 @@ def test_shaped_clay_survives_a_save_load_roundtrip():
     w.act(actor, "shape clay into a small pot")
     w2 = World.from_data(json.loads(json.dumps(w.to_data())))
     made = next((e for e in w2.entities.values() if e.name == "a clay small pot"), None)
-    assert made is not None and made.location == "riverbank" and made.portable is False
+    reloaded_actor = w2.get(actor.id)
+    assert made is not None and made.location == reloaded_actor.id and made.portable is True
 
 
 def test_listen_at_the_riverbank_uses_its_own_line_pool():

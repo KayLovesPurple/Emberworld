@@ -37,7 +37,7 @@
 - `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from).
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
-- `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and stays where it's shaped (not yet portable).
+- `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and yours to carry.
 - `thread` -- thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it.
 - `name` -- name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has).
 

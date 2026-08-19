@@ -224,6 +224,17 @@ def test_hearth_cook_hint_generalizes_to_a_raw_egg_in_hand():
     assert "you could cook that egg here" in hearth.description.lower()
 
 
+def test_cook_egg_mentions_the_pot_a_real_session_asked_about():
+    """A real session asked "what did it boil the egg in?!" -- there was no
+    vessel grounding the "hot water" flavor text at all. Pins that the
+    egg's own cook_line now names the pot."""
+    w, actor = fresh()
+    run(w, actor, "go in", "light hearth")
+    _give_egg(w, actor)
+    result = w.act(actor, "cook egg")
+    assert "pot" in result.lower()
+
+
 def test_cook_potato_is_unaffected_by_the_cookables_generalization():
     w, actor = fresh()
     run(w, actor, "go out", "take potato", "go in", "light hearth")

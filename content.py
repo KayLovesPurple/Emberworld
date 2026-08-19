@@ -1417,7 +1417,7 @@ CLAY_NAME_CAP = 40   # a short object phrase, not a proper name -- more room
 
 
 def cmd_shape(world, actor, arg):
-    """shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and stays where it's shaped (not yet portable)."""
+    """shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and yours to carry."""
     arg = (arg or "").strip()
     prefix = "clay into "
     if not arg.lower().startswith(prefix):
@@ -1441,7 +1441,7 @@ def cmd_shape(world, actor, arg):
     full_name = f"a clay {given}"
     world.add(Entity(world.fresh_id("shaped"), full_name,
                       f"{full_name}, still faintly damp from the riverbank.",
-                      location=actor.location, portable=False))
+                      location=actor.id, portable=True))
     return f"You work the clay between your hands until it holds its shape: {full_name}."
 
 
@@ -1457,6 +1457,30 @@ def cmd_add_wood(world, actor, arg):
     if hearth.attrs.get("lit"):
         return "You feed wood into the fire. It catches and burns brighter."
     return "You stack wood in the cold hearth, ready for a light."
+
+
+POT_ID = "pot"
+
+# A decorative-only hut fixture, existing purely to ground the egg's
+# "boiled" cook_line (below) in something real -- a real session asked
+# "what did it boil the egg in?!" and there was, honestly, nothing.
+# Deliberately no water level, no filling verb, nothing to maintain: the
+# calm-axis invariant rules out a second thing to tend, so this is
+# present, described, and otherwise completely inert -- same register as
+# the shelf or the cairn's flat stone, not the hearth's own fuel state.
+# Also lays groundwork for tea (README's "Someday" list), which will need
+# the same "boiled in something" grounding this fixes for the egg now.
+POT_DESCRIPTION = "a battered tin pot, sitting empty by the hearth"
+
+
+def ensure_pot(world):
+    """Add the hut's tin pot to a world that predates it (fresh build or an
+    older save) -- same backfill role as ensure_shelf/ensure_cairn. No
+    dynamic state to resync, unlike those two -- the description never
+    changes, so unlike ensure_cairn there's nothing here that can drift."""
+    if world.get(POT_ID) is None:
+        world.add(Entity(POT_ID, "tin pot", POT_DESCRIPTION,
+                          location="hut", portable=False))
 
 
 # 75% of ACTOR_HUNGER_CAP (content_common.py), same ratio held through both
@@ -1491,7 +1515,7 @@ COOKABLES = {
         "cooked_name": "boiled egg",
         "cooked_desc": "a hard-boiled egg, shell cracked and cooling",
         "food_value": EGG_FOOD_VALUE,
-        "cook_line": "You lower the egg into the hot water. Soon it's hard-boiled and cooling.",
+        "cook_line": "You fill the tin pot and set it over the embers, then lower the egg in. Soon it's hard-boiled and cooling.",
     },
 }
 
@@ -2918,6 +2942,7 @@ def build_world():
 
     ensure_shelf(w)
     ensure_charm_string(w)
+    ensure_pot(w)
 
     build_cat(w)
     build_chicken(w)

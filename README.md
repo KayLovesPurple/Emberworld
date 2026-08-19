@@ -133,7 +133,10 @@ piling up right alongside any potatoes you haven't gotten to yet. She's
 nameable (`name chicken <name>`, same as the cat), but that's the whole
 of it — no hunger, no feeding, nothing she ever needs from you. See
 `docs/CHICKEN_SPEC.md`'s "A trap explicitly not being built" for why
-that restraint is the entire point of her.
+that restraint is the entire point of her. Cooking an egg boils it in the
+hut's own tin pot, always sitting by the hearth — decorative only, no
+water to fill or maintain, added after a real reader asked what an egg
+was even being boiled in.
 
 **The forest's edge.** A path off the yard leads there, and that's where
 the wood comes from now too: gather fallen branches and deadfall and add
@@ -352,13 +355,18 @@ predefined outcome. `gather` at the new riverbank (a path off the yard,
 parallel to the forest's edge, with its own `listen`/`watch clouds`
 flavor) digs up a carried lump of raw clay; `shape clay into <name>`
 consumes it and leaves a permanent, freely-named object behind —
-`shape clay into a squat dish` → "a clay squat dish" — wherever it was
-shaped. Cosmetic only, on purpose: shape + name → a described, persistent
-object with no mechanics, no shelf slot, no give-to-cat, no cairn, no
-tuck, no charm-string — a made object is categorically different from a
+`shape clay into a squat dish` → "a clay squat dish" — landing straight in
+your hands, yours to carry. Cosmetic only, on purpose: shape + name → a
+described, persistent object with no mechanics, no give-to-cat, no cairn,
+no tuck, no charm-string — a made object is categorically different from a
 found one (it's authored, not drawn from a pool), so it gets its own home
 rather than a fifth fate stacked onto a curio system that's already asked
 for a presentation-layer fix once (see "Curio visual compression" below).
+It can be set on the hut's shelf, though — `place` was never curio-gated
+to begin with, so that one falls out for free once the object is
+portable. Non-portable at first (v1's choice, deliberately flagged at the
+time as worth revisiting); a real session hit the wall directly — made a
+cup, couldn't carry it away — so it's portable now.
 
 The core question this deliberately leaves open: how much must made
 things actually *do*?
