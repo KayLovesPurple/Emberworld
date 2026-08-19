@@ -458,6 +458,37 @@ into a permanent, collective bed by the fence (the cairn's yard-side
 twin) instead of just vanishing — not built yet, on purpose, until a
 lineage has actually lived with the simpler version for a while.
 
+**`look charm` — a small ASCII rendering of the charm-string** *(built —
+see "The rules, in brief" above for the charm-string itself, and
+`docs/ARCHITECTURE.md`'s "The charm-string" section for the full landed
+shape, including a real backfill gotcha the original spec below didn't
+anticipate)*. Held back as its own fast-follow rather than bundled into
+the charm-string's original pass, since the count-based prose tiers
+already satisfied that feature's own exit criterion on their own
+(threading is a real second choice, and the description already changes
+as the lineage's contribution grows), and this was genuinely new
+rendering machinery — nothing else in the game wraps rows of symbols. The
+original design, as actually built:
+
+- A dedicated look-target, `look charm` (or `look charm-string`),
+  rendering the string as a small ASCII strip — one glyph per threaded
+  item, in strict insertion order (oldest first, top-to-bottom,
+  left-to-right), not sorted or grouped by type. Unattributed, unlike the
+  journal, but the same spirit: a small, honest history of
+  who-added-what-when, just without the names.
+- One glyph per eligible item type — `o` for a bone button, `•` for a
+  pebble of blue glass, `*` for a pinecone (the pinecone's own glyph is
+  new relative to the original two-item spec, since it joined
+  `CHARM_ELIGIBLE_ITEMS` after this spec was first written).
+- Wrapped five symbols per row, each symbol separated by `~~~`, each row
+  itself framed by `~~~` at both ends, so it reads as one continuous
+  strung line rather than isolated fragments. Two buttons and a pebble:
+  `~~~o~~~o~~~•~~~`. Twelve items (5 + 5 + 2) wraps across three rows.
+- At 0 items, `look charm` returns the same "bare length of twine,
+  waiting" line the empty prose tier already uses — no empty ASCII block.
+- Free action, no state change, same cost as any other `look <object>` —
+  matches `look shelf`/`look cairn`.
+
 ### The wishing-statue — a wish-sink (built — docs/FOREST_SPEC.md Stage 7)
 
 The forest's statue is already noted as deliberately mechanic-free. This is what it's *for*, beyond being lovely: it's where an agent can wish for something the world doesn't have — and where we get to see those wishes.

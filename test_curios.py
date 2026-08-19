@@ -1411,6 +1411,126 @@ def test_look_charm_string_has_no_hint_at_capacity():
     assert CHARM_MISSING_TWINE_HINT not in result
 
 
+def test_look_charm_at_zero_items_returns_the_same_empty_prose_line():
+    """Phase 2: `look charm`/`look charm-string`'s dedicated ASCII view.
+    At zero items there's nothing to render, so it must fall back to the
+    exact same "bare length of twine" line the room's own prose tier uses
+    -- no empty ASCII block, per the original spec."""
+    w, actor = fresh()
+    result = w.act(actor, "look charm-string")
+    assert result.splitlines()[0] == CHARM_BANDS[0][1]
+
+
+def test_look_charm_renders_an_ascii_strip_after_threading():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_button(w, actor)
+    _give_pebble(w, actor)
+    _give_twine(w, actor)
+    _give_twine(w, actor)
+    _give_twine(w, actor)
+    run(w, actor, "thread bone button on charm-string",
+        "thread bone button on charm-string",
+        "thread pebble of blue glass on charm-string")
+    result = w.act(actor, "look charm-string")
+    assert "~~~o~~~o~~~•~~~" in result
+
+
+def test_look_charm_wraps_at_five_symbols_per_row():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = 12
+    charm.attrs["items"] = ["a bone button"] * 12
+    result = w.act(actor, "look charm-string")
+    rows = [line for line in result.splitlines() if line.startswith("~~~")]
+    assert len(rows) == 3
+    assert rows[0].count("o") == 5
+    assert rows[1].count("o") == 5
+    assert rows[2].count("o") == 2
+
+
+def test_look_charm_glyph_mapping_is_stable_regardless_of_mix():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = 3
+    charm.attrs["items"] = ["a pinecone", "a bone button", "a pebble of blue glass"]
+    result = w.act(actor, "look charm-string")
+    assert "~~~*~~~o~~~•~~~" in result
+
+
+def test_look_charm_renders_at_capacity_without_error():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = CHARM_CAPACITY
+    charm.attrs["items"] = ["a bone button"] * CHARM_CAPACITY
+    result = w.act(actor, "look charm-string")
+    rows = [line for line in result.splitlines() if line.startswith("~~~")]
+    assert len(rows) == CHARM_CAPACITY // 5
+
+
+def test_charm_items_persist_through_save_load_roundtrip():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    before = w.act(actor, "look charm-string")
+    reloaded_world = World.from_data(w.to_data())
+    reloaded_actor = reloaded_world.get(actor.id)
+    after = reloaded_world.act(reloaded_actor, "look charm-string")
+    assert before == after
+
+
+def test_ensure_charm_string_backfills_unknown_glyphs_for_a_legacy_count():
+    """A charm-string threaded before item-tracking existed (or a save
+    from before this pass) has a real count but no matching item history
+    -- ensure_charm_string must not silently lose that accounting. Padding
+    the front with CHARM_UNKNOWN_GLYPH keeps the ASCII view's total glyph
+    count matching the count-based prose tier, while being honest that the
+    earliest entries' actual type isn't known."""
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = 3
+    del charm.attrs["items"]
+    ensure_charm_string(w)
+    assert len(w.get(CHARM_STRING_ID).attrs["items"]) == 3
+    result = w.act(actor, "look charm-string")
+    assert "~~~?~~~?~~~?~~~" in result
+
+
+def test_ensure_charm_string_backfill_is_idempotent():
+    w, actor = fresh()
+    charm = w.get(CHARM_STRING_ID)
+    charm.attrs["count"] = 3
+    del charm.attrs["items"]
+    ensure_charm_string(w)
+    ensure_charm_string(w)
+    assert len(w.get(CHARM_STRING_ID).attrs["items"]) == 3
+
+
+def test_charm_string_room_listing_stays_prose_only_even_with_items_threaded():
+    """The dedicated `look charm-string` view is a separate, richer look --
+    the room's own standing description (entity.description, what a bare
+    `look` prints inline) must stay the count-based prose, never the ASCII
+    strip, per the original spec's "room listing stays prose-only" rule."""
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    assert w.get(CHARM_STRING_ID).description == CHARM_BANDS[1][1]
+    assert "~~~" not in w.get(CHARM_STRING_ID).description
+
+
+def test_missing_twine_hint_still_appends_alongside_the_ascii_view():
+    w, actor = fresh()
+    _give_button(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "bone button on charm-string")
+    _give_pebble(w, actor)
+    result = w.act(actor, "look charm-string")
+    assert "~~~o~~~" in result
+    assert CHARM_MISSING_TWINE_HINT in result
+
+
 def test_charm_string_refuses_at_capacity_and_count_never_exceeds_it():
     w, actor = fresh()
     charm = w.get(CHARM_STRING_ID)

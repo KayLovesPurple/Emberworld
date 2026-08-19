@@ -1890,14 +1890,54 @@ e.name.lower()`) matches `"charm"` against the entity's own name,
 `"charm-string"`, the same way `look pinecone` already matches `"a
 pinecone"`.
 
-**Deliberately deferred**: a dedicated `look charm` ASCII rendering (a
-small glyph-per-item strip, wrapped and separated, insertion-ordered) was
-part of the original design but is being built as a fast-follow, not
-bundled into this pass — it's genuinely new rendering machinery (nothing
-else in the game wraps rows of symbols), while the count-based prose tier
-above already satisfies the feature's own exit criterion on its own:
-threading is a real second choice, and the description already changes as
-the lineage's contribution grows.
+**Phase 2, built as its own fast-follow: a dedicated `look charm`/`look
+charm-string` ASCII rendering**, distinct from the room's own standing
+description above (which stays count-based prose only, unchanged).
+`_charm_string_ascii` renders one glyph per threaded item, in strict
+insertion order, wrapped `CHARM_ASCII_ROW_WIDTH` (5) per row and
+separated/framed by `CHARM_ASCII_SEP` (`"~~~"`) — two buttons and a
+pebble: `"~~~o~~~o~~~•~~~"`. `CHARM_ITEM_GLYPHS` maps each eligible item
+to its glyph (`o` button, `•` pebble, `*` pinecone — the pinecone's own
+glyph is new here, since it joined `CHARM_ELIGIBLE_ITEMS` after the
+original spec was written, button/pebble only). At zero items there's
+nothing to render, so it falls back to the exact same empty-prose-tier
+line the room's own description already uses — no empty ASCII block, the
+same "don't render a block for nothing" rule the shelf and cairn already
+follow at their own empty states.
+
+**BUG WE HIT, caught before it shipped: rendering by insertion order needs
+an actual insertion order, and Phase 1 never tracked one.** `cmd_thread`
+only ever incremented a plain `count` — nothing recorded *which* items had
+been threaded or in what sequence, since the count-based prose tier never
+needed to know. Phase 2 added `charm.attrs["items"]`, appended to
+(`e.name`) alongside `count` in `cmd_thread`, but that leaves every
+charm-string that predates this pass — including this project's own live
+`emberworld_save.json`, discovered mid-implementation — with a real count
+and zero item history. `ensure_charm_string` backfills the gap: pad the
+**front** of `items` with `None` (rendered as `CHARM_UNKNOWN_GLYPH`,
+`"?"`) up to `count`, never the back, since anything newly threaded always
+lands at the *end* — so any untracked entries must be the oldest ones, by
+construction. Idempotent: once padded, `len(items) == count`, so a later
+load pads nothing further. Chosen over the alternatives — guessing a type
+(silently wrong), or leaving the count and glyph total mismatched (looks
+like a bug rather than a known gap) — because `?` says plainly "this one
+predates tracking," which is the actual, honest situation.
+
+**This project's own live save's one `?` turned out to be recoverable, so
+it isn't one anymore.** `emberworld_save.json` is gitignored (never part
+of a commit), but checking it directly turned up exactly one gap: count 1,
+no item history. Rather than leave it as a guess, the real answer was
+findable — `grep -n "Command:\*\* \`thread" sessions/*.md` turns up
+exactly one `thread` command ever issued, across every session transcript
+this lineage has: *"thread a pinecone on charm-string"*
+(`sessions/20260814-225640_thistle_day-52_40-turns.md`, turn 17, result
+"You knot the pinecone onto the charm-string"), corroborated by the
+journal's own Day 53 entry ("threaded a pinecone on the charm-string").
+Patched by hand (`charm.attrs["items"] = ["a pinecone"]`, then
+`world.save()`) as a one-time, evidence-backed repair of this specific
+save — not a change to `ensure_charm_string` itself, which still must
+fall back to `CHARM_UNKNOWN_GLYPH` for any *other* legacy save, since most
+won't have a session-log trail this complete to recover from.
 
 ## The outer-world map — `map.py`, a hand-drawn ASCII layout
 

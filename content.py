@@ -714,9 +714,11 @@ def cmd_look(world, actor, arg):
             if summary:
                 return summary
         if target.id == CHARM_STRING_ID:
+            text = _charm_string_ascii(target)
             hint = _charm_string_missing_twine_hint(world, actor, target)
             if hint:
-                return f"{target.description} {hint}"
+                return f"{text}\n{hint}"
+            return text
         return target.description
     stamp = world.timestr()
     if world.is_dark(room.id):
@@ -2340,6 +2342,51 @@ def _charm_string_missing_twine_hint(world, actor, charm):
     return CHARM_MISSING_TWINE_HINT
 
 
+# Phase 2 of the charm-string, deferred at Phase 1's original ship (see
+# README's "Someday" entry for the original design this was built from,
+# preserved there since it never got its own spec file). `look
+# charm`/`look charm-string` -- a dedicated, richer view distinct from the
+# room's own standing description above, which stays count-based prose
+# only. One glyph per eligible item type; the pinecone's glyph is new
+# here, added after the original spec (button/pebble only) since
+# CHARM_ELIGIBLE_ITEMS grew a third member in the meantime.
+CHARM_ITEM_GLYPHS = {
+    "a bone button": "o",
+    "a pebble of blue glass": "•",  # a plain round dot, not a bullet-point
+    "a pinecone": "*",
+}
+
+# What an item threaded before item-tracking existed (see ensure_charm_string's
+# backfill below) renders as -- honest about not knowing, rather than either
+# guessing or quietly losing the accounting.
+CHARM_UNKNOWN_GLYPH = "?"
+
+CHARM_ASCII_ROW_WIDTH = 5
+CHARM_ASCII_SEP = "~~~"
+
+
+def _charm_string_ascii(charm):
+    """look charm/look charm-string's dedicated view: a small ASCII strip,
+    one glyph per threaded item in strict insertion order (oldest first),
+    wrapped CHARM_ASCII_ROW_WIDTH per row and separated/framed by
+    CHARM_ASCII_SEP, e.g. two buttons and a pebble: "~~~o~~~o~~~•~~~".
+    Not sorted or grouped by type -- unattributed, unlike the journal, but
+    the same spirit: a small, honest history of who-added-what-when.
+
+    At zero items there's nothing to render, so this returns the exact same
+    empty-prose-tier line the room's own standing description already uses
+    for count 0 -- no empty ASCII block."""
+    items = charm.attrs.get("items", [])
+    if not items:
+        return charm.description
+    glyphs = [CHARM_ITEM_GLYPHS.get(name, CHARM_UNKNOWN_GLYPH) for name in items]
+    rows = []
+    for i in range(0, len(glyphs), CHARM_ASCII_ROW_WIDTH):
+        row = glyphs[i:i + CHARM_ASCII_ROW_WIDTH]
+        rows.append(CHARM_ASCII_SEP + CHARM_ASCII_SEP.join(row) + CHARM_ASCII_SEP)
+    return "\n".join(rows)
+
+
 def ensure_charm_string(world):
     """Add the hut's charm-string to a world that predates it (fresh build
     or an older save) -- same backfill role, and same resync-on-load fix
@@ -2349,14 +2396,26 @@ def ensure_charm_string(world):
     Present-but-empty from world creation, unlike the lazily-created statue
     -- a bare length of twine on the wall is visible before anyone's added
     to it, the same way the cairn's flat stone is visible before any
-    stone's been stacked."""
+    stone's been stacked.
+
+    Also backfills `items` (Phase 2's insertion-ordered glyph list) to
+    match `count` -- a charm-string threaded before item-tracking existed
+    has a real count with no matching history. Padding the FRONT with
+    `None` (rendered as CHARM_UNKNOWN_GLYPH) rather than the back is
+    deliberate: new items are always appended to the end, so any untracked
+    ones must be the oldest, not the newest. Idempotent -- once padded,
+    len(items) == count, so a later load pads nothing further."""
     charm = world.get(CHARM_STRING_ID)
     if charm is None:
         charm = world.add(Entity(CHARM_STRING_ID, "charm-string",
                                   _charm_string_description(0),
-                                  location="hut", attrs={"count": 0}))
+                                  location="hut", attrs={"count": 0, "items": []}))
     else:
         charm.description = _charm_string_description(charm.attrs["count"])
+        items = charm.attrs.setdefault("items", [])
+        missing = charm.attrs["count"] - len(items)
+        if missing > 0:
+            charm.attrs["items"] = [None] * missing + items
     return charm
 
 
@@ -2383,6 +2442,7 @@ def cmd_thread(world, actor, arg):
     world.entities.pop(e.id, None)
     world.entities.pop(twine.id, None)
     charm.attrs["count"] += 1
+    charm.attrs.setdefault("items", []).append(e.name)
     charm.description = _charm_string_description(charm.attrs["count"])
     return f"You knot {_the(e.name)} onto the charm-string. Now: {charm.description}"
 
