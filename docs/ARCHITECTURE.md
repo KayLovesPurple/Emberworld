@@ -1140,7 +1140,7 @@ assertion; updated to assert wish adds/removes nothing (the entity already
 exists by then) while still pinning that only the wish log itself changes.
 
 While fixing that, also gave the base description its own quiet nudge:
-`"...the kind of thing a hand leaves a wish with, the way you would a coin
+`"...the kind of thing someone leaves a wish with, the way you would a coin
 in a fountain"` — the same register `STATUE_DISCOVERY_TEXT` already uses,
 folded into the permanent `look statue` text too, not just the one-time
 discovery paragraph. README's "wishing-statue" section already claimed

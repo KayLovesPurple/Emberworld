@@ -1524,7 +1524,7 @@ STATUE_DISCOVERY_TEXT = (
 # statue's permanent description too (see ensure_statue) -- kept as its own
 # constant so ensure_statue's legacy-save backfill can check for it by
 # substring, same pattern ensure_shelf already uses for STONE_CAIRN_HINT.
-STATUE_WISH_HINT = ("the kind of thing a hand leaves a wish with, the way "
+STATUE_WISH_HINT = ("the kind of thing someone leaves a wish with, the way "
                      "you would a coin in a fountain")
 
 # THE CONSTRAINT THAT MUST NEVER BREAK: the statue stays mechanically

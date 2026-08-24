@@ -1107,6 +1107,18 @@ def test_system_prompt_does_not_ask_for_a_running_log():
         "should not read as an instruction to keep a running log"
 
 
+def test_system_prompt_distinguishes_witnessed_from_relayed_journal_claims():
+    """A hand trusting the journal wholesale can't tell 'I watched this happen'
+    from 'an earlier note said so' -- and a claim invented once (a wishing
+    ritual that was never a real mechanic) snowballs when every later hand
+    treats a predecessor's confident phrasing as fact. The prompt should ask
+    hands to weigh a journal claim by how it's grounded, not just trust it."""
+    prompt = drv.LLM_SYSTEM_PROMPT.lower()
+    assert "journal" in prompt, "the journal must still be pointed at"
+    assert "watch" in prompt or "witness" in prompt or "saw" in prompt, \
+        "should distinguish an eyewitness claim from a relayed one"
+
+
 # ---------------------------------------------------------------------------
 # Built-in runner, so you don't need pytest installed.
 # ---------------------------------------------------------------------------
