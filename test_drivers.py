@@ -398,6 +398,70 @@ def test_signoff_cat_hunger_hint_uses_the_current_meow_threshold():
     assert "seemed hungry" in c.last["messages"][0]["content"]
 
 
+def test_flagged_thoughts_extracts_only_the_self_flagged_sentence():
+    """BUG WE HIT: a real hand (Thistle, day 64) noticed mid-visit that a
+    journal claim was flatly contradicted by what just happened -- "the game
+    accepted the pinecone as a valid decoration despite Wick's journal claim
+    - that's a nice contradiction worth noting" -- said, in the same breath,
+    it should jot down a journal note about it, then never did (turn budget
+    went to eating and waiting instead). The realization lived only in that
+    turn's thoughts, which the sign-off never saw, so the actual journal
+    entry ended up an unrelated auto-generated line. _flagged_thoughts must
+    pull out just the sentence that flags something, not the surrounding
+    reasoning about turns left or what to eat, so the sign-off gets a
+    literal, grounded fragment rather than a paraphrase."""
+    thoughts = [
+        "I'm hungry and it's getting dark, so I should eat the boiled egg "
+        "before heading to the hearth.",
+        "Actually the game accepted the pinecone as a valid decoration "
+        "despite Wick's journal claim - that's a nice contradiction worth "
+        "noting. With 8 turns left, I'll give Ember a scratch first.",
+    ]
+    flagged = drv._flagged_thoughts(thoughts)
+    assert len(flagged) == 1
+    assert "contradiction worth noting" in flagged[0]
+    assert "8 turns left" not in flagged[0], \
+        "only the flagged sentence should be kept, not the rest of the thought"
+    assert "boiled egg" not in " ".join(flagged), \
+        "an unflagged turn's thoughts must not appear at all"
+
+
+def test_flagged_thoughts_dedupes_and_caps():
+    thoughts = ["Worth noting: the well never runs dry." for _ in range(8)]
+    flagged = drv._flagged_thoughts(thoughts)
+    assert len(flagged) == 1, "identical flagged sentences should be deduped"
+
+    thoughts = [f"Worth noting: detail number {i}." for i in range(8)]
+    flagged = drv._flagged_thoughts(thoughts)
+    assert len(flagged) <= 5, "a pathological run must not flood the sign-off prompt"
+
+
+def test_signoff_offers_flagged_moments_and_asks_them_prioritized():
+    """The closing-note prompt should carry any self-flagged realizations
+    as a second grounded source, alongside `did`, and tell the model a
+    flagged correction outweighs routine summary -- without opening the
+    door to inventing anything beyond what the hand itself already said."""
+    c = _RecordingClient()
+    flagged = ["the pinecone threaded with no wood, so Wick's claim was wrong"]
+    w, actor = fresh()
+    drv._leave_signoff(c, w, actor, flagged=flagged)
+    system = c.last["system"]
+    user = c.last["messages"][0]["content"]
+    assert flagged[0] in user
+    assert "priorit" in system.lower(), \
+        "a flagged correction should be asked to take priority over routine summary"
+    assert "don't invent" in system.lower() or "do not invent" in system.lower()
+
+
+def test_signoff_omits_the_flagged_block_on_a_visit_with_nothing_flagged():
+    c = _RecordingClient()
+    w, actor = fresh()
+    drv._leave_signoff(c, w, actor, flagged=[])
+    user = c.last["messages"][0]["content"]
+    assert "flagged" not in user.lower(), \
+        "an empty flagged list must not leave a placeholder section behind"
+
+
 class _RecordingClient:
     """Captures the kwargs of the last create() call; returns reply_text
     (default "wait", override before calling for tests that need a specific
@@ -1107,16 +1171,19 @@ def test_system_prompt_does_not_ask_for_a_running_log():
         "should not read as an instruction to keep a running log"
 
 
-def test_system_prompt_distinguishes_witnessed_from_relayed_journal_claims():
-    """A hand trusting the journal wholesale can't tell 'I watched this happen'
-    from 'an earlier note said so' -- and a claim invented once (a wishing
-    ritual that was never a real mechanic) snowballs when every later hand
-    treats a predecessor's confident phrasing as fact. The prompt should ask
-    hands to weigh a journal claim by how it's grounded, not just trust it."""
+def test_system_prompt_flags_that_journal_writers_can_be_wrong():
+    """A hand trusting the journal wholesale has no reason to question a
+    confident claim -- whether it was invented outright (a wishing ritual
+    that was never a real mechanic) or was true once and went stale (a wood
+    requirement that was actually a bug, since fixed). Distinguishing
+    eyewitness from hearsay doesn't catch the second kind, since a stale
+    claim can be perfectly grounded and still wrong -- so the prompt should
+    just flag that whoever wrote an entry could have been mistaken, full
+    stop, rather than try to sort claims into trustworthy and not."""
     prompt = drv.LLM_SYSTEM_PROMPT.lower()
     assert "journal" in prompt, "the journal must still be pointed at"
-    assert "watch" in prompt or "witness" in prompt or "saw" in prompt, \
-        "should distinguish an eyewitness claim from a relayed one"
+    assert "wrong" in prompt or "mistaken" in prompt, \
+        "should flag that a journal writer could have been wrong"
 
 
 # ---------------------------------------------------------------------------

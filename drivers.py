@@ -10,6 +10,7 @@ Only the choice of command differs between them.
 """
 
 import os
+import re
 import sys
 import random
 import string
@@ -468,9 +469,8 @@ LLM_SYSTEM_PROMPT = (
     "visitors -- you have no memory of past turns, so trust what the world "
     "tells you directly, and read the journal early; it's usually "
     "kept in the hut, and carries what past hands learned about living "
-    "here. Weigh a journal claim by how it's grounded -- a hand describing "
-    "what it watched happen is sturdier than one repeating an earlier "
-    "note's claim. Living here is partly tending -- "
+    "here -- though keep in mind whoever wrote it could have been wrong. "
+    "Living here is partly tending -- "
     "a light kept through the night, a potato grown and cooked, a cat "
     "who'll let you know if it's hungry -- and partly looking closely: "
     "this world holds more than any list of tasks, and unfamiliar objects, "
@@ -763,6 +763,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
     history = deque(maxlen=5)
     journal_text = None                       # once read, kept in view so it needn't re-read
     did = []           # visit-long, ordered, NOT deduped -- what really happened
+    all_thoughts = []  # visit-long raw thoughts, filtered at departure -- see _flagged_thoughts
     try:
         for i in range(turns):
             turns_left = turns - i
@@ -814,6 +815,8 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
             result = w.act(actor, choice)
             print(result, "\n")
             _log_turn(session_log, i + 1, can_think_aloud, thoughts, choice, result)
+            if thoughts:
+                all_thoughts.append(thoughts)
             # remember the journal's contents the first time it's read this visit
             if choice.split()[:1] == ["read"] and "journal reads" in result:
                 jrnl = w.get("journal")
@@ -836,7 +839,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
     except KeyboardInterrupt:
         print("\n(the visit is cut short -- but the note still gets left.)")
     finally:
-        _leave_signoff(client, w, actor, model, think, did)
+        _leave_signoff(client, w, actor, model, think, did, _flagged_thoughts(all_thoughts))
         w.save(SAVE)
         session_log.write(f"## Departure\n\nEnded on world day {w.day()}. "
                           "A closing note was left in the shared journal.\n")
@@ -844,11 +847,54 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
     print(f"(They depart. Their note is in the journal.)\n(saved: {SAVE}; session: {session_path})")
 
 
-def _leave_signoff(client, w, actor, model=None, think=True, did=None):
+# BUG WE HIT, from a real session: a hand (Thistle, day 64) noticed mid-visit
+# that a journal claim had just been directly disproved by its own action
+# ("the game accepted the pinecone... despite Wick's journal claim - that's a
+# nice contradiction worth noting"), said in the same breath it should write
+# that up, then never did -- turn budget went to eating and waiting instead.
+# The realization lived only in that turn's `thoughts`, which the sign-off
+# never saw (it only ever got `did`, the bare action list), so the actual
+# closing note that landed was unrelated. These are the phrasings a hand
+# tends to self-flag with -- generous on purpose, since a false positive here
+# just offers an irrelevant (but still real, still grounded) sentence to the
+# sign-off, while a false negative silently loses the safety net for that
+# turn. Neither is as bad as inventing something, which this list can't do:
+# it only ever selects sentences the hand itself already wrote.
+_NOTEWORTHY_PHRASES = (
+    "worth noting", "worth passing on", "worth writing", "worth flagging",
+    "worth a note", "worth mentioning", "should write", "should note",
+    "should mention", "should flag", "should correct", "contradiction",
+    "contradicts", "turned out to be wrong", "wasn't right", "isn't right",
+    "isn't true", "was wrong", "were wrong", "mistaken",
+)
+
+
+def _flagged_thoughts(thoughts, cap=5):
+    """Pull out just the sentences (not whole turns) where a hand's own
+    reasoning flagged something as worth passing on -- see _NOTEWORTHY_PHRASES
+    for why. Sentence-level, not turn-level, so a flagged realization doesn't
+    drag in unrelated reasoning about turns left or what to eat from the same
+    turn. Deduped and capped so a pathological run can't flood the sign-off
+    prompt; order preserved otherwise."""
+    seen, out = set(), []
+    for t in thoughts:
+        for sentence in re.split(r"(?<=[.!?])\s+", t):
+            low = sentence.lower()
+            if any(p in low for p in _NOTEWORTHY_PHRASES) and sentence not in seen:
+                seen.add(sentence)
+                out.append(sentence)
+                if len(out) >= cap:
+                    return out
+    return out
+
+
+def _leave_signoff(client, w, actor, model=None, think=True, did=None, flagged=None):
     """Always leave one closing note, grounded in `did` -- the visit's real,
-    ordered list of what actually happened -- so the note can't confabulate.
-    Written straight to the journal entity so it lands wherever the agent
-    ended up, even on API failure or Ctrl-C.
+    ordered list of what actually happened -- and in `flagged`, any sentences
+    a hand's own reasoning flagged as worth passing on (see
+    _flagged_thoughts) -- so the note can't confabulate beyond either. Written
+    straight to the journal entity so it lands wherever the agent ended up,
+    even on API failure or Ctrl-C.
 
     The cat is mentioned to whoever's leaving ONLY if it's actually hungry, so
     caretaking enters the lineage when it matters -- not every single visit.
@@ -862,15 +908,23 @@ def _leave_signoff(client, w, actor, model=None, think=True, did=None):
         extra = "\n(The cat seemed hungry when you left.)"
     did_block = ("\n".join(f"  - {c}" for c in did) if did
                  else "  (nothing that left much of a mark -- a quiet visit)")
+    flagged_block = ""
+    if flagged:
+        lines = "\n".join(f'  - "{f}"' for f in flagged)
+        flagged_block = ("\n\nMoments you personally flagged as worth "
+                          f"passing on, in your own words:\n{lines}")
     try:
         note = _ask_claude(client,
             "You are someone whose visit to a small persistent world is ending. "
-            "Below is everything you actually did this visit, in order -- draw "
-            "only from that list and don't invent anything beyond it. Pick "
-            "whatever's worth passing on and leave ONE short sentence in the "
-            "shared journal for whoever comes next, in your own voice. Just "
-            "the sentence.",
-            f"What you actually did this visit:\n{did_block}\n\n"
+            "Below is everything you actually did this visit, in order, and -- "
+            "if any -- moments where you yourself flagged something as worth "
+            "passing on. Draw only from those, and don't invent anything "
+            "beyond them. If a flagged moment corrects or contradicts an "
+            "earlier journal claim, that takes priority over routine summary. "
+            "Pick whatever's worth passing on and leave ONE short sentence in "
+            "the shared journal for whoever comes next, in your own voice. "
+            "Just the sentence.",
+            f"What you actually did this visit:\n{did_block}{flagged_block}\n\n"
             f"{w.perceive(actor)}{extra}\n\nYour closing note:",
             model or LLM_MODEL, think)
     except Exception:
