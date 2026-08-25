@@ -188,9 +188,9 @@ using up one carried twine to do it. Like the cairn it's collective and
 one-way — no take-back, and it belongs to the whole lineage, not to
 whoever threaded a given button — but where the cairn only ever grows
 *taller*, the charm-string reads differently as it *fills*: a bare length
-of twine, waiting, becomes a single found thing, then a small scatter,
-then — given enough hands, enough visits — a charm-string crowded with
-found things. A feather still doesn't qualify: it already has its own
+of twine, waiting, becomes a single found thing, then a few, then a small
+scatter, then — given enough hands, enough visits — a charm-string
+crowded with found things. A feather still doesn't qualify: it already has its own
 fate above. Twine itself can't be given to the cat — it's the knot the
 recipe needs, not a decorative find in its own right, so `give twine to
 cat` is always refused, keeping it available for threading instead.

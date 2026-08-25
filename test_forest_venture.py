@@ -647,6 +647,26 @@ def test_ensure_statue_backfills_the_wish_hint_onto_a_legacy_statue():
     assert patched.description.startswith("a weathered stone figure")
 
 
+def test_ensure_statue_does_not_double_the_hint_when_its_wording_changes():
+    """BUG WE HIT, live: STATUE_WISH_HINT's exact wording changed ("a hand
+    leaves a wish" -> "someone leaves a wish"), and the old backfill guard
+    checked `STATUE_WISH_HINT not in statue.description` -- so every statue
+    already carrying the OLD wording (any ongoing lineage) failed that
+    check against the new constant and got the NEW wording appended on
+    top, doubling the hint: "...folds -- the kind of thing a hand leaves a
+    wish with... -- the kind of thing someone leaves a wish with...". The
+    backfill guard now checks a fragment stable across that reword instead
+    of the live constant itself."""
+    w, actor = fresh()
+    statue = ensure_statue(w)
+    old_hint = "the kind of thing a hand leaves a wish with, the way you would a coin in a fountain"
+    statue.description = ("a weathered stone figure, worn past recognizing, "
+                           f"moss thick in its folds -- {old_hint}")
+    resynced = ensure_statue(w)
+    assert resynced.description.count("kind of thing") == 1, \
+        f"the hint must not be duplicated by a wording change alone: {resynced.description!r}"
+
+
 def test_look_statue_vaguely_hints_at_wishing():
     """README already claims "the statue's own description hints that
     wishing here is a thing people do" -- but that hint used to live only

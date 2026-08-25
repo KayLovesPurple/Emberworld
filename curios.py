@@ -560,6 +560,7 @@ CHARM_CAPACITY = 100
 CHARM_BANDS = (
     (0, "a bare length of twine hangs on the wall, waiting."),
     (1, "a single found thing hangs from the twine -- a start, not yet a decoration."),
+    (2, "a few found things hang from the twine -- still a start, not yet a decoration."),
     (5, "a small scatter of found things hangs from the twine, starting to gather."),
     (20, "a charm-string clatters gently, crowded with found things."),
 )

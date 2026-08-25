@@ -1411,6 +1411,24 @@ def test_charm_string_description_bands_match_count():
     assert _charm_string_description(just_below) == CHARM_BANDS[0][1]
 
 
+def test_charm_string_description_is_not_falsely_singular_for_several_items():
+    """BUG WE HIT, from a real session: the count==1 band's text ("a single
+    found thing hangs from the twine") covered every count up to the next
+    threshold (5), so threading a second and third item still read "a
+    single found thing" -- a hand (Thistle) threaded a pinecone, then a
+    second pinecone, then a pebble of blue glass (count 3, confirmed by
+    `items`), and every one of those got told there was only a single
+    thing there. The count==1 text must describe count 1 only; a real
+    "more than one, not yet a scatter" band must exist in between."""
+    assert _charm_string_description(1) == "a single found thing hangs from the twine -- a start, not yet a decoration."
+    for n in (2, 3, 4):
+        desc = _charm_string_description(n)
+        assert "single" not in desc.lower(), \
+            f"count {n} must not be described as a single found thing: {desc!r}"
+    assert _charm_string_description(2) == _charm_string_description(4), \
+        "still one band across 2-4, just not the 'single' one"
+
+
 def test_charm_string_count_and_description_persist_through_save_load_roundtrip():
     w, actor = fresh()
     _give_button(w, actor)

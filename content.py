@@ -1527,6 +1527,15 @@ STATUE_DISCOVERY_TEXT = (
 STATUE_WISH_HINT = ("the kind of thing someone leaves a wish with, the way "
                      "you would a coin in a fountain")
 
+# BUG WE HIT: ensure_statue's backfill guard used to check for
+# STATUE_WISH_HINT itself, so a wording tweak to the constant ("a hand
+# leaves a wish" -> "someone leaves a wish") made every statue that
+# already carried the OLD wording fail the check and get the NEW wording
+# appended on top, doubling the hint. This fragment is stable across a
+# reword (only "a hand"/"someone" ever changed) and is what the backfill
+# actually checks against now.
+_STATUE_WISH_HINT_MARKER = "leaves a wish with"
+
 # THE CONSTRAINT THAT MUST NEVER BREAK: the statue stays mechanically
 # inert. Lore says it grants; mechanics grant nothing; if anything is ever
 # granted, it happens invisibly, later, by us -- never by this verb. The
@@ -1559,7 +1568,7 @@ def ensure_statue(world):
             f"a weathered stone figure, worn past recognizing, moss thick "
             f"in its folds -- {STATUE_WISH_HINT}", location="forest_edge",
             portable=False, attrs={"wishes": []}))
-    elif STATUE_WISH_HINT not in statue.description:
+    elif _STATUE_WISH_HINT_MARKER not in statue.description:
         statue.description = statue.description.rstrip(" -") \
             + f" -- {STATUE_WISH_HINT}"
     return statue
