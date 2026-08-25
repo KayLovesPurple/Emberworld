@@ -31,7 +31,7 @@ from curios import (
     SHELF_CAPACITY, _shelf_description, ensure_shelf,
     CURIO_GROUP_EXACT_MAX,
     CAIRN_ID, ensure_cairn, cmd_stack_stone,
-    CHARM_STRING_ID, CHARM_CAPACITY, CHARM_ELIGIBLE_ITEMS,
+    CHARM_STRING_ID, CHARM_CAPACITY, CHARM_ELIGIBLE_ITEMS, _is_charm_eligible,
     _charm_string_ascii, _charm_string_missing_twine_hint, ensure_charm_string,
     _curio_groups, _group_count_line, _group_look_summary,
     _is_tuckable,
@@ -2007,7 +2007,7 @@ def carrying_actions(world, actor):
     if charm and charm.attrs["count"] < CHARM_CAPACITY \
             and any("twine" in e.name.lower() for e in carried):
         for e in carried:
-            if e.name in CHARM_ELIGIBLE_ITEMS:
+            if _is_charm_eligible(e.name):
                 acts.append(f"thread {e.name} on charm-string")
     for e in here + carried:
         if "lit" in e.attrs:

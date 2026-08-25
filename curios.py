@@ -219,6 +219,20 @@ STONE_CAIRN_HINT = "it could go on the cairn at the forest's edge"
 CHARM_ELIGIBLE_ITEMS = ("a bone button", "a pebble of blue glass", "a pinecone")
 CHARM_STRING_HINT = "it could be threaded onto the charm-string in the hut"
 
+# A made thing's first crossing into the found-curio economy (see
+# ARCHITECTURE.md's note on this): a hand-shaped clay bead can thread onto
+# the charm-string too, alongside the found items above. cmd_shape's naming
+# is freeform ("clay into <anything>"), so there's no single fixed string
+# to add to CHARM_ELIGIBLE_ITEMS the way a found item gets one -- "a clay
+# bead", "a clay small bead", "a clay glass bead" are all equally real
+# names a hand might type. A light "ends with bead" check instead of exact
+# membership, deliberately loose; retune to something stricter (or looser)
+# once real play shows whether it needs it. Scoped to bead on purpose --
+# see the charm-string's own design notes on why a clay bowl or cup stays
+# out: those are useful objects at hut scale, not wall-hung decoration.
+def _is_charm_eligible(name):
+    return name in CHARM_ELIGIBLE_ITEMS or name.lower().endswith("bead")
+
 # Twine is the OTHER half of the threading recipe (cmd_thread consumes one),
 # found through the same FOUND_ITEMS roll as everything else and just as
 # giveable to the cat on paper -- but a real session (Marrow, day 59) found
@@ -595,7 +609,7 @@ def _charm_string_missing_twine_hint(world, actor, charm):
     carried = world.contents(actor.id)
     if any("twine" in e.name.lower() for e in carried):
         return ""
-    if not any(e.name in CHARM_ELIGIBLE_ITEMS for e in carried):
+    if not any(_is_charm_eligible(e.name) for e in carried):
         return ""
     return CHARM_MISSING_TWINE_HINT
 
@@ -619,6 +633,21 @@ CHARM_ITEM_GLYPHS = {
 # guessing or quietly losing the accounting.
 CHARM_UNKNOWN_GLYPH = "?"
 
+# A made thing's own glyph -- a hollow-looking "0" rather than the button's
+# "o", distinct at a glance in the ASCII strip. CHARM_ITEM_GLYPHS itself
+# stays a plain name->glyph dict (an exact-name lookup fits the fixed,
+# found-item set it was built for) -- a bead's freeform naming needs the
+# same "ends with bead" check _is_charm_eligible uses, so it can't just be
+# one more entry there.
+CHARM_BEAD_GLYPH = "0"
+
+
+def _charm_glyph(name):
+    if name and name.lower().endswith("bead"):
+        return CHARM_BEAD_GLYPH
+    return CHARM_ITEM_GLYPHS.get(name, CHARM_UNKNOWN_GLYPH)
+
+
 CHARM_ASCII_ROW_WIDTH = 5
 CHARM_ASCII_SEP = "~~~"
 
@@ -637,7 +666,7 @@ def _charm_string_ascii(charm):
     items = charm.attrs.get("items", [])
     if not items:
         return charm.description
-    glyphs = [CHARM_ITEM_GLYPHS.get(name, CHARM_UNKNOWN_GLYPH) for name in items]
+    glyphs = [_charm_glyph(name) for name in items]
     rows = []
     for i in range(0, len(glyphs), CHARM_ASCII_ROW_WIDTH):
         row = glyphs[i:i + CHARM_ASCII_ROW_WIDTH]
@@ -690,7 +719,7 @@ def cmd_thread(world, actor, arg):
             item_name = item_name[:-len(suffix)].strip()
             break
     e = find_visible(world, actor, item_name, prefer=lambda x: _carrying(world, actor, x))
-    if not e or e.location != actor.id or e.name not in CHARM_ELIGIBLE_ITEMS:
+    if not e or e.location != actor.id or not _is_charm_eligible(e.name):
         return "That's not something you can thread onto the charm-string."
     if charm.attrs["count"] >= CHARM_CAPACITY:
         return "The string's full to hanging -- there's no room left for another thing."

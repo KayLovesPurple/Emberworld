@@ -29,7 +29,7 @@ from curios import (
     CURIO_GROUP_EXACT_MAX, CURIO_GROUP_SEVERAL_AT, _plural_of,
     _curio_groups, _group_look_summary,
     CHARM_STRING_ID, CHARM_ELIGIBLE_ITEMS, CHARM_CAPACITY, CHARM_BANDS,
-    CHARM_STRING_HINT, CHARM_MISSING_TWINE_HINT,
+    CHARM_STRING_HINT, CHARM_MISSING_TWINE_HINT, _is_charm_eligible,
     _charm_string_description, ensure_charm_string, cmd_thread,
 )
 from _test_helpers import fresh, run, _add_curio, _Unlucky
@@ -1684,6 +1684,79 @@ def test_non_eligible_found_item_descriptions_do_not_mention_the_charm_string():
         desc = _found_description(look_line, reaction, name)
         assert "charm-string" not in desc.lower(), \
             f"{name!r} wrongly mentions the charm-string: {desc!r}"
+
+
+def _shape_bead(world, actor, given="bead"):
+    """Build a hand-shaped clay item the way real play does -- gather at
+    the riverbank, then shape -- rather than constructing the entity
+    directly, so this exercises cmd_shape's real freeform naming."""
+    from content import cmd_gather, cmd_shape
+    prev_location = actor.location
+    actor.location = "riverbank"
+    cmd_gather(world, actor, "")
+    cmd_shape(world, actor, f"clay into {given}")
+    actor.location = prev_location
+    return next(e for e in world.contents(actor.id) if e.name.endswith(given))
+
+
+def test_is_charm_eligible_covers_the_fixed_set_and_anything_bead_named():
+    """A clay bead is made, not found, so it can never be a literal member
+    of CHARM_ELIGIBLE_ITEMS (a fixed found-curio set) -- and cmd_shape's
+    naming is freeform, so there's no single fixed string to add anyway
+    ("a clay bead", "a clay small bead", "a clay glass bead" are all
+    equally real names a hand might type). Eligibility for a made thing is
+    a light "ends with bead" check instead of exact membership."""
+    for name in CHARM_ELIGIBLE_ITEMS:
+        assert _is_charm_eligible(name)
+    for name in ("a clay bead", "a clay small bead", "a clay glass bead"):
+        assert _is_charm_eligible(name), f"{name!r} should be charm-eligible"
+    for name in ("a clay bowl", "a clay cup", "a jay's feather", "firewood"):
+        assert not _is_charm_eligible(name), f"{name!r} should NOT be charm-eligible"
+
+
+def test_a_shaped_clay_bead_can_be_threaded_onto_the_charm_string():
+    w, actor = fresh()
+    _shape_bead(w, actor)
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "a clay bead on charm-string")
+    assert "clay bead" in result
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 1
+
+
+def test_a_shaped_clay_bowl_cannot_be_threaded_onto_the_charm_string():
+    w, actor = fresh()
+    _shape_bead(w, actor, given="squat bowl")
+    _give_twine(w, actor)
+    result = cmd_thread(w, actor, "a clay squat bowl on charm-string")
+    assert "not something you can thread" in result.lower()
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 0
+
+
+def test_missing_twine_hint_fires_for_a_carried_bead_too():
+    w, actor = fresh()
+    _shape_bead(w, actor)
+    result = w.act(actor, "look charm-string")
+    assert CHARM_MISSING_TWINE_HINT in result
+
+
+def test_thread_bead_is_offered_in_available_actions_once_twine_is_in_hand():
+    w, actor = fresh()
+    _shape_bead(w, actor)
+    _give_twine(w, actor)
+    actions = w.available_actions(actor)
+    assert any("thread a clay bead" in a for a in actions), actions
+
+
+def test_threaded_bead_renders_as_its_own_glyph_in_the_ascii_view():
+    w, actor = fresh()
+    _shape_bead(w, actor)
+    _give_twine(w, actor)
+    cmd_thread(w, actor, "a clay bead on charm-string")
+    result = w.act(actor, "look charm-string")
+    assert "0" in result
+    for existing in ("o", "•", "*"):
+        assert existing not in result, \
+            f"a bead must not be confused with an existing glyph: {result!r}"
 
 
 def test_ensure_shelf_backfills_the_charm_hint_onto_a_legacy_button():
