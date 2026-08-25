@@ -757,8 +757,8 @@ TUCK_REFUSAL = "That won't press flat between the pages -- try the shelf, or the
 def cmd_tuck(world, actor, arg):
     """tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn."""
     # deferred: the journal's own entry-indexing/missing-message helpers
-    # stay in content.py, alongside cmd_write/cmd_read that also use them.
-    from content import _journal_entry_index, _journal_missing_message
+    # live in journal.py, alongside cmd_write/cmd_read that also use them.
+    from journal import _journal_entry_index, _journal_missing_message
     arg = (arg or "").strip()
     item_name = arg.lower()
     for suffix in (" in journal", " in the journal", " journal"):

@@ -13,6 +13,8 @@ Run it either way:
 from world import Entity
 from content import (
     SEED_NAME, BLOOM_TICKS, BLOOM_KINDS, _seed_in_world, _mystery_plant,
+)
+from journal import (
     JOURNAL_READ_LIMIT, JOURNAL_OLDER_SHOWN, JOURNAL_GAP, journal_view,
     _journal_view_indices,
 )

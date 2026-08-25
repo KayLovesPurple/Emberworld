@@ -47,6 +47,12 @@ breaking, and the recipe for adding a feature safely.
   slice left in the file (~3000 lines at the time). See "The curio-economy
   split" below for the full as-built reasoning, including what stayed in
   content.py and why.
+- `journal.py` — the shared journal as its own self-contained subsystem:
+  `cmd_write`/`cmd_read`, the capped/spread view a hand actually sees
+  (`journal_view`/`_journal_view_indices`), and the entry-indexing
+  bookkeeping curios.py's tuck-in-journal reaches for. Split out of
+  content.py later, once it stood as a second coherent slice on its own —
+  see "The journal module split" below.
 - `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
   sound, undergrowth, smell), the ambient lines, and `describe_forest` /
   `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
@@ -54,7 +60,8 @@ breaking, and the recipe for adding a feature safely.
   of the forest lifted out cleanly when the rest of it could not — see
   "Where to go next".
 - `drivers.py` — the three ways to drive the world (human, dumb agent, LLM),
-  `load_or_build`, and the headless fuzzer. Imports content.py and cat.py.
+  `load_or_build`, and the headless fuzzer. Imports content.py, cat.py, and
+  journal.py (for `journal_view`, used to build the LLM prompt's excerpt).
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
   dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
 - `test_world.py` / `test_cat.py` / `test_chicken.py` / `test_drivers.py` /
@@ -206,6 +213,8 @@ without being curio-*disposal* themselves:
   `_journal_missing_message`, `_tucked_line`) — tuck-in-journal writes into
   the journal's own entry bookkeeping, but the bookkeeping is the
   journal's, shared with `cmd_write`/`cmd_read` which are not curio verbs.
+  (It moved out into its own module later anyway, once it stood as a
+  second coherent slice on its own — see "The journal module split" below.)
 
 **Two deferred, function-body imports, both following cat.py's existing
 `cmd_feed`/`cmd_add_wood` precedent exactly** (a real verb handler that has
@@ -229,6 +238,55 @@ chain — cosmetic, not a test-covered ordering guarantee), and a manual
 plus the tuck-then-write interplay from earlier the same session, to
 directly confirm nothing moved-but-silently-broke that the test suite
 happened not to cover.
+
+## The journal module split
+
+A much smaller, later split — content.py sat at almost exactly its own
+documented "~2300 lines" (2275, essentially on budget, not newly bloated)
+when this happened, so it wasn't forced by size the way the curio-economy
+split was. It followed the same underlying test, applied a second time:
+the journal (`cmd_write`, `cmd_read`, `journal_view`/`_journal_view_indices`,
+the `JOURNAL_*` constants, `_tucked_line`, `_journal_entry_index`,
+`_journal_missing_message`) was a genuinely self-contained ~190-line block —
+explicitly called out, by name, as its own thing back when the curio-economy
+split decided to leave it in content.py (see the bullet just above). One
+coherent slice standing alone doesn't justify a split on its own; a second
+one showing up on inspection, cleanly separable, is what made this worth
+doing now rather than waiting further.
+
+`journal.py` gets the cat.py/chicken.py/curios.py treatment exactly:
+its own constants, its own two verbs, registering directly into the
+shared `VERBS`/`FREE_VERBS` dicts on import (`VERBS.update({"write":
+cmd_write, "read": cmd_read})`) rather than content.py importing the
+handlers just to register them itself. Its only real dependencies —
+`day_stamp`/`find_visible`/`_carrying` — already lived in
+content_common.py from the curio-economy split, so no second round of
+promoting shared lookup helpers was needed this time.
+
+**The one cross-module reference updates in place, same shape as
+before.** `curios.py`'s `cmd_tuck` already reached for
+`_journal_entry_index`/`_journal_missing_message` via a deferred,
+function-body import (the same cat.py `cmd_feed`/`cmd_add_wood` pattern
+the curio-economy split used) — the import target just changes from
+`content` to `journal`; the deferral itself was never about a cycle
+against content.py specifically, so nothing else about it needed to
+change. `drivers.py`'s top-level `journal_view` import moves to its own
+`from journal import journal_view` line. content.py itself doesn't use
+any journal.py name directly (only `journal_actions`, the *availability-
+listing* function that offers `"read journal"`/`"write <note>"` as plain
+strings, stays — a different concern, the same one `carrying_actions`
+already has for curios.py's shelf/charm-string) — so content.py's own
+`import journal` is a bare, side-effect-only import, there purely so the
+registration runs before the game does.
+
+**Net result:** content.py: 2275 → 2087 lines. journal.py: 210 lines.
+Verified the same way the curio-economy split was: full test suite green
+(583 tests, unchanged count since this moved code rather than adding or
+removing any), the fuzzer clean, `docs/REFERENCE.md` regenerated
+(4-line diff — `write`/`read` reordered earlier in the listing, since
+journal.py's `VERBS.update` now runs at a different point in the import
+chain, same cosmetic reordering the curio-economy split saw for its own
+verbs, not a content change).
 
 ## The core model
 
@@ -2150,6 +2208,46 @@ save — not a change to `ensure_charm_string` itself, which still must
 fall back to `CHARM_UNKNOWN_GLYPH` for any *other* legacy save, since most
 won't have a session-log trail this complete to recover from.
 
+**The charm-string's first crossing from found things into made ones: a
+hand-shaped clay bead.** Every prior eligible item — button, pebble,
+pinecone — was something a hand *found*; `CHARM_ELIGIBLE_ITEMS` is a fixed
+tuple of exact names because a found item's name is fixed too (the forest
+always calls it "a bone button"). A clay bead is different on both counts:
+it's *made* (`cmd_shape`, gathered clay shaped by hand), and its name is
+freeform — `shape clay into <anything>` means "a clay bead," "a clay small
+bead," and "a clay glass bead" are all equally real names a hand might
+type, with no single fixed string to add to the tuple. `_is_charm_eligible`
+replaces the raw `name in CHARM_ELIGIBLE_ITEMS` check everywhere it was
+used (`cmd_thread`, the missing-twine hint, the `available_actions`
+listing) with a check against the fixed set *or* a light `name.endswith
+("bead")` match — deliberately loose rather than trying to parse "is this
+small enough to be decoration" out of freeform text, on the theory that a
+real mismatch is cheap to retune once it happens, same spirit as
+`CHARM_BANDS`' own "first guess, easy to retune" thresholds.
+
+Deliberately scoped to bead-shaped things only, not "any shaped clay" — a
+clay bowl or cup stays a useful object at hut scale (sitting in the hut,
+holding water or food), not wall-hung decoration next to a pinecone. That
+line was a real design call, not a technical one: nothing stops a bowl
+from threading mechanically, it just reads wrong next to what the
+charm-string currently is. Revisit if real play ever wants it wider.
+
+A threaded bead gets its own glyph in the ASCII view — `0` (`CHARM_BEAD_GLYPH`
+in `_charm_glyph`), distinct from the button's `o` at a glance in monospace.
+`CHARM_ITEM_GLYPHS` itself stays a plain exact-name dict, since that still
+fits the fixed found-item set it was built for; `_charm_glyph` layers the
+same "ends with bead" check on top before falling back to it, so a bead
+never needs (and never gets) a literal dictionary entry.
+
+This is the first instance of a bigger, deliberately-not-yet-built idea:
+letting things a hand *makes* enter the same shared rituals a hand *finds*
+into, rather than made and found things living in permanently separate
+systems (clay/eggs are explicitly excluded from the curio economy
+elsewhere in this doc, for unrelated reasons specific to each). Whether
+that idea grows past this one case depends on whether real play actually
+reaches for it again — see this doc's own repeated preference for waiting
+until a second real instance shows up before generalizing.
+
 ## The outer-world map — `map.py`, a hand-drawn ASCII layout
 
 `map` (`cmd_map`, a free verb) prints an ASCII diagram of the outer world —
@@ -2446,6 +2544,47 @@ command's actual result text, not its verb — an active verb still ticks the
 clock even when it's refused, so only the result says whether it landed. The
 closing prompt hands the model that list verbatim and is told to draw only
 from it and invent nothing beyond it.
+
+**`did` alone still missed a real category: a hand noticing something
+worth passing on and never writing it down.** A real transcript (Thistle,
+day 64) caught the world contradicting the journal directly — `thread a
+pinecone on charm-string` worked with no wood in hand, disproving an
+earlier hand's confident claim that the charm-string wanted wood from the
+forest's edge. Thistle's own reasoning said so outright: *"that's a nice
+contradiction worth noting... maybe jot down a journal note about the
+pinecone discrepancy"* — and then never called `write`, turn budget going
+to eating and waiting instead. The realization lived only in that turn's
+`thoughts`, which `_leave_signoff` never saw (only `did`, the action list),
+so the closing note that actually landed was unrelated. Multiple hands
+after that spent real turns gathering wood chasing a mechanic that never
+existed.
+
+Fixed by giving the closing prompt a second grounded source, not a looser
+one. `thoughts` is computed every turn already (`_ask_claude` with
+`return_thinking=True`) but was discarded once printed; the loop now
+accumulates it (`all_thoughts`), and `_flagged_thoughts` extracts, at
+departure, just the *sentences* (not whole turns — a flagged realization
+shouldn't drag in the same turn's unrelated reasoning about inventory or
+turns left) containing one of a small, deliberately generous set of
+self-flagging phrases (`_NOTEWORTHY_PHRASES`: "worth noting," "worth
+passing on," "contradiction," "was wrong," "mistaken," and similar). Generous
+on purpose: a false positive here just offers an irrelevant but still real,
+still hand-written sentence to the sign-off, which can ignore it; a false
+negative silently loses the safety net for that turn. Neither is as bad as
+inventing something, which this can't do — it only ever selects sentences
+the hand itself already wrote, verbatim, same discipline `did` already
+has. The closing prompt is told a flagged correction takes priority over
+routine summary when one is present, and the block is omitted entirely
+when nothing was flagged (same "no placeholder for absence" rule `did`'s
+own quiet-visit fallback already follows).
+
+Deliberately not solved by asking hands to write more insistently (a
+sibling idea, discussed but not built): that would be re-asking Thistle to
+do the exact thing it already tried and failed to prioritize under
+turn-pressure, with no guarantee it lands the next time either. The
+sign-off catches it regardless of whether the hand followed through —
+a safety net that fires unconditionally at departure, not a stricter
+instruction hoping for better compliance.
 
 ## Where to go next (deferred, but planned)
 
