@@ -707,7 +707,7 @@ def ensure_charm_string(world):
 
 
 def cmd_thread(world, actor, arg):
-    """thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it."""
+    """thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it. "hang <item> on charm-string" is an alias (a real hand guessed it and got 'I don't understand' instead)."""
     if not arg:
         return "Thread what onto the charm-string? e.g.  thread button on charm-string"
     charm = find_visible(world, actor, "charm-string")
@@ -786,6 +786,6 @@ VERBS.update({
     "give": cmd_give,
     "place": cmd_place, "put": cmd_place,
     "stack": cmd_stack_stone,
-    "thread": cmd_thread,
+    "thread": cmd_thread, "hang": cmd_thread,
     "tuck": cmd_tuck,
 })

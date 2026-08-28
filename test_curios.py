@@ -1367,6 +1367,20 @@ def test_threading_a_pinecone_succeeds():
     assert "pinecone" in result.lower()
 
 
+def test_hang_is_accepted_as_an_alias_for_thread():
+    """A real lineage session (Thistlewick, day 72) tried `hang bead on
+    charm-string` -- a reasonable guess for the verb -- got 'I don't
+    understand', and wrote in the journal that the charm-string 'seems
+    purely decorative for now', which then misled every hand after it.
+    `hang` should reach the same handler as `thread`."""
+    w, actor = fresh()
+    _give_pebble(w, actor)
+    _give_twine(w, actor)
+    result = w.act(actor, "hang pebble of blue glass on charm-string")
+    assert w.get(CHARM_STRING_ID).attrs["count"] == 1
+    assert "pebble" in result.lower()
+
+
 def test_threading_without_twine_is_refused_with_no_state_change():
     w, actor = fresh()
     button = _give_button(w, actor)

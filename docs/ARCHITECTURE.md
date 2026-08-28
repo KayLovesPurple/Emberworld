@@ -2239,6 +2239,28 @@ fits the fixed found-item set it was built for; `_charm_glyph` layers the
 same "ends with bead" check on top before falling back to it, so a bead
 never needs (and never gets) a literal dictionary entry.
 
+**BUG WE HIT: a reasonable verb guess reads as "this doesn't exist" instead
+of "not with this word."** `world.act` dispatches purely on the command's
+first word, so a hand typing anything other than the exact registered verb
+gets the flat, generic `"I don't understand '<verb>'."` — indistinguishable
+from a genuinely unsupported action. A real session (Thistlewick, day 72,
+holding a clay bead but no twine) tried `hang bead on charm-string`, hit
+that message, gave up, and set the bead on the shelf instead — then wrote
+in the journal that the charm-string "seems purely decorative for now,"
+which the *next* hand (also Thistlewick, day 73) read and repeated even
+more confidently ("don't waste a bead on it"), actively steering lineage
+behavior away from a mechanic that had just shipped. Unlike the
+missing-twine hint above (a genuinely absent affordance) or the `add
+<anything>` bug (a wrong-but-confident answer), this is a *third* shape of
+the same underlying problem: a plausible synonym for a real, working verb
+simply isn't recognized. Fixed the same way `"put": cmd_place` already
+handles `cmd_place`'s own synonym: `"hang": cmd_thread` added to
+`VERBS.update`, so `hang <item> on charm-string` reaches the exact same
+handler as `thread`. Doesn't fix every possible synonym a hand might try —
+`tie`, `attach` — but closes the one a real hand actually reached for; see
+this doc's own "wait for a second real instance" preference for not
+pre-guessing the rest.
+
 This is the first instance of a bigger, deliberately-not-yet-built idea:
 letting things a hand *makes* enter the same shared rituals a hand *finds*
 into, rather than made and found things living in permanently separate
