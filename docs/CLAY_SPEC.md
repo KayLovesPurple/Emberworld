@@ -1,4 +1,4 @@
-# Clay — Design Spec (Cosmetic-only, Stage 1)
+# Clay — Design Spec
 
 *Design spec. Follows the test-first workflow in ARCHITECTURE.md: observe
 → diagnose → write tight spec with tests → implement.*
@@ -8,10 +8,16 @@
 **✅ Built — cosmetic tier.** The riverbank, `gather`/`shape clay into
 <name>`, and both calm verbs are live; see ARCHITECTURE.md's "The
 riverbank and clay" for the mechanism and this doc's now-resolved open
-questions below for the decisions actually shipped. Functional clay (a
-pot that truly stores, a dish that changes cat behavior) is a separate,
-later design pass, deliberately not started — see "Explicitly NOT in
-scope" below.
+questions below for the decisions actually shipped.
+
+**✅ Built — first functional tier: storage pots.** A shaped clay object
+named "...pot" can hold up to 7 of one locked-in kind (`pots.py`) — the
+first made object with real mechanics, not just a description. See "Clay
+storage pots" below for what it does, and ARCHITECTURE.md's own "Clay
+storage pots" section for the full build reasoning and the bugs it caught.
+Everything *else* functional clay was ever imagined to be (a dish that
+changes cat behavior, LLM-defined function) is still deliberately not
+started — see "Explicitly NOT in scope" below, now narrower than it was.
 
 ## Design goals (recap, so this doc stands alone)
 
@@ -160,6 +166,41 @@ portable it can reach the shelf too, for free, with no new code written
 for it. Worth knowing, not worth closing off: sitting on the shelf is the
 same passive, non-functional register as being carried at all.
 
+## Clay storage pots (functional tier, `pots.py`)
+
+The first shaped clay object that *does* something, not just describes
+something. Any object made via `shape clay into <name>` whose name ends in
+"pot" — "a clay pot", "a clay squat pot", "a clay egg pot," anything —
+becomes a storage pot automatically; there's no separate "make a pot"
+verb, cmd_shape's freeform naming already covers it.
+
+- **Holds up to 7 things at once**, and **locks to whichever kind is
+  stored first.** Put an egg in an empty pot and it becomes an egg-pot;
+  every later item must be the same kind, or the store is refused. This is
+  why a lineage ends up with several pots, each its own kind, rather than
+  one miscellaneous catch-all — "a pot of potatoes" and "a pot of glass
+  pebbles" are different pots. Raw and cooked food count as the same kind
+  (an egg-pot doesn't reject its own eggs once they're boiled).
+- **`put <item> in <pot's name>`** stores it (`store` works too, as an
+  alias — both reach the same handler `place`/`put` already use for the
+  shelf). `take <item>` pulls it back out, the same generic `take` that
+  already works on the shelf.
+- **Declutters the room** exactly the way the shelf already does: a
+  stored item's location moves onto the pot, so it drops out of the
+  room's flat listing and is only ever mentioned through the pot's own
+  description ("a clay pot, holding 4 eggs").
+- **Cooking reaches into a pot** whether it's sitting in the room or
+  being carried — an egg doesn't need to be taken back out first.
+- **Not curio-gated, same as every other shaped clay object** — see "Why
+  not a curio" above. A pot can also just sit on the shelf like any other
+  carried thing, for the same "never deliberately gated, just never
+  needed to be" reason as before.
+
+See ARCHITECTURE.md's "Clay storage pots" section for the full mechanism
+(`_is_storage_pot`, `_item_kind`, the deferred-import wiring into
+`cmd_place`) and three bugs caught before this shipped — worth reading
+before extending this system further.
+
 ## Tests written (test_riverbank.py, "THE RIVERBANK AND CLAY" section)
 
 All of the below are in place and passing, plus the article-doubling
@@ -211,12 +252,15 @@ fixture of the room — without touching the shelf, the cat, the cairn, or
 the journal, and without adding a fifth fate to a curio system that has
 already asked for a presentation-layer fix once.
 
-## Explicitly NOT in scope for this pass
+## Explicitly NOT in scope
 
-- **Functional clay** — a pot that actually stores, a dish that changes
-  cat behavior, anything with real mechanics. Cosmetic only, per README's
-  "start here" ordering; revisit once a lineage has lived with the
-  cosmetic version for a while.
+- **Functional clay beyond storage pots** — a dish that changes cat
+  behavior, or the "LLM-defined function" tier from README where an agent
+  describes what a made thing does and the world tries to honour it.
+  Storage pots (above) are the one functional case built so far; revisit
+  the rest once real play has lived with pots for a while, same "wait for
+  a second real instance" discipline the clay bead followed for the
+  charm-string.
 - **Tea, or any clay object built specifically to pair with tea** (the
   "thrown teapot" example from README) — tea itself isn't built yet.
 - **A second riverbank resource** (fish, reeds, water for the bucket,

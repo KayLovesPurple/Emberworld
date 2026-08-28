@@ -648,11 +648,16 @@ def cmd_take(world, actor, arg):
     surface = world.get(e.location)
     e.location = actor.id
     if surface is not None and surface.attrs.get("display_surface"):
-        # cmd_place recomputes this on the way onto the shelf; taking
-        # something back off it needs the same refresh, or the shelf goes
-        # on describing itself as still holding what's already been carried
-        # away.
-        surface.description = _shelf_description(world, surface)
+        # cmd_place/pots.py's _try_store recomputes this on the way onto
+        # the shelf or into a pot; taking something back out needs the same
+        # refresh, or the container goes on describing itself as still
+        # holding what's already been carried away. Shelf and pot each
+        # render their own way, so the id (fixed at "shelf") picks which.
+        if surface.id == "shelf":
+            surface.description = _shelf_description(world, surface)
+        else:
+            from pots import _pot_description   # deferred: pots.py doesn't need content.py
+            surface.description = _pot_description(world, surface)
     return f"You take {_the(e.name)}."
 
 
@@ -1081,9 +1086,17 @@ def cmd_shape(world, actor, arg):
         return "You've no clay in hand to shape. The riverbank has it, if you gather some."
     world.entities.pop(clay.id, None)
     full_name = f"a clay {given}"
-    world.add(Entity(world.fresh_id("shaped"), full_name,
+    shaped = world.add(Entity(world.fresh_id("shaped"), full_name,
                       f"{full_name}, still faintly damp from the riverbank.",
                       location=actor.id, portable=True))
+    from pots import _is_storage_pot, _pot_description   # deferred: pots.py doesn't need content.py
+    if _is_storage_pot(full_name):
+        # A pot's whole point is to hold things -- say so immediately,
+        # rather than the generic damp-clay line every other shaped object
+        # gets, so the affordance is visible the moment it's made (the same
+        # "present but empty" treatment the charm-string gets from world
+        # creation, not lazily on first use).
+        shaped.description = _pot_description(world, shaped)
     return f"You work the clay between your hands until it holds its shape: {full_name}."
 
 
@@ -1808,12 +1821,30 @@ def carrying_actions(world, actor):
     carried = world.contents(actor.id)
     for e in carried:
         acts.append(f"drop {e.name}")
-    shelf = next((e for e in here if e.attrs.get("display_surface")), None)
+    shelf = world.get("shelf")
+    if shelf and shelf.location != actor.location:
+        shelf = None
     if shelf:
         if len(world.contents(shelf.id)) < SHELF_CAPACITY:
             for e in carried:
                 acts.append(f"place {e.name} on shelf")
         for e in world.contents(shelf.id):
+            acts.append(f"take {e.name}")
+    # Storage pots: any shaped clay pot, whether sitting here or carried --
+    # only offer "put ... in ..." for something whose kind the pot would
+    # actually accept (empty, or already locked to that same kind), and
+    # only under capacity, same "only offer what can do something" rule as
+    # the shelf above.
+    from pots import _is_storage_pot, _item_kind, CONTAINER_CAPACITY   # deferred: pots.py doesn't need content.py
+    for pot in [e for e in here + carried if _is_storage_pot(e.name)]:
+        held = world.contents(pot.id)
+        if len(held) < CONTAINER_CAPACITY:
+            for e in carried:
+                if e.id == pot.id:
+                    continue
+                if not held or pot.attrs.get("kind") == _item_kind(e.name):
+                    acts.append(f"put {e.name} in {pot.name}")
+        for e in held:
             acts.append(f"take {e.name}")
     charm = next((e for e in here if e.id == CHARM_STRING_ID), None)
     if charm and charm.attrs["count"] < CHARM_CAPACITY \

@@ -150,9 +150,14 @@ def find_visible(world, actor, name, prefer=None):
         return None
     room = world.get(actor.location)
     here = _room_here(world, actor, room) if room else []
-    displayed = [item for surface in here if surface.attrs.get("display_surface")
+    carried = world.contents(actor.id)
+    # display_surface marks anything whose contents stay find-visible even
+    # though they're not sitting loose in the room -- the shelf (fixed, in
+    # `here`) originally, and now a storage pot too, which is portable, so
+    # this checks carried surfaces as well, not just ones in the room.
+    displayed = [item for surface in here + carried if surface.attrs.get("display_surface")
                  for item in world.contents(surface.id)]
-    matches = [e for e in here + world.contents(actor.id) + displayed
+    matches = [e for e in here + carried + displayed
                if e.id != actor.id and (name in e.name.lower() or name == e.id)]
     if not matches:
         return None
@@ -184,6 +189,13 @@ def _is_raw(e):
 
 def _is_cooked(e):
     return e.attrs.get("food", 0) > 0
+
+
+# What a storage pot locks its "kind" to -- cooking changes an item's own
+# name (an egg -> a boiled egg), so kind-matching by substring here means a
+# pot doesn't reject its own contents' cooked half; anything that isn't
+# food locks to its exact name instead (see pots.py's _item_kind).
+FOOD_KINDS = ("potato", "egg")
 
 
 LAST_POTATO_BEAT = (

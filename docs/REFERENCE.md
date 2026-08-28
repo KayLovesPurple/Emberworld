@@ -7,7 +7,7 @@
 - `feed` -- feed cat -- give a carried potato to the cat (a raw one, if you have a choice -- cooked food is for you); "feed hearth" is an alias for "add wood" (two hands independently reached for it).
 - `pet` / `stroke` -- pet cat -- pet the cat. Accomplishes nothing; is the entire point.
 - `give` -- give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark.
-- `place` / `put` -- place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
+- `place` / `put` / `store` -- place <thing> [on shelf | in <pot>] -- set a carried object on the hut's curio shelf (holds up to 10 at once), or store it in a clay storage pot if the pot's named; "store" is an alias for both. "put wood in hearth" is an alias for "add wood" (two hands independently reached for it).
 - `stack` -- stack stone [on cairn] -- add a carried stone to the cairn at the forest's edge, permanently; it's no longer yours once it joins the pile.
 - `thread` / `hang` -- thread <item> on charm-string -- add a carried button, pebble, or other threadable curio to the hut's charm-string, permanently, using up one twine to do it. "hang <item> on charm-string" is an alias (a real hand guessed it and got 'I don't understand' instead).
 - `tuck` -- tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn.

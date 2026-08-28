@@ -178,6 +178,13 @@ _CURIO_PLURALS = {
     "a knot of bleached twine": "knots of bleached twine",
     "a curl of birch bark": "curls of birch bark",
     "a sprig of dried moss": "sprigs of dried moss",
+    # Not curios, but pots.py reuses this same table (via _plural_of) for
+    # storage-pot descriptions rather than re-solving pluralization badly --
+    # "potato" is the one real irregular in this game's whole vocabulary.
+    "a potato": "potatoes",
+    "a broiled potato": "broiled potatoes",
+    "an egg": "eggs",
+    "a boiled egg": "boiled eggs",
 }
 
 
@@ -298,12 +305,23 @@ _PUT_WOOD_IN_HEARTH = {
 
 
 def cmd_place(world, actor, arg):
-    """place <thing> [on shelf] -- set a carried object on the hut's curio shelf (holds up to 10 at once); "put wood in hearth" is an alias for "add wood" (two hands independently reached for it)."""
+    """place <thing> [on shelf | in <pot>] -- set a carried object on the hut's curio shelf (holds up to 10 at once), or store it in a clay storage pot if the pot's named; "store" is an alias for both. "put wood in hearth" is an alias for "add wood" (two hands independently reached for it)."""
     if arg.lower().strip() in _PUT_WOOD_IN_HEARTH:
         from content import cmd_add_wood   # deferred: cmd_add_wood is hearth-owned, stays in content.py
         return cmd_add_wood(world, actor, "")
-    shelf = next((e for e in world.contents(actor.location)
-                  if e.attrs.get("display_surface")), None)
+    if " in " in arg.lower():
+        from pots import _try_store   # deferred: pots.py doesn't need curios.py, avoiding a cycle
+        result = _try_store(world, actor, arg)
+        if result is not None:
+            return result
+    # BUG WE HIT (caught before it shipped): storage pots also carry
+    # display_surface once used, so once one existed in the hut this used
+    # to sometimes grab the pot instead of the shelf here -- "shelf" is a
+    # fixed id (ensure_shelf below), so look it up by id, not by the flag
+    # a pot now shares.
+    shelf = world.get("shelf")
+    if not shelf or shelf.location != actor.location:
+        shelf = None
     if not shelf:
         return "There's nowhere here to set that out. The shelf is in the hut."
     if len(world.contents(shelf.id)) >= SHELF_CAPACITY:
@@ -784,7 +802,7 @@ def cmd_tuck(world, actor, arg):
 
 VERBS.update({
     "give": cmd_give,
-    "place": cmd_place, "put": cmd_place,
+    "place": cmd_place, "put": cmd_place, "store": cmd_place,
     "stack": cmd_stack_stone,
     "thread": cmd_thread, "hang": cmd_thread,
     "tuck": cmd_tuck,

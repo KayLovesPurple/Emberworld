@@ -53,6 +53,11 @@ breaking, and the recipe for adding a feature safely.
   bookkeeping curios.py's tuck-in-journal reaches for. Split out of
   content.py later, once it stood as a second coherent slice on its own —
   see "The journal module split" below.
+- `pots.py` — clay storage pots: any shaped clay object named "...pot"
+  (`_is_storage_pot`) can hold up to `CONTAINER_CAPACITY` (7) of one locked
+  item kind (`_item_kind`), decluttering the room the shelf's own way. Small
+  enough to start as its own module rather than growing content.py or
+  curios.py again — see "Clay storage pots" below.
 - `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
   sound, undergrowth, smell), the ambient lines, and `describe_forest` /
   `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
@@ -2269,6 +2274,101 @@ elsewhere in this doc, for unrelated reasons specific to each). Whether
 that idea grows past this one case depends on whether real play actually
 reaches for it again — see this doc's own repeated preference for waiting
 until a second real instance shows up before generalizing.
+
+## Clay storage pots — `pots.py`
+
+The second instance of the "let made things join what found things already
+do" idea the clay-bead section above left open, and the first genuinely
+*functional* made object (README's "Someday" section calls this tier
+"functional making," explicitly deferred until a lineage had lived with
+cosmetic-only clay for a while). Prompted directly by real play: eggs have
+no home at all, just pile up loose in whatever room the chicken laid them,
+and a lineage had already been shaping decorative pots with nowhere to put
+anything.
+
+**Design, as specified before any code was written:** any shaped clay
+object ending in "pot" can hold things, not just eggs — a pot locks to
+whatever kind is first put into it (an egg-pot stays egg-only from then on),
+so a lineage naturally ends up with several pots, each its own kind ("a pot
+of potatoes... a pot of glass pieces"), rather than one miscellaneous
+junk-drawer pot. Capacity 7. Declutters the room the same way the shelf
+already does. Cooking must still work on a stored egg as long as its pot is
+in the room, whether or not the hand happens to be carrying it.
+
+**`_is_storage_pot(name)`** is a `name.startswith("a clay ") and
+name.endswith("pot")` check — deliberately narrower than the clay bead's
+bare `endswith("bead")`, because the hut already has an unrelated fixture
+literally named `"tin pot"` (cook-flavor text only, see "Food and the cat"
+above); `endswith("pot")` alone would catch it too.
+
+**`_item_kind(name)`** decides what "kind" means for the lock: for food,
+`FOOD_KINDS = ("potato", "egg")` (content_common.py) matched by substring,
+so raw and cooked share a pot (an egg and a boiled egg are the same kind —
+cooking changes an item's own `.name`, and the lock would otherwise reject
+an egg's own cooked self coming back). Anything else locks to its exact
+name, since a curio's name never changes once found.
+
+**No new verb.** `place`/`put` (curios.py's `cmd_place`) already owns "set
+a carried thing somewhere"; `cmd_place` now tries `pots._try_store` first
+(a deferred import — pots.py doesn't need curios.py, so this stays one-way)
+whenever the arg contains `" in "`, and only falls through to its own "on
+shelf" handling if that returns `None` (arg didn't name a real pot at all —
+`" in "` can appear for other reasons, and the wood-in-hearth alias check
+above it still runs first). `store` is registered as a second alias for the
+same `cmd_place`, alongside the existing `put`. One dispatch key, one
+handler, the same shape journal.py's tuck-reach-in and content.py's
+wood-alias already use for a genuine cross-module call.
+
+**Reused, not reinvented: `display_surface`.** A pot's contents stay
+find-visible the exact way the shelf's already do — `find_visible`
+(content_common.py) checked `display_surface` on room fixtures only, since
+the shelf is the only thing that ever set it and it's never carried. A pot
+*is* portable, so `find_visible` now also checks surfaces the actor is
+carrying, not just ones in the room — a no-op for every existing
+`display_surface` user (nothing carried has ever set it before), purely
+additive for pots.
+
+**BUG WE HIT, caught before it shipped: both the shelf and a pot set
+`display_surface`, so "any display_surface entity here" stopped meaning
+"the shelf."** `cmd_place`'s original shelf lookup was exactly that —
+`next(e for e in room if e.attrs.get("display_surface"))` — which would
+happily return a pot sitting in the hut instead of the shelf once one
+existed there. Fixed by looking the shelf up by its fixed id (`world.get
+("shelf")`) instead of by the flag it now shares with pots. The same
+ambiguity existed in two more places that had made the identical
+assumption — `cmd_take`'s "which container's description do I refresh"
+branch (content.py) and `carrying_actions`' own shelf lookup (content.py) —
+both fixed the same way. `test_the_real_shelf_is_still_found_correctly_
+once_a_pot_shares_its_room` (test_pots.py) pins it.
+
+**BUG WE HIT, caught before it shipped: a pot named after its own
+contents matches the item search too.** `find_visible(world, actor, "egg")`
+is a substring match, so once a pot exists named "a clay egg pot", typing
+`put egg in clay egg pot` could resolve "egg" to the pot itself instead of
+the actual egg — `"egg"` is a substring of both. `_try_store`'s item lookup
+now explicitly excludes the target pot and any other storage pot from
+matching as the *item*, falling back to "you aren't carrying that" rather
+than silently trying to put a pot inside itself.
+`test_a_second_pot_can_hold_a_different_kind_than_the_first` (test_pots.py)
+caught this directly — naming pots after their contents ("egg pot"/"potato
+pot") is exactly the natural thing a lineage would type.
+
+**A freshly-shaped pot announces itself as empty immediately, not on first
+use.** Every other shaped clay object gets `cmd_shape`'s generic "still
+faintly damp from the riverbank" line; a pot's whole point is holding
+things, so `cmd_shape` now checks `_is_storage_pot` on what it just made
+and, if so, sets its description via `_pot_description` right away — the
+same "present but empty" treatment the charm-string gets from world
+creation, not lazily deferred to the first `put`. Caught by a test that
+first asserted the wrong (generic) description and then had to be
+corrected once this was added.
+
+**Pluralization reuses curios.py's existing `_plural_of`/`_CURIO_PLURALS`**
+(via a deferred import) rather than re-solving a problem that dict already
+exists to solve — `_CURIO_PLURALS` picked up four new entries ("a potato" →
+"potatoes", "an egg" → "eggs", and their cooked forms) since potato is the
+one real irregular plural in this game's whole vocabulary and the naive
+"strip the article, add an s" fallback would have produced "potatos."
 
 ## The outer-world map — `map.py`, a hand-drawn ASCII layout
 
