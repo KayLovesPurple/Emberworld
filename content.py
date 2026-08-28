@@ -1196,7 +1196,7 @@ COOKABLES = {
         "cooked_name": "boiled egg",
         "cooked_desc": "a hard-boiled egg, shell cracked and cooling",
         "food_value": EGG_FOOD_VALUE,
-        "cook_line": "You fill the tin pot and set it over the embers, then lower the egg in. Soon it's hard-boiled and cooling.",
+        "cook_line": "You fill the tin pot and set it over the embers, then lower the egg in. Soon it's hard-boiled and cooling -- yours to eat.",
     },
 }
 
