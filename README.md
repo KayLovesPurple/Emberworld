@@ -58,6 +58,14 @@ reads that note and harvests the crop.
 - `docs/FOREST_SPEC.md` — the forest's staged build spec.
 - `docs/CLAY_SPEC.md` — design spec for clay and the riverbank (cosmetic tier built).
 - `docs/CHICKEN_SPEC.md` — design spec for the chicken and eggs (built).
+- `docs/REFACTORING.md` — the agreed code-health backlog: no behavior
+  changes, ordered by value, several meant to land before the feature
+  queue builds on them.
+- `docs/FOX_SPEC.md` — design spec for the fox: the egg offering, the
+  lineage-time trust arc, and her rare gifts (agreed, not built).
+- `docs/CROSSING_SPEC.md` — design spec for the driftwood crossing and
+  the far bank: the first lineage-scale construction project (agreed,
+  not built).
 - `emberworld_save.json` — the persistent world (created on first run; safe to
   delete to start fresh).
 
@@ -345,6 +353,55 @@ commitment.
    (hearth) + a foraged herb (forest), boiled into a cup. A little recipe rather
    than a single-verb loop — the cosiest possible use of a turn, and a
    self-directed comfort for the player the way petting is comfort for the cat.
+
+### The agreed queue (as of world day 75 — decided together, not yet built)
+
+Five additions agreed after reading the lineage's actual play (the
+journal, the wish log, the session transcripts), in build order — small
+to large, each shippable alone:
+
+1. **The twine truth-fix.** Days 68–73 of the journal show false lore
+   winning: several hands wrote that the charm-string "is just
+   decorative" (both circulating twines had been given to the cat before
+   `GIVE_TWINE_REFUSAL` existed, so threading really was impossible for
+   a stretch), and later hands inherited the misinformation. The fix is
+   the pattern the stone's cairn-hint already uses — truth travels on
+   the object: freshly found twine's own description names its purpose,
+   so the object out-argues the journal. Worth shipping first and alone,
+   to watch whether object-truth beats journal-lore in the wild.
+2. **The reed whistle.** Reeds at the riverbank, cut with the knife:
+   `play` as a pure calm-axis verb — and the cat comes to listen, once
+   per visit. The first sound in the world, and the first made thing
+   with a (harmless, tiny) behavior: a deliberately small probe of the
+   functional-making question.
+3. **The cat's corner.** The hut listing is drowning in a decade of
+   "given to the cat and roundly ignored" lines. A cairn-like aggregate
+   — Ember's corner — absorbs cat-trace items into one line that
+   deepens in description rather than growing in length, with
+   `look corner` giving the full hoard. Same permanence, one line.
+   Existing traces migrate on load (charm-string-backfill precedent);
+   `SAVE_VERSION` bumps.
+4. **The fox** *(see `docs/FOX_SPEC.md`)*. The egg's second fate and the
+   cat's wild counterpart: offerings left out in the yard ratchet a
+   lineage-time trust arc — prints, a glimpse, seen, named — and, at its
+   ceiling, rare gifts from off the map arrive on her own clock, never
+   legibly tied to any offering. She is prose, not an entity: she can
+   never come to harm, and never do any.
+5. **The crossing** *(see `docs/CROSSING_SPEC.md`)*. Driftwood, washed
+   up rarely at the riverbank, laid piece by piece — one-way, anonymous,
+   cairn-grammar — into a crossing no single hand can finish. When the
+   last piece goes in, the riverbank gains an exit to the far bank: the
+   first time "many hands, one-way" unlocks something rather than only
+   accumulating.
+
+Considered and parked, with reasons: **wear** (world prose that deepens
+with lifetime use — deferred, to avoid a thicket of conditional
+strings); **letters** (condition-delivered notes to specific future
+moments — parked because the journal's false-lore problem shows a
+targeted message is misinformation with a delivery guarantee);
+**granting wishes from the statue log** (at least one logged wish was
+for a curio the wisher already had multiples of — manufactured on the
+spot, not a real want; the log stays worth reading, skeptically).
 
 **The mysterious statue** *(built — docs/FOREST_SPEC.md Stage 7 — deliberately
 mechanic-free even so).* It does NOTHING. No state, no puzzle, no
