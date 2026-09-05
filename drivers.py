@@ -437,7 +437,7 @@ _REFUSAL_MARKERS = (
     "there's no", "have no '", "aren't carrying", "already",
     "isn't lit", "need a", "nothing left to burn", "nothing here is ready",
     "nothing written there", "nothing to feed", "you'd regret it",
-    "write what?", "name it what?", "no wood",
+    "write what?", "name it what?", "eat what?", "no wood",
 )
 
 

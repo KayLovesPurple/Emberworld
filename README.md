@@ -282,7 +282,7 @@ lives specifically in the ground gained since you last checked in.
 inert: `wish <something>` there costs a turn, changes nothing, and returns
 the same fixed line every time, no matter what you ask for or whether
 anything comes of it. The statue's own description hints that wishing
-here is a thing people do — "the way you'd toss a coin in a fountain" —
+here is a thing people do — "wished for something they didn't have" —
 but never that anything is listening; that distinction is the whole point.
 Once found, it stays findable again from anywhere deep enough for the rest
 of your visit; a short trip may never reach it at all, which is fine — see

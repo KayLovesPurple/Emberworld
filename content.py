@@ -1226,6 +1226,8 @@ def cmd_cook(world, actor, arg):
 
 def cmd_eat(world, actor, arg):
     """eat <thing> -- eat cooked food to ease your hunger."""
+    if not arg.strip():
+        return "Eat what? e.g.  eat broiled potato"
     e = find_visible(world, actor, arg, prefer=_is_cooked)
     if not e:
         return f"You have no '{arg}' to eat."
@@ -1331,25 +1333,30 @@ STATUE_DISCOVERY_CHANCE = 0.25   # was 0.15; real play found the wait too long.
 # The one deliberate hint that wishing is even possible here -- but framed
 # as something the place itself suggests, not a claim of prior knowledge
 # (a fresh hand hasn't actually "heard" anything) and not an invitation from
-# anyone listening. Same folk-magic register as "a coin tossed in a
-# fountain" already used in README's wishing-statue design notes: other
-# people have done this, for whatever reason people do -- never a promise
-# that doing it here works, or that anything hears you. THE LINE THAT MUST
-# NEVER APPEAR: anything implying the statue listens, grants, or is aware.
+# anyone listening: other people have done this, for whatever reason people
+# do -- never a promise that doing it here works, or that anything hears
+# you. THE LINE THAT MUST NEVER APPEAR: anything implying the statue
+# listens, grants, or is aware.
+#
+# Used to end on "the way you'd toss a coin in a fountain" -- dropped after
+# real play showed it working too well as a genre cue: wishes came back as
+# stock fountain-wish material ("a good harvest", "a safe journey home"),
+# including several for items the wisher was already carrying. A wish is
+# for something you don't have; the hint now says that outright instead of
+# naming a genre that happens to imply it.
 STATUE_DISCOVERY_TEXT = (
     "Between two trunks stands something that isn't a tree -- a weathered "
     "stone figure, worn past recognizing, moss thick in its folds. However "
     "long it's stood here, it was long before you. Something about it makes "
-    "you think people have stood here and wished for things, the way you'd "
-    "toss a coin in a fountain."
+    "you think people have stood here and wished for something they didn't "
+    "have."
 )
 
-# The same folk-magic hint STATUE_DISCOVERY_TEXT ends on, folded into the
-# statue's permanent description too (see ensure_statue) -- kept as its own
-# constant so ensure_statue's legacy-save backfill can check for it by
-# substring, same pattern ensure_shelf already uses for STONE_CAIRN_HINT.
-STATUE_WISH_HINT = ("the kind of thing someone leaves a wish with, the way "
-                     "you would a coin in a fountain")
+# The same hint STATUE_DISCOVERY_TEXT ends on, folded into the statue's
+# permanent description too (see ensure_statue) -- kept as its own constant
+# so ensure_statue's legacy-save backfill can check for it by substring,
+# same pattern ensure_shelf already uses for STONE_CAIRN_HINT.
+STATUE_WISH_HINT = "the kind of thing someone leaves a wish with, for something they don't have"
 
 # BUG WE HIT: ensure_statue's backfill guard used to check for
 # STATUE_WISH_HINT itself, so a wording tweak to the constant ("a hand
@@ -1375,8 +1382,8 @@ def ensure_statue(world):
     (most whole lineages, even) may go a long time without ever finding it.
     Nothing else depends on this entity existing before then.
 
-    The description carries the same vague, folk-magic hint as the
-    discovery text -- "a coin in a fountain," never a claim that anything
+    The description carries the same vague hint as the discovery text --
+    a wish is for something you don't have, never a claim that anything
     hears or grants -- so a hand who looks again later (this visit, or a
     later hand entirely, long after the one-time discovery paragraph has
     scrolled away) still finds the nudge toward `wish`, not just a rock.

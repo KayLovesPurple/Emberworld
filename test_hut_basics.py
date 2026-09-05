@@ -100,6 +100,15 @@ def test_cooking_targets_the_raw_potato_not_an_already_cooked_one():
         "the already-cooked potato shouldn't be disturbed"
 
 
+def test_eat_with_no_argument_asks_what_rather_than_quoting_empty_string():
+    """Real-play bug: bare `eat` fell straight to the not-found branch with
+    arg="", producing "You have no '' to eat." -- same class of fix as
+    cmd_wish/cmd_write's own "<verb> what?" guard for a missing argument."""
+    w, actor = fresh()
+    result = w.act(actor, "eat")
+    assert result == "Eat what? e.g.  eat broiled potato"
+
+
 def test_eating_targets_the_cooked_potato_not_the_raw_one():
     w, actor = fresh()
     broiled = _cook_one_potato(w, actor)
