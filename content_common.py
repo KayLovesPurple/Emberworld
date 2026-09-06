@@ -126,6 +126,16 @@ def _always_present(world, actor):
     return True
 
 
+# REFACTORING.md item 4: cmd_look used to special-case CHARM_STRING_ID
+# inline -- a general verb knowing one specific entity by id, which this
+# codebase otherwise never does. Same idea as PRESENCE_RULES just above:
+# the general machinery (cmd_look, content.py) asks, the specific
+# subsystem (curios.py, for the charm-string and the cat's corner) answers.
+# Keyed by entity id -> fn(world, actor, target) -> str, checked by
+# cmd_look before falling back to `target.description` unchanged.
+LOOK_OVERRIDES = {}
+
+
 def _room_here(world, actor, room):
     """The entities actually present in `room` right now -- ordinarily just
     world.contents(room.id), minus anything whose PRESENCE_RULE says it

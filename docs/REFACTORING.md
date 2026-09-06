@@ -50,16 +50,18 @@ and a third tuple edit.
 so the yard's Exits line reads "inside the hut, the forest's edge,
 river" — the one bare key among labeled ones.
 
-## 4. A `LOOK_OVERRIDES` hook
+## 4. A `LOOK_OVERRIDES` hook — **done**
 
-`cmd_look` special-cases `CHARM_STRING_ID` inline — the general verb
+`cmd_look` special-cased `CHARM_STRING_ID` inline — the general verb
 knowing one specific entity, which this codebase otherwise never does.
-A small `LOOK_OVERRIDES = {entity_id: fn}` registry (same shape as
-`PRESENCE_RULES`: the general machinery asks, the specific subsystem
-answers) lets curios.py own the charm-string's ASCII rendering — and
-the cat's corner (`look corner`) and the crossing (`look crossing`)
-both want the same hook, so it's better built once now than
-special-cased twice more.
+Built alongside the cat's corner rather than separately, since the
+corner needed the identical hook for its own two ids
+(`CAT_CORNER_HUT_ID`/`CAT_CORNER_YARD_ID`) — building it once for two
+callers beat special-casing a third inline. `LOOK_OVERRIDES =
+{entity_id: fn}` (content_common.py, same shape as `PRESENCE_RULES`) is
+checked by `cmd_look`; curios.py registers `_look_charm_string` and
+`_look_cat_corner` into it. The crossing (`look crossing`) can reuse it
+directly when it lands.
 
 ## 5. Finish the VisitState migration
 
@@ -112,7 +114,7 @@ refusal string would catch silent drift.
 
 ## The order, if doing them as a batch
 
-~~2 (banded)~~ → 1 (ENSURES) → 4 (LOOK_OVERRIDES) → 3 (calm pools) →
+~~2 (banded)~~ → 1 (ENSURES) → ~~4 (LOOK_OVERRIDES)~~ → 3 (calm pools) →
 5 (VisitState) as one small-change run; then 7 and 6 as the two big
 mechanical moves; 8 whenever the verb surface is next quiet. Run the
 full test suite plus `--fuzz` after each one, per ARCHITECTURE.md's

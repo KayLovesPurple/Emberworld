@@ -31,6 +31,8 @@ from curios import (
     CHARM_STRING_ID, CHARM_ELIGIBLE_ITEMS, CHARM_CAPACITY, CHARM_BANDS,
     CHARM_STRING_HINT, CHARM_MISSING_TWINE_HINT, _is_charm_eligible,
     _charm_string_description, ensure_charm_string, cmd_thread,
+    CAT_CORNER_HUT_ID, CAT_CORNER_YARD_ID, CAT_CORNER_BANDS,
+    ensure_cat_corner, _cat_corner_description,
 )
 from _test_helpers import fresh, run, _add_curio, _Unlucky
 
@@ -638,16 +640,20 @@ def test_a_dropped_curio_names_itself_in_the_room_listing():
     assert f"- {name}, {look_line}" in w.act(actor, "look")
 
 
-def test_a_curio_given_to_the_cat_does_not_double_its_name_in_the_room_listing():
-    """The give-to-cat trace already names itself ("a pinecone, well-battered
-    after a game with the cat") -- prefixing the name again on top of that
-    (as a naive curio-flag check would) reads as "a pinecone, a pinecone,
-    ..."."""
+def test_a_curio_given_to_the_cat_no_longer_leaves_a_standalone_room_entity():
+    """Superseded by the cat's corner: give-to-cat used to leave a
+    permanent, non-portable trace entity sitting directly in the room
+    ("a pinecone, well-battered after a game with the cat"), doubling as
+    its own naming bug risk (fixed once, worth pinning stays gone now).
+    It folds into the corner's bookkeeping instead -- no new entity, no
+    name-doubling possible because there's no separate entity to double
+    the name onto."""
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
     w.act(actor, "give pinecone to cat")
+    assert not any(e.name == "a pinecone" for e in w.entities.values()), \
+        "the given curio should be fully consumed, not left as a room entity"
     listing = w.act(actor, "look")
-    assert "a pinecone, well-battered after a game with the cat" in listing
     assert "a pinecone, a pinecone," not in listing
 
 
@@ -676,7 +682,7 @@ def test_look_at_a_carried_curio_shows_its_odd_line_and_cat_hint():
     assert result == "tight and resinous, one scale broken — the cat might bat at it."
 
 
-def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_leaves_a_trace():
+def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_joins_the_corner():
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
     result = w.act(actor, "give pinecone to cat")
@@ -684,25 +690,26 @@ def test_giving_a_play_curio_to_the_cat_fires_the_reaction_and_leaves_a_trace():
         "The cat pounces on the pinecone, batting it round before losing interest."
     assert not any(e.name == "a pinecone" and e.location == actor.id
                    for e in w.contents(actor.id)), "giving it away must consume it from the pack"
-    assert "well-battered after a game with the cat" in w.perceive(actor)
+    assert "well-battered after a game with the cat" in w.act(actor, "look corner")
 
 
-def test_taking_a_cat_given_trace_names_the_cat_specifically():
+def test_taking_a_cat_given_trace_still_names_the_cat_specifically():
     """`take`'s generic non-portable refusal ("The {thing} won't budge")
     also covers real fixtures (the cairn, the charm-string, shaped clay) --
     for those "won't budge" is simply true. A curio already given to the
-    cat is different: it isn't heavy or fixed in place, it's just not
-    yours anymore, so it gets its own, more accurate refusal. A curio
-    already given to the cat is the one entity that's ever both
-    `attrs["curio"]` and non-portable at once -- every other permanent
-    fate (the cairn, the charm-string, the journal-tuck) consumes the
-    entity outright rather than leaving a claimed trace behind, and the
-    mystery seed's bloom flips `curio`/`portable` together in the same
-    tick, never separately -- so that combination is a safe, unambiguous
-    signal, not a name-based guess."""
+    cat is different in kind: it isn't heavy or fixed in place, it's just
+    not yours anymore, so it gets its own, more accurate refusal. This
+    combination (attrs["curio"] and non-portable at once) can no longer
+    arise from real play -- give-to-cat folds straight into the cat's
+    corner now, leaving no standalone entity for `take` to ever see -- but
+    the refusal itself stays correct if the shape ever recurs (a manually
+    constructed entity here, the same way test_take_prefers_a_real_
+    shelved_curio_over_an_unrelated_cat_given_trace already has to)."""
     w, actor = fresh()
-    _add_curio(w, actor, "a pinecone")
-    w.act(actor, "give pinecone to cat")
+    w.add(Entity(w.fresh_id("found"), "a pinecone",
+                 "a pinecone, well-battered after a game with the cat",
+                 location=actor.location, portable=False,
+                 attrs={"curio": True, "cat_reaction": "plays"}))
     result = w.act(actor, "take pinecone")
     assert result.splitlines()[0] == "It's the cat's now, you can't have it."
 
@@ -744,13 +751,13 @@ def test_take_prefers_a_real_shelved_curio_over_an_unrelated_cat_given_trace():
     assert any(e.id == live.id and e.location == actor.id for e in w.contents(actor.id))
 
 
-def test_giving_an_ignored_curio_to_the_cat_still_leaves_a_trace():
+def test_giving_an_ignored_curio_to_the_cat_still_joins_the_corner():
     w, actor = fresh()
     _add_curio(w, actor, "a smooth grey stone")
     result = w.act(actor, "give stone to cat")
     assert result.splitlines()[0] == \
         "The cat sniffs the smooth grey stone once, unimpressed, and stalks off."
-    assert "given to the cat and roundly ignored" in w.perceive(actor)
+    assert "given to the cat and roundly ignored" in w.act(actor, "look corner")
 
 
 # ===========================================================================
@@ -811,12 +818,13 @@ def test_stack_stone_finds_a_carried_stone_even_when_a_same_named_item_lies_in_t
     assert w.get(CAIRN_ID).attrs["height_cm"] > 0
 
 
-def test_give_trace_persists_across_a_save_load_roundtrip():
+def test_cat_corner_persists_across_a_save_load_roundtrip():
     w, actor = fresh()
     _add_curio(w, actor, "a pinecone")
     w.act(actor, "give pinecone to cat")
     w2 = World.from_data(json.loads(json.dumps(w.to_data())))
-    assert "well-battered after a game with the cat" in w2.perceive(w2.get("you"))
+    actor2 = w2.get("you")
+    assert "well-battered after a game with the cat" in w2.act(actor2, "look corner")
 
 
 def test_putting_a_curio_on_the_shelf_via_the_put_alias():
@@ -1004,6 +1012,171 @@ def test_actions_does_not_offer_give_to_cat_without_the_cat_present():
     w.get("cat").location = "yard"     # actor stays in the hut
     actions = w.available_actions(actor)
     assert not any(a.startswith("give ") for a in actions)
+
+
+# ===========================================================================
+# THE CAT'S CORNER -- a cairn-like aggregate for give-to-cat traces.
+# Superseded design: give-to-cat used to leave a permanent, non-portable
+# trace entity sitting directly in the room; real play showed a decade of
+# DISTINCT trace lines (not just repeats of the same item, which
+# compression already handled) drowning the listing. Two corners, one per
+# room the cat can ever be in (hut, yard) -- see docs/ARCHITECTURE.md's
+# "The cat's corner" for the full reasoning.
+# ===========================================================================
+def test_give_to_cat_in_the_hut_updates_only_the_hut_corner():
+    w, actor = fresh()
+    w.get("cat").location = "hut"
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    hut_corner = w.get(CAT_CORNER_HUT_ID)
+    yard_corner = w.get(CAT_CORNER_YARD_ID)
+    assert _cat_corner_total_helper(hut_corner) == 1
+    assert _cat_corner_total_helper(yard_corner) == 0
+
+
+def _cat_corner_total_helper(corner):
+    return sum(e["count"] for e in corner.attrs.get("traces", {}).values())
+
+
+def test_give_to_cat_in_the_yard_updates_only_the_yard_corner():
+    w, actor = fresh()
+    run(w, actor, "go out")
+    w.get("cat").location = "yard"
+    _add_curio(w, actor, "a smooth grey stone")
+    w.act(actor, "give stone to cat")
+    hut_corner = w.get(CAT_CORNER_HUT_ID)
+    yard_corner = w.get(CAT_CORNER_YARD_ID)
+    assert _cat_corner_total_helper(hut_corner) == 0
+    assert _cat_corner_total_helper(yard_corner) == 1
+
+
+def test_both_corners_exist_in_a_fresh_world_bare_and_empty():
+    w, actor = fresh()
+    hut_corner = w.get(CAT_CORNER_HUT_ID)
+    yard_corner = w.get(CAT_CORNER_YARD_ID)
+    assert hut_corner is not None and hut_corner.location == "hut"
+    assert yard_corner is not None and yard_corner.location == "yard"
+    assert hut_corner.description == CAT_CORNER_BANDS[0][1]
+    assert yard_corner.description == CAT_CORNER_BANDS[0][1]
+    assert not hut_corner.portable and not yard_corner.portable
+
+
+def test_cat_corner_description_bands_by_total_trace_count():
+    w, actor = fresh()
+    corner = w.get(CAT_CORNER_HUT_ID)
+    for threshold, line in CAT_CORNER_BANDS:
+        corner.attrs["traces"] = {"a placeholder": {"count": threshold, "reaction": "ignores"}}
+        assert _cat_corner_description(corner) == line
+
+
+def test_cat_corner_description_updates_immediately_after_a_real_give():
+    w, actor = fresh()
+    names = ("a pinecone", "a small brown feather", "a smooth grey stone",
+             "a pebble of blue glass", "a bone button")
+    for name in names:
+        w.get("cat").location = "hut"   # the cat wanders on its own; pin it before each give
+        _add_curio(w, actor, name)
+        w.act(actor, f"give {name.split(' ', 1)[1]} to cat")
+    corner = w.get(CAT_CORNER_HUT_ID)
+    assert corner.description == CAT_CORNER_BANDS[2][1], corner.description
+
+
+def test_look_corner_shows_the_full_per_item_breakdown():
+    w, actor = fresh()
+    for name, arg in (("a pinecone", "pinecone"), ("a pinecone", "pinecone"),
+                      ("a bone button", "button")):
+        w.get("cat").location = "hut"   # the cat wanders on its own; pin it before each give
+        _add_curio(w, actor, name)
+        w.act(actor, f"give {arg} to cat")
+    result = w.act(actor, "look corner")
+    assert "two pinecones, well-battered after a game with the cat" in result
+    assert "a bone button, given to the cat and roundly ignored" in result
+
+
+def test_look_corner_at_zero_shows_the_bare_description_only():
+    w, actor = fresh()
+    result = w.act(actor, "look corner")
+    assert result == CAT_CORNER_BANDS[0][1]
+
+
+def test_look_the_cats_corner_resolves_via_find_visible():
+    w, actor = fresh()
+    w.get("cat").location = "hut"
+    _add_curio(w, actor, "a pinecone")
+    w.act(actor, "give pinecone to cat")
+    assert "well-battered" in w.act(actor, "look the cat's corner")
+
+
+def test_available_actions_lists_look_the_cats_corner():
+    w, actor = fresh()
+    assert "look the cat's corner" in w.available_actions(actor)
+
+
+def test_cat_corner_is_not_portable_and_not_a_curio():
+    w, actor = fresh()
+    corner = w.get(CAT_CORNER_HUT_ID)
+    assert not corner.portable
+    assert not corner.attrs.get("curio")
+    result = w.act(actor, "take the cat's corner")
+    assert "won't budge" in result.lower()
+
+
+def test_ensure_cat_corner_migrates_a_legacy_trace_in_the_hut():
+    w, actor = fresh()
+    legacy = w.add(Entity(w.fresh_id("found"), "a jay's feather",
+                           "a jay's feather, well-battered after a game with the cat",
+                           location="hut", portable=False,
+                           attrs={"curio": True, "cat_reaction": "plays"}))
+    ensure_cat_corner(w)
+    assert w.get(legacy.id) is None, "the standalone legacy trace must be consumed"
+    corner = w.get(CAT_CORNER_HUT_ID)
+    assert corner.attrs["traces"]["a jay's feather"]["count"] == 1
+    assert "well-battered" in w.act(actor, "look corner")
+
+
+def test_ensure_cat_corner_migrates_a_legacy_trace_in_the_yard():
+    w, actor = fresh()
+    legacy = w.add(Entity(w.fresh_id("found"), "a pebble of blue glass",
+                           "a pebble of blue glass, given to the cat and roundly ignored.",
+                           location="yard", portable=False,
+                           attrs={"curio": True, "cat_reaction": "ignores"}))
+    ensure_cat_corner(w)
+    assert w.get(legacy.id) is None
+    corner = w.get(CAT_CORNER_YARD_ID)
+    assert corner.attrs["traces"]["a pebble of blue glass"]["count"] == 1
+
+
+def test_ensure_cat_corner_leaves_unrelated_non_portable_fixtures_alone():
+    w, actor = fresh()
+    ensure_cat_corner(w)
+    assert w.get("pot") is not None, "the tin pot (not a curio) must not be touched"
+
+
+def test_ensure_cat_corner_is_idempotent():
+    w, actor = fresh()
+    ensure_cat_corner(w)
+    hut_before = dict(w.get(CAT_CORNER_HUT_ID).attrs["traces"])
+    ensure_cat_corner(w)
+    assert w.get(CAT_CORNER_HUT_ID).attrs["traces"] == hut_before
+    assert sum(1 for e in w.entities.values() if e.id == CAT_CORNER_HUT_ID) == 1
+
+
+def test_a_fox_gift_given_to_the_cat_also_joins_the_corner():
+    from fox import FOX_TRUST_CEILING
+    from _test_helpers import _Lucky
+    w, actor = fresh()
+    yard = w.get("yard")
+    yard.attrs["fox_trust"] = FOX_TRUST_CEILING
+    yard.attrs["fox_suppress_until"] = 0
+    run(w, actor, "go out")
+    w.rng = _Lucky()
+    w.act(actor, "wait")
+    gift = next(e for e in w.contents("yard") if e.attrs.get("fox_gift"))
+    w.act(actor, f"take {gift.name}")
+    w.get("cat").location = "yard"   # the cat wanders on its own; pin it just before giving
+    w.act(actor, f"give {gift.name} to cat")
+    corner = w.get(CAT_CORNER_YARD_ID)
+    assert gift.name in corner.attrs["traces"]
 
 
 def test_wood_and_hearth_fuel_survive_save_load_roundtrip():

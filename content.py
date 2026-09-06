@@ -24,7 +24,7 @@ from content_common import (
     _the, _is_raw, _is_cooked, LAST_POTATO_BEAT, _patch_has_crop,
     _last_potato_beat, day_stamp as _day_stamp,
     PRESENCE_RULES, PRESENCE_LAST, _always_present, _room_here,
-    find_visible, _carrying, banded,
+    find_visible, _carrying, banded, LOOK_OVERRIDES,
 )
 from curios import (
     FOUND_ITEMS, _found_description,
@@ -32,7 +32,7 @@ from curios import (
     CURIO_GROUP_EXACT_MAX,
     CAIRN_ID, ensure_cairn, cmd_stack_stone,
     CHARM_STRING_ID, CHARM_CAPACITY, CHARM_ELIGIBLE_ITEMS, _is_charm_eligible,
-    _charm_string_ascii, _charm_string_missing_twine_hint, ensure_charm_string,
+    ensure_charm_string, ensure_cat_corner,
     _curio_groups, _group_count_line, _group_look_summary,
     _is_tuckable,
 )
@@ -539,12 +539,8 @@ def cmd_look(world, actor, arg):
             summary = _group_look_summary(target.name, _room_here(world, actor, room))
             if summary:
                 return summary
-        if target.id == CHARM_STRING_ID:
-            text = _charm_string_ascii(target)
-            hint = _charm_string_missing_twine_hint(world, actor, target)
-            if hint:
-                return f"{text}\n{hint}"
-            return text
+        if target.id in LOOK_OVERRIDES:
+            return LOOK_OVERRIDES[target.id](world, actor, target)
         return target.description
     stamp = world.timestr()
     if world.is_dark(room.id):
@@ -2111,6 +2107,7 @@ def build_world():
     ensure_shelf(w)
     ensure_charm_string(w)
     ensure_pot(w)
+    ensure_cat_corner(w)
 
     build_cat(w)
     build_chicken(w)

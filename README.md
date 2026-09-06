@@ -386,13 +386,17 @@ its own entry for why):
    per visit. The first sound in the world, and the first made thing
    with a (harmless, tiny) behavior: a deliberately small probe of the
    functional-making question.
-3. **The cat's corner.** The hut listing is drowning in a decade of
-   "given to the cat and roundly ignored" lines. A cairn-like aggregate
-   — Ember's corner — absorbs cat-trace items into one line that
+3. **The cat's corner** *(built — see `docs/ARCHITECTURE.md`'s "The cat's
+   corner" section)*. The hut listing was drowning in a decade of "given
+   to the cat and roundly ignored" lines — a real save had 26. A
+   cairn-like aggregate absorbs cat-trace items into one line that
    deepens in description rather than growing in length, with
-   `look corner` giving the full hoard. Same permanence, one line.
-   Existing traces migrate on load (charm-string-backfill precedent);
-   `SAVE_VERSION` bumps.
+   `look corner` giving the full hoard. Turned out to need *two*
+   corners, not one: the cat wanders between the hut and the yard, and
+   traces have always landed in whichever room the give happened in (24
+   hut, 2 yard, in that same real save). Existing traces migrate on
+   load, the same shape as the charm-string's own items-backfill — no
+   `SAVE_VERSION` bump needed after all.
 4. **The fox** *(built — see `docs/FOX_SPEC.md` and
    `docs/ARCHITECTURE.md`'s "The fox" section)*, shipped out of order
    ahead of 2 and 3 above once the egg glut it fixes kept recurring in

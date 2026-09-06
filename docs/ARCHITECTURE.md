@@ -39,14 +39,14 @@ breaking, and the recipe for adding a feature safely.
   producer (never a second hungry mouth), its two behaviors (idle/lay),
   and `build_chicken`/`ensure_chicken`. See "The chicken" below.
 - `curios.py` — the found-curio economy as its own self-contained
-  subsystem: the shelf, the cairn, the charm-string, give-to-cat,
-  tuck-in-journal, and the visual-compression grouping that keeps a
-  well-visited room's listing readable, plus `FOUND_ITEMS` and
-  `_found_description`. Split out of content.py the same way cat.py/
-  chicken.py were, once it had grown into the single largest coherent
-  slice left in the file (~3000 lines at the time). See "The curio-economy
-  split" below for the full as-built reasoning, including what stayed in
-  content.py and why.
+  subsystem: the shelf, the cairn, the charm-string, give-to-cat and the
+  cat's corner it now folds into, tuck-in-journal, and the visual-
+  compression grouping that keeps a well-visited room's listing readable,
+  plus `FOUND_ITEMS` and `_found_description`. Split out of content.py the
+  same way cat.py/chicken.py were, once it had grown into the single
+  largest coherent slice left in the file (~3000 lines at the time). See
+  "The curio-economy split" and "The cat's corner" below for the full
+  as-built reasoning, including what stayed in content.py and why.
 - `journal.py` — the shared journal as its own self-contained subsystem:
   `cmd_write`/`cmd_read`, the capped/spread view a hand actually sees
   (`journal_view`/`_journal_view_indices`), and the entry-indexing
@@ -1147,6 +1147,99 @@ for that reason, but kept as its own separate pool rather than added to
 "it smells faintly of fox, and of somewhere else" to every entry) has to
 read as *brought*, never *found*, so a hand can tell on sight which
 economy a given curio came from.
+
+## The cat's corner — a cairn-like aggregate for give-to-cat traces
+
+Next off the agreed queue after the fox. `give <curio> to cat` used to
+leave a permanent, non-portable trace entity sitting directly in whatever
+room the give happened in ("a pinecone, well-battered after a game with
+the cat") — real play showed exactly what the cairn's own design already
+anticipated for stones: a decade of lineage play accumulated 26 of these
+in one live save, 24 in the hut and 2 in the yard. Curio-grouping
+(`_curio_groups`) only ever collapses *identical* traces into a count
+line ("two pinecones, well-battered..."), never the dozen-odd genuinely
+*different* item types the found-curio/fox-gift catalog can produce
+between them, so grouping alone never touched the real problem. The
+corner is the cairn's own "collective, permanent, one line" shape,
+applied to give-to-cat instead of stack-stone: every trace folds into one
+entity's bookkeeping instead of becoming its own room fixture, with the
+full breakdown a `look` away.
+
+**Two corners, not one — the twist the queue's own one-paragraph sketch
+didn't anticipate.** The cat wanders between the hut and the yard
+(`cat_wander`, cat.py), and `give ... to cat` has always worked wherever
+it currently is — traces have landed in *either* room depending on where
+the give happened (the live save's 24-hut/2-yard split is exactly this).
+A single, fixed-location corner, mirroring the cairn's own anchor at the
+forest's edge, would only ever catch half of them. `CAT_CORNER_HUT_ID`/
+`CAT_CORNER_YARD_ID` are two independent entities, one per room the cat
+can ever occupy — `cmd_give` looks up whichever one matches
+`actor.location` (`_cat_corner_id_for`) and folds the trace in there.
+
+**Bookkeeping, and why it's a dict keyed by name rather than a plain
+count like the cairn's.** The cairn only ever needs a height, because
+every stone is interchangeable. A cat-given trace isn't: the corner's
+whole reason for existing is to preserve *which* items were given and
+how the cat reacted to each, for the `look corner` breakdown, so
+`corner.attrs["traces"]` is `{name: {"count": N, "reaction": "plays" |
+"ignores"}}`. The standing room-listing description still banded
+(`CAT_CORNER_BANDS`, `content_common.banded`) on the *total* count across
+every kind, the same "small pile → proper heap" shape as the cairn's own
+height bands — `_cat_corner_trace_line` reuses `_group_count_line` (the
+curio-visual-compression helper, unchanged) to render each breakdown
+line in the exact register a standalone trace always read in, just
+gathered under `look corner` instead of scattered across a dozen bullets.
+
+**REFACTORING.md item 4, done at the same time, not separately.**
+`cmd_look` used to special-case `CHARM_STRING_ID` inline — a general verb
+knowing one specific entity by id, which this codebase otherwise never
+does — and the corner needed the identical hook (two more ids,
+`CAT_CORNER_HUT_ID`/`CAT_CORNER_YARD_ID`, each wanting their own dedicated
+`look` view). Building the hook once for two callers rather than adding a
+third inline special-case: `LOOK_OVERRIDES` (content_common.py, same
+`{entity_id: fn}` shape as `PRESENCE_RULES`) is checked by `cmd_look`
+after the curio-group-summary branch; curios.py registers both the
+charm-string's existing view and the corner's new one into it.
+`_look_charm_string`/`_look_cat_corner` both take `(world, actor, target)`
+and return the string `cmd_look` shows — the charm-string's own logic is
+otherwise untouched, just relocated out of content.py's `cmd_look` and
+into a named function next to the entity it's about.
+
+**Migration, the same shape as the charm-string's own items-backfill.**
+`ensure_cat_corner` (called from `build_world`/`load_or_build`, same as
+every other `ensure_*`) creates both corners if missing, then scans the
+hut and the yard for any entity matching the exact shape a standalone
+trace always had — `curio=True`, non-portable, description ending in one
+of `_CAT_TRACE_SUFFIXES`' two phrasings — and folds each one into the
+matching corner before removing it. `_legacy_trace_reaction` matches on
+`.endswith(suffix)` *or* `.endswith(suffix + ".")`: the live save had
+both forms (a handful of older traces carry a trailing period the
+current phrasing never adds), from before that was made consistent.
+Verified directly against the real save: 26 standalone traces in, 0 left
+after migration, 24/2 split preserved exactly, correct band on both
+corners (`"a proper heap..."` for the hut at 24, `"a corner where a
+little..."` for the yard at 2) — not just the test suite's synthetic
+cases.
+
+**No `SAVE_VERSION` bump**, despite the original queue note assuming one
+would be needed — the same realization the fox's own build made moot for
+itself: a one-time `ensure_*` backfill handles the old shape cleanly
+without needing to reject any save as incompatible, the same as
+chicken/pots/fox before it.
+
+**What this structurally retires, without any code needing to change.**
+No standalone cat-given trace entity will ever be created again, so the
+whole class of "same-named trace shadows a carried item" bugs a real
+session hit once (`find_visible`'s room-first search order resolving
+"give pinecone" to an inert trace instead of the one still in hand) can
+no longer recur — there's no trace entity left anywhere to do the
+shadowing. `_curio_groups`'/`_group_count_line`'s own trace-handling
+branches (the "traces are included" fix from the curio-visual-compression
+pass) stay in place, generic and still correct, just permanently
+unexercised by give-to-cat specifically from here on — deliberately not
+stripped out, since they remain the right behavior for any non-portable
+curio that might exist by some other path, and removing still-correct
+generality isn't this pass's job.
 
 ## The forest, staged — Stage 3: episodic reset, made explicit
 

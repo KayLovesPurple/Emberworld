@@ -16,6 +16,19 @@ separately produced two identical trace bullets. They're included now,
 same as any other loose curio — see ARCHITECTURE.md for how a trace group
 keeps its text instead of collapsing to a bare count.
 
+**Superseded in part, later still, by the cat's corner** (see
+ARCHITECTURE.md's "The cat's corner"): grouping *identical* traces never
+touched the real problem real play surfaced — a decade of lineage play
+produces a dozen-odd genuinely *different* trace types (a pinecone trace,
+a button trace, a stone trace...), which compression was never designed
+to collapse across. `give <curio> to cat` no longer creates a standalone
+trace entity at all; it folds straight into one of two corner entities
+(hut/yard) instead, so the "traces are loose curios too" scope note below
+no longer has anything live to apply to — nothing currently exercises
+this doc's own trace-inclusion fix in practice, though the grouping
+mechanism itself stays correct and general-purpose for ordinary found
+curios, which this doc's core scope is still accurate for.
+
 ## Purpose
 
 Emberworld's curios are intentionally persistent. They can accumulate across many visits, and that accumulation is part of the world's lineage and character. The problem is presentation: an ever-growing list of individual curios will eventually make the hut noisy and difficult to read.

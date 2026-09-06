@@ -7,7 +7,8 @@ readable) -- same reasoning as cat.py/chicken.py's own splits. See
 docs/ARCHITECTURE.md for the as-built history of each fate below.
 
 What stays in content.py on purpose: cmd_look itself (a general verb that
-happens to call into _group_look_summary/_charm_string_ascii here), the
+reaches into this file's own LOOK_OVERRIDES entries -- see the charm-string
+and the cat's corner below -- rather than special-casing either by id), the
 journal's own write/read/entry-indexing (cmd_tuck reaches into it via a
 deferred import, same pattern as cat.py's cmd_feed reaching for
 cmd_add_wood), and find_visible/_carrying/_room_here themselves -- those
@@ -16,7 +17,7 @@ just this file.
 """
 
 from world import Entity, VERBS
-from content_common import _the, find_visible, _carrying, banded
+from content_common import _the, find_visible, _carrying, banded, LOOK_OVERRIDES
 from cat import _cat_cap
 
 
@@ -77,16 +78,21 @@ def _curio_groups(entities):
 
 
 def _drop_self_naming_prefix(name, description):
-    """A cat-given trace's description is self-naming -- "{name}, {suffix}"
-    (see _CAT_GIVE_TRACES) -- because on its own (count==1) it's rendered
-    as-is by _room_listing_line with no separate name prefix. Once it's
-    folded into a count line or a group summary, the name is already
-    spoken there, so repeating it verbatim reads as "There are two
-    pinecones here. a pinecone, well-battered..." -- the name twice.
-    Strips the "{name}, " open when present; returns `description`
-    unchanged for an ordinary find's bare look_line (which never has it).
-    Shared by _group_count_line and _group_look_summary so both render a
-    trace group the same way."""
+    """A self-naming description is "{name}, {suffix}" -- the shape a
+    give-to-cat trace always had back when one could exist as a standalone
+    room entity (see _CAT_TRACE_SUFFIXES) -- because on its own (count==1)
+    it's rendered as-is by _room_listing_line with no separate name
+    prefix. Once it's folded into a count line or a group summary, the
+    name is already spoken there, so repeating it verbatim reads as
+    "There are two pinecones here. a pinecone, well-battered..." -- the
+    name twice. Strips the "{name}, " open when present; returns
+    `description` unchanged for an ordinary find's bare look_line (which
+    never has it). Shared by _group_count_line and _group_look_summary so
+    both render a self-naming group the same way. The cat's corner (below)
+    reuses this same "{name}, {suffix}" shape for its own breakdown lines,
+    though no live entity is ever built from it anymore -- give-to-cat
+    folds straight into the corner's bookkeeping instead of creating a
+    trace this function would ever actually see."""
     prefix = f"{name}, "
     return description[len(prefix):] if description.startswith(prefix) else description
 
@@ -426,24 +432,161 @@ def ensure_shelf(world):
 
 
 # ---------------------------------------------------------------------------
-# Give-to-cat -- the reaction and the durable trace it leaves behind, keyed
-# by the curio's own cat_reaction. The gesture matters regardless of which
-# fires -- see cmd_give's docstring and the reset-or-richer invariant it
-# guards: either way the thing is gone from the pack and the world is one
-# thing richer, never reset.
+# Give-to-cat -- the reaction, keyed by the curio's own cat_reaction. The
+# gesture matters regardless of which fires -- see cmd_give's docstring
+# and the reset-or-richer invariant it guards: either way the thing is
+# gone from the pack and the world is one thing richer, never reset. What
+# used to happen next -- a durable, standalone trace entity left behind in
+# the room -- now folds into the cat's corner instead; see the section
+# below for why and how.
 # ---------------------------------------------------------------------------
 _CAT_GIVE_REACTIONS = {
     "plays": "{cap} pounces on {thing}, batting it round before losing interest.",
     "ignores": "{cap} sniffs {thing} once, unimpressed, and stalks off.",
 }
-_CAT_GIVE_TRACES = {
-    "plays": "{name}, well-battered after a game with the cat",
-    "ignores": "{name}, given to the cat and roundly ignored",
+
+# The second half of a cat-given trace's old self-naming description
+# ("{name}, {suffix}") -- no standalone trace entity is ever built from
+# this anymore (see cmd_give/the cat's corner below), but the exact
+# phrasing survives here as the corner's own single source of truth for
+# both matching legacy traces during migration and rendering its own
+# per-item breakdown.
+_CAT_TRACE_SUFFIXES = {
+    "plays": "well-battered after a game with the cat",
+    "ignores": "given to the cat and roundly ignored",
 }
 
 
+# ---------------------------------------------------------------------------
+# The cat's corner -- a cairn-like aggregate for cat-given traces. Every
+# curio given to the cat used to become its own permanent, non-portable
+# entity sitting wherever the give happened ("a pinecone, well-battered
+# after a game with the cat"). Real play showed exactly what the cairn's
+# own design already anticipated for stones: a decade of DISTINCT trace
+# lines drowns the room listing, since curio-grouping only ever collapses
+# IDENTICAL traces, never the dozen-odd different item types this game's
+# FOUND_ITEMS/FOX_GIFT_POOL catalog can produce between them. The corner
+# absorbs every trace into one line that deepens in description as the
+# hoard grows, with the full breakdown a `look` away -- the cairn's own
+# "collective, permanent, one line" shape, applied to give-to-cat instead
+# of stack-stone.
+#
+# Two corners, not one: the cat wanders between the hut and the yard
+# (cat_wander, cat.py), and `give ... to cat` works wherever it currently
+# is -- traces have always landed in either room depending on where the
+# give happened. A single fixed-location corner (mirroring the cairn,
+# anchored at the forest's edge) would only ever catch half of them.
+CAT_CORNER_HUT_ID = "cat_corner_hut"
+CAT_CORNER_YARD_ID = "cat_corner_yard"
+
+# Same "small pile -> proper heap" shape as the cairn's own height bands,
+# banded (content_common.banded) by total trace count across every item
+# type this corner's ever absorbed. Self-contained text on purpose, the
+# same way the cairn's own description names itself -- neither is
+# curio=True, so the room listing shows this description alone, never
+# prefixed by the entity's own .name (see _room_listing_line).
+CAT_CORNER_BANDS = (
+    (0, "a bare corner, nothing of the cat's here yet"),
+    (1, "a corner where a little of the cat's has collected"),
+    (5, "a small hoard in the corner -- things the cat's batted at or ignored, kept all the same"),
+    (15, "a proper heap fills the corner -- years of what the cat's ignored or battered, never thrown out"),
+)
+
+
+def _cat_corner_id_for(room_id):
+    return {"hut": CAT_CORNER_HUT_ID, "yard": CAT_CORNER_YARD_ID}.get(room_id)
+
+
+def _cat_corner_total(corner):
+    return sum(entry["count"] for entry in corner.attrs.get("traces", {}).values())
+
+
+def _cat_corner_description(corner):
+    return banded(CAT_CORNER_BANDS, _cat_corner_total(corner))
+
+
+def _absorb_into_cat_corner(corner, name, reaction):
+    """Fold one more given item into the corner's bookkeeping and refresh
+    its standing description -- the corner's own equivalent of a stone
+    landing on the cairn, except keyed by count-and-kind instead of
+    height."""
+    traces = corner.attrs.setdefault("traces", {})
+    entry = traces.setdefault(name, {"count": 0, "reaction": reaction})
+    entry["count"] += 1
+    corner.description = _cat_corner_description(corner)
+
+
+def _cat_corner_trace_line(name, reaction, count):
+    """One breakdown line, in the exact register a standalone trace used
+    to read in before the corner existed: "{name}, {suffix}" for a single
+    item, or curio-visual-compression's own count-line (_group_count_line)
+    for 2+ -- the identical text a room listing would have shown before,
+    just gathered here instead of scattered across a dozen bullets."""
+    suffix = _CAT_TRACE_SUFFIXES[reaction]
+    if count == 1:
+        return f"{name}, {suffix}"
+    return _group_count_line(name, f"{name}, {suffix}", count)
+
+
+def _look_cat_corner(world, actor, corner):
+    """look corner's dedicated view: the standing description unchanged
+    (same "nothing to show yet" fallback at zero as the charm-string's own
+    ASCII view), plus the full per-item breakdown once there's anything to
+    show -- what a hand used to have to read off a dozen separate
+    room-listing lines, now a `look` away instead."""
+    traces = corner.attrs.get("traces", {})
+    if not traces:
+        return corner.description
+    lines = [_cat_corner_trace_line(name, entry["reaction"], entry["count"])
+             for name, entry in sorted(traces.items())]
+    return corner.description + "\n" + "\n".join(lines)
+
+
+LOOK_OVERRIDES[CAT_CORNER_HUT_ID] = _look_cat_corner
+LOOK_OVERRIDES[CAT_CORNER_YARD_ID] = _look_cat_corner
+
+
+# The exact shape a standalone trace entity always had, before the corner
+# existed: curio=True, non-portable, description ending in one of
+# _CAT_TRACE_SUFFIXES' two phrasings (with or without a trailing period --
+# older saves have both, from before that was made consistent). Used only
+# by ensure_cat_corner's one-time migration below; nothing after this
+# pass ever creates a new one of these.
+def _legacy_trace_reaction(description):
+    for reaction, suffix in _CAT_TRACE_SUFFIXES.items():
+        if description.endswith(suffix) or description.endswith(suffix + "."):
+            return reaction
+    return None
+
+
+def ensure_cat_corner(world):
+    """Add both corners to a world that predates them (fresh build or an
+    older save) -- same backfill role as ensure_shelf/ensure_cairn -- and
+    migrate any standalone cat-given trace entities still sitting in the
+    hut or yard into the appropriate corner's own bookkeeping, the same
+    "fold old data into the new shape" move ensure_charm_string's own
+    items-backfill already made for pre-Phase-2 charm-string counts.
+    Resyncs each corner's description on every load too, same reason
+    ensure_cairn/ensure_charm_string do: CAT_CORNER_BANDS changing later
+    shouldn't need a fresh give to take effect."""
+    for room_id in ("hut", "yard"):
+        corner_id = _cat_corner_id_for(room_id)
+        corner = world.get(corner_id)
+        if corner is None:
+            corner = world.add(Entity(corner_id, "the cat's corner", "",
+                                       location=room_id, portable=False,
+                                       attrs={"traces": {}}))
+        for e in list(world.contents(room_id)):
+            if e.attrs.get("curio") and not e.portable:
+                reaction = _legacy_trace_reaction(e.description)
+                if reaction:
+                    _absorb_into_cat_corner(corner, e.name, reaction)
+                    world.entities.pop(e.id, None)
+        corner.description = _cat_corner_description(corner)
+
+
 def cmd_give(world, actor, arg):
-    """give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always leaves its mark."""
+    """give <thing> to cat -- hand a carried curio to the cat; it plays with some and ignores others, but the gesture always joins what she's collected in her corner."""
     if not arg:
         return "Give what to the cat? e.g.  give pinecone to cat"
     cat = world.get("cat")
@@ -461,9 +604,10 @@ def cmd_give(world, actor, arg):
         return GIVE_TWINE_REFUSAL
     reaction = e.attrs.get("cat_reaction", "ignores")
     cap, thing, name = _cat_cap(cat), _the(e.name), e.name
-    e.location = actor.location
-    e.portable = False
-    e.description = _CAT_GIVE_TRACES[reaction].format(name=name)
+    corner = world.get(_cat_corner_id_for(actor.location) or "")
+    world.entities.pop(e.id, None)
+    if corner is not None:
+        _absorb_into_cat_corner(corner, name, reaction)
     return _CAT_GIVE_REACTIONS[reaction].format(cap=cap, thing=thing)
 
 
@@ -682,6 +826,21 @@ def _charm_string_ascii(charm):
         row = glyphs[i:i + CHARM_ASCII_ROW_WIDTH]
         rows.append(CHARM_ASCII_SEP + CHARM_ASCII_SEP.join(row) + CHARM_ASCII_SEP)
     return "\n".join(rows)
+
+
+def _look_charm_string(world, actor, target):
+    """REFACTORING.md item 4: cmd_look (content.py) used to know
+    CHARM_STRING_ID by name -- a general verb special-casing one specific
+    entity, which this codebase otherwise never does. Registered into
+    LOOK_OVERRIDES (content_common.py) instead, the same "general
+    machinery asks, specific subsystem answers" shape PRESENCE_RULES
+    already uses."""
+    text = _charm_string_ascii(target)
+    hint = _charm_string_missing_twine_hint(world, actor, target)
+    return f"{text}\n{hint}" if hint else text
+
+
+LOOK_OVERRIDES[CHARM_STRING_ID] = _look_charm_string
 
 
 def ensure_charm_string(world):
