@@ -486,10 +486,10 @@ CAT_CORNER_YARD_ID = "cat_corner_yard"
 # curio=True, so the room listing shows this description alone, never
 # prefixed by the entity's own .name (see _room_listing_line).
 CAT_CORNER_BANDS = (
-    (0, "a bare corner, nothing of the cat's here yet"),
-    (1, "a corner where a little of the cat's has collected"),
+    (0, "a bare corner, nothing of the cat's things here yet"),
+    (1, "a corner where a little of the cat's things has collected"),
     (5, "a small hoard in the corner -- things the cat's batted at or ignored, kept all the same"),
-    (15, "a proper heap fills the corner -- years of what the cat's ignored or battered, never thrown out"),
+    (15, "a proper heap fills the corner -- everything the cat's ignored or battered, never thrown out"),
 )
 
 
