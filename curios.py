@@ -487,7 +487,7 @@ CAT_CORNER_YARD_ID = "cat_corner_yard"
 # prefixed by the entity's own .name (see _room_listing_line).
 CAT_CORNER_BANDS = (
     (0, "a bare corner, nothing of the cat's things here yet"),
-    (1, "a corner where a little of the cat's things has collected"),
+    (1, "a corner where a few of the cat's things have collected"),
     (5, "a small hoard in the corner -- things the cat's batted at or ignored, kept all the same"),
     (15, "a proper heap fills the corner -- everything the cat's ignored or battered, never thrown out"),
 )
