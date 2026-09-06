@@ -58,6 +58,12 @@ breaking, and the recipe for adding a feature safely.
   item kind (`_item_kind`), decluttering the room the shelf's own way. Small
   enough to start as its own module rather than growing content.py or
   curios.py again — see "Clay storage pots" below.
+- `fox.py` — the fox, per `docs/FOX_SPEC.md`: never an entity, ever — all
+  her state lives in `attrs` on the yard. A lineage-time relationship
+  (offerings that always resolve overnight and ratchet trust one-way,
+  texture that deepens in stages, naming once she's been seen) plus, past
+  a trust ceiling, rare gifts hard-decoupled from any single offering. See
+  "The fox" below.
 - `forest_text.py` — the forest's fragment pools (near/mid/deep × light,
   sound, undergrowth, smell), the ambient lines, and `describe_forest` /
   `_forest_ambient`. FOREST_SPEC.md Stages 2 and 6. Imports nothing: the two
@@ -70,7 +76,8 @@ breaking, and the recipe for adding a feature safely.
 - `emberworld.py` — the thin CLI entrypoint. Just argv parsing and a
   dispatch to `play`/`random_agent`/`llm_agent`/`fuzz_run`.
 - `test_world.py` / `test_cat.py` / `test_chicken.py` / `test_drivers.py` /
-  `test_lineage_memory.py` — the test suite for those modules. content.py's own tests are split
+  `test_lineage_memory.py` / `test_map.py` / `test_pots.py` / `test_fox.py`
+  — the test suite for those modules. content.py's own tests are split
   further, by subject, into `test_hut_basics.py`, `test_curios.py`,
   `test_forest_edge.py`, `test_forest_venture.py`, `test_journal_and_seed.py`,
   and `test_riverbank.py` (see the split note lower in this doc for why and
@@ -1016,6 +1023,103 @@ bare-name precedent to preserve for the chicken. `_animal_description`
 dispatches to `_cat_description`/`_chicken_description` (both still
 species-owned, imported into `content.py`) to refresh the right entity's
 standing description after naming.
+
+## The fox — a lineage-time relationship, per `docs/FOX_SPEC.md`
+
+Shipped ahead of the smaller items in front of it in the agreed queue
+(the twine truth-fix, the reed whistle, the cat's corner) because the
+egg glut it exists to fix kept recurring in real play — the chicken
+produces faster than anyone eats, and eggs had exactly one fate (cook,
+eat) before this. A new subsystem file, `fox.py`, but a different shape
+from `cat.py`/`chicken.py`: **there is no fox entity, anywhere, ever**
+(FOX_SPEC.md's design goal 4). All her state — trust, given name, the
+gift-suppression window — lives in `attrs` on the `yard` entity itself.
+`ensure_fox(world)` reflects that: it doesn't create anything (no
+entity to create), it just makes sure `fox_tending` is attached to the
+yard, the same backfill role `ensure_shelf`/`ensure_cairn` play for
+their own entities.
+
+**BUG WE HIT (caught before it shipped): `Entity.attach()` doesn't
+dedupe.** Unlike `build_cat`/`build_chicken`, which only ever run once
+(guarded by `world.get("chicken") is None`, trivially true exactly
+once), `ensure_fox` runs against the *same* pre-existing `yard` entity
+on every load. Calling `yard.attach("fox_tending")` unconditionally
+would attach it a second time on the second load, running the behavior
+twice a tick from then on. Guarded by checking `"fox_tending" not in
+yard.behavior_names` first — a fresh world's yard (attached once in
+`build_world`) and an older save's yard (missing it entirely, backfilled
+here) both end up with exactly one copy either way.
+
+**Trust is a one-way ratchet, exactly like the cairn's height** — an
+offering resolves, `+1`, forever; nothing in `fox_tending` ever
+subtracts from it. `FOX_SIGN_BANDS` is `content_common.banded()`'s
+newest caller (see the section above): four `(threshold, line)` tiers —
+prints, glimpse, seen, lingers — deliberately with no band for the
+ceiling itself, since trust keeps counting past it but nothing further
+gates on it (`banded()` caps at the highest band it has, so trust 15 and
+trust 10,000 read identically). Naming unlocks at `FOX_TRUST_SEEN` and
+folds into the sign's own text once set (`"; Sorrel, someone decided"`)
+— the same "a memoryless hand inherits a name in one line" trick the
+cat's given name already pulls.
+
+**"Morning texture," and the one real design decision the spec left
+open.** FOX_SPEC.md describes stage text as texture that "appears" after
+an offering resolves, without pinning the actual delivery mechanism.
+Two were considered:
+- `world.announce(msg, room_id)` — what `wildlife_glimpse` already uses
+  for its own ambient fox line (`WILDLIFE_LINES["yard"]["dusk"]`,
+  unrelated to this system). Rejected: `world.log` only survives for the
+  single `act()` call that reads it (see `World.act`'s own reset-then-
+  read), so a message posted during a tick the current hand isn't
+  standing in the yard for is simply gone, never seen by anyone. "Morning
+  texture queued" implies persistence until read, which this can't give.
+- **A persistent trace entity** (`FOX_SIGN_ID`, id `"fox_sign"`) — this
+  is what shipped. `fox_tending` creates it once, on the first offering
+  ever resolved, and updates its `.description` in place on every
+  resolution after, the same "one entity, description recomputed"
+  pattern `ensure_cairn`/`ensure_charm_string` already use. It reads
+  through the exact same room-listing machinery every other piece of
+  world state goes through (`_room_lines`/`_room_listing_line`), so
+  `cmd_look` needed **zero** special-casing for it — no new entry in the
+  `CHARM_STRING_ID`-shaped pile of special cases REFACTORING.md item 4
+  wants to collapse. It isn't the fox (design goal 4 survives): it's a
+  trace of her passing, the same idea as a cat-given trace being an
+  entity without being the cat.
+
+**The offering and the gift are hard-decoupled, exactly as design goal
+requires — never in the same `if`.** `fox_tending` resolves a waiting
+offering (present + `world.phase() == "night"`) in one unconditional
+block, and separately rolls the gift chance in a second, entirely
+independent block gated only on trust/ceiling/suppression-window/no-
+gift-already-out. The only wire between them is `fox_suppress_until`,
+set by the *first* block and read by the *second* — an offering can only
+ever suppress a gift, never cause one, so a gift's timing can never be
+read as a response to any specific offering, even by accident.
+
+**Naming's one real asymmetry against `cat`/`chicken`.** `cmd_name`
+(content.py) checks for a `"fox "` prefix *before* falling into the
+existing `_NAMEABLE_ANIMALS` entity loop, because the fox can't use that
+loop at all — it does `world.get(species)` and checks
+`animal.location != actor.location`, both meaningless for something
+with no entity and no location. `_name_fox` checks `FOX_TRUST_SEEN`
+against the yard's own attrs instead, and — deliberately — **not**
+`actor.location == "yard"`: a hand names what it's heard of (texture,
+inherited from anywhere), not what's standing in front of it, since
+nothing ever stands in front of anyone here. `fox_actions` (fox.py)
+mirrors this: `"leave egg out"` is yard-gated (a real physical act),
+`"name fox <name>"` isn't (a lineage fact, available from wherever a
+hand happens to be once trust crosses the threshold).
+
+**Gifts are ordinary curios, on purpose** (`curio=True`, portable,
+`cat_reaction` picked the same way a found item's is) — they enter the
+shelf/give-to-cat economy exactly like anything from the forest, since
+"there is something right about giving Ember a fox's gift." `FOX_GIFT_POOL`
+is shaped identically to `curios.FOUND_ITEMS` (`name, look_line, reaction`)
+for that reason, but kept as its own separate pool rather than added to
+`FOUND_ITEMS` — the fox's provenance (`_fox_gift_description` appends
+"it smells faintly of fox, and of somewhere else" to every entry) has to
+read as *brought*, never *found*, so a hand can tell on sight which
+economy a given curio came from.
 
 ## The forest, staged — Stage 3: episodic reset, made explicit
 

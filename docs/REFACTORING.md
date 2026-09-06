@@ -5,8 +5,8 @@
 these change behavior; every one should land green against the existing
 tests and the fuzzer. Roughly ordered by value — and 1–5 are each small
 and independently shippable, worth doing before or alongside the agreed
-feature queue, since the fox and the crossing build directly on several
-of them.*
+feature queue, since the fox (now built -- see `docs/FOX_SPEC.md`) and
+the crossing build directly on several of them.*
 
 ## 1. An `ENSURES` registry for backfills
 
@@ -31,10 +31,10 @@ lamp hand-roll the same idea but don't fit the helper's exact shape
 closely enough to be worth forcing (see docs/ARCHITECTURE.md's note on
 this). `banded(bands, value)` in content_common.py collapses the three —
 generic infrastructure, not owned by any one caller, same reasoning
-`find_visible`/`_carrying`/`_room_here` already moved there for. Ready to
-earn its keep four more times: the crossing's prose tiers, the fox's
-trust stages, and the cat's corner's deepening line all want exactly this
-shape.
+`find_visible`/`_carrying`/`_room_here` already moved there for. Already
+earned its keep once more: the fox's `FOX_SIGN_BANDS` (fox.py) uses it
+too. Still ready for the crossing's prose tiers and the cat's corner's
+deepening line, whenever those land.
 
 ## 3. Data-key the calm verbs by room
 
@@ -69,7 +69,8 @@ as aliases for existing call sites (`world.forest_depth` forwarding to
 block in content.py, journal.py, drivers.py. Point them at
 `world.visit.<field>` directly and delete the shims. Mechanical,
 test-backed, and it removes the two-names-for-one-field trap before the
-fox adds session state of its own.
+crossing adds session state of its own (the fox, once built, turned out
+to need none -- her whole state is persistent, on the yard's own attrs).
 
 ## 6. Split the LLM driver out of drivers.py
 
@@ -89,9 +90,11 @@ content.py is back at ~2100 lines post-splits. The forest block
 wildlife rolls — ~400 lines) is the largest coherent slice left,
 already has its own spec doc (FOREST_SPEC.md) and a sibling module
 (forest_text.py); `forest.py` follows the house pattern exactly. The
-mystery seed/bloom block (~130 lines) is a second candidate. Worth
-doing *before* the feature queue lands, since fox.py and the crossing
-will grow the codebase around whatever shape content.py is in.
+mystery seed/bloom block (~130 lines) is a second candidate. Worth doing
+before the crossing lands, and now overdue rather than pre-emptive: fox.py
+already grew content.py by a small amount around this exact block
+(`_name_fox`, the `FOX_TRUST_SEEN` import) to give the fox a naming
+branch, and the crossing will add more of the same shape.
 
 ## 8. Longer-term: refusals as a signal, not a substring list
 

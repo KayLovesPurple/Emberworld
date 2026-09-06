@@ -5,9 +5,17 @@
 
 ## Status
 
-**Not built.** Agreed design, ready to implement after the smaller queued
-items (twine truth-fix, reed whistle, cat's corner — see README's
-"Someday" section).
+**Built.** Shipped ahead of the smaller queued items (twine truth-fix,
+reed whistle, cat's corner) this doc originally put first in line — the
+egg glut this spec exists to fix ("a hand carrying nine eggs") kept
+recurring in real play, so the egg sink took priority over the smaller,
+lower-value items in front of it. See docs/ARCHITECTURE.md's "The fox"
+section for the full as-built write-up, including two implementation
+decisions this spec left open: exact trust thresholds, and how "morning
+texture" is actually delivered (a persistent trace entity in the yard,
+reusing the room-listing machinery every other piece of world state
+already goes through, rather than a one-tick-only announcement a hand
+could easily miss).
 
 ## Where this came from
 

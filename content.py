@@ -40,6 +40,7 @@ import journal   # noqa: F401 -- no names used directly; imported for its own
                   # VERBS/FREE_VERBS registration, same reason cat/chicken/
                   # curios get imported even where content.py doesn't use
                   # every name they export.
+from fox import FOX_TRUST_SEEN, ensure_fox, fox_actions
 
 
 # ---------------------------------------------------------------------------
@@ -685,9 +686,29 @@ def _animal_description(species, animal):
     return _cat_description(animal) if species == "cat" else _chicken_description(animal)
 
 
+# The fox grows a THIRD virtual entry in cmd_name's own dispatch rather
+# than a parallel verb -- but she isn't in _NAMEABLE_ANIMALS/the entity
+# loop below, and can't be: there's no fox entity, ever (FOX_SPEC.md's
+# design goal 4), so "is it here" can't mean "is it in this room" the way
+# it does for the cat and chicken. Naming her is ungated by location --
+# a hand names what it's heard of (FOX_TRUST_SEEN, a fact about the whole
+# lineage, on the yard's own attrs), not what's standing in front of it.
+def _name_fox(world, given):
+    yard = world.get("yard")
+    if yard is None or yard.attrs.get("fox_trust", 0) < FOX_TRUST_SEEN:
+        return "There's no fox here to name."
+    given = given.strip().strip('"').split("\n")[0][:24].strip()
+    if not given:
+        return "Name it what? e.g.  name fox Sorrel"
+    yard.attrs["fox_given_name"] = given
+    return f"You turn the sign of her over a moment, then decide: {given}."
+
+
 def cmd_name(world, actor, arg):
-    """name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has)."""
+    """name cat <name> / name chicken <name> / name fox <name> -- name an animal you've encountered; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has). Naming the fox unlocks once she's been seen, and doesn't require standing anywhere near her -- she's never present to stand near."""
     arg = arg.strip()
+    if arg.lower().startswith("fox "):
+        return _name_fox(world, arg[len("fox "):])
     species = "cat"
     for candidate in _NAMEABLE_ANIMALS:
         if arg.lower().startswith(candidate + " "):
@@ -1909,13 +1930,13 @@ def journal_actions(world, actor):
 
 # Registered here, in one place and one deliberate order, rather than each
 # module appending its own on import: this is a list, and the order a hand
-# reads the actions in is part of the surface. cat_actions/chicken_actions
-# are defined in cat.py/chicken.py with the rest of each animal, and stay
-# last, where cat_actions has always been.
+# reads the actions in is part of the surface. cat_actions/chicken_actions/
+# fox_actions are defined in cat.py/chicken.py/fox.py with the rest of each
+# animal, and stay last, where cat_actions has always been.
 ACTION_SOURCES.extend([
     core_actions, garden_actions, forest_actions, riverbank_actions, sky_actions,
     hearth_actions, carrying_actions, making_actions, journal_actions,
-    cat_actions, chicken_actions,
+    cat_actions, chicken_actions, fox_actions,
 ])
 
 
@@ -2093,6 +2114,7 @@ def build_world():
 
     build_cat(w)
     build_chicken(w)
+    ensure_fox(w)
 
     patch = w.add(Entity("patch", "vegetable patch",
         "a strip of turned soil, dark and ready", location="yard"))

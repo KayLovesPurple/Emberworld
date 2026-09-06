@@ -28,6 +28,17 @@ reads that note and harvests the crop.
   well-visited room readable. Split out of content.py the same way
   cat.py/chicken.py were, once it had grown into the largest coherent
   slice left in the file.
+- `journal.py` — the shared journal as its own self-contained subsystem:
+  writing an entry, reading the capped/spread view a hand actually sees,
+  and the entry-indexing bookkeeping curios.py's tuck-in-journal reaches
+  for. Split out of content.py once it grew into a second coherent slice.
+- `pots.py` — clay storage pots: a shaped clay "...pot" that locks to one
+  item kind and holds up to 7, reusing curios.py's `place`/`put` (now also
+  `store`) verb via a deferred import rather than a new dispatch key.
+- `fox.py` — the fox: never an entity, ever, all her state living in
+  attrs on the yard. A lineage-time relationship built one egg offering
+  at a time, texture that deepens in stages, naming once she's been
+  seen, and, past a trust ceiling, rare gifts on her own clock.
 - `forest_text.py` — the forest's generated texture: the near/mid/deep
   fragment pools and the ambient lines, plus the two small functions that
   compose them. Pure writing, no world state; split out because it's the
@@ -46,7 +57,7 @@ reads that note and harvests the crop.
 - `test_world.py` / `test_cat.py` / `test_chicken.py` / `test_drivers.py` /
   `test_lineage_memory.py` / `test_hut_basics.py` / `test_curios.py` /
   `test_forest_edge.py` / `test_forest_venture.py` / `test_journal_and_seed.py` /
-  `test_riverbank.py` / `test_map.py`
+  `test_riverbank.py` / `test_map.py` / `test_pots.py` / `test_fox.py`
   — the safety net, split to match (content.py's own tests split further,
   by subject, once the combined file outgrew content.py itself). Each runs
   with or without pytest; `_test_helpers.py` holds the handful of things
@@ -354,11 +365,12 @@ commitment.
    than a single-verb loop — the cosiest possible use of a turn, and a
    self-directed comfort for the player the way petting is comfort for the cat.
 
-### The agreed queue (as of world day 75 — decided together, not yet built)
+### The agreed queue (as of world day 75 — decided together)
 
 Five additions agreed after reading the lineage's actual play (the
 journal, the wish log, the session transcripts), in build order — small
-to large, each shippable alone:
+to large, each shippable alone (item 4 shipped out of that order; see
+its own entry for why):
 
 1. **The twine truth-fix.** Days 68–73 of the journal show false lore
    winning: several hands wrote that the charm-string "is just
@@ -381,12 +393,15 @@ to large, each shippable alone:
    `look corner` giving the full hoard. Same permanence, one line.
    Existing traces migrate on load (charm-string-backfill precedent);
    `SAVE_VERSION` bumps.
-4. **The fox** *(see `docs/FOX_SPEC.md`)*. The egg's second fate and the
-   cat's wild counterpart: offerings left out in the yard ratchet a
-   lineage-time trust arc — prints, a glimpse, seen, named — and, at its
-   ceiling, rare gifts from off the map arrive on her own clock, never
-   legibly tied to any offering. She is prose, not an entity: she can
-   never come to harm, and never do any.
+4. **The fox** *(built — see `docs/FOX_SPEC.md` and
+   `docs/ARCHITECTURE.md`'s "The fox" section)*, shipped out of order
+   ahead of 2 and 3 above once the egg glut it fixes kept recurring in
+   real play. The egg's second fate and the cat's wild counterpart:
+   `leave egg out` in the yard ratchets a lineage-time trust arc —
+   prints, a glimpse, seen, named — and, at its ceiling, rare gifts from
+   off the map arrive on her own clock, never legibly tied to any
+   offering. She is prose, not an entity: she can never come to harm,
+   and never do any.
 5. **The crossing** *(see `docs/CROSSING_SPEC.md`)*. Driftwood, washed
    up rarely at the riverbank, laid piece by piece — one-way, anonymous,
    cairn-grammar — into a crossing no single hand can finish. When the

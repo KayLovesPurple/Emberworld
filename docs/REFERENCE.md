@@ -13,6 +13,7 @@
 - `tuck` -- tuck <thing> in journal -- press a flat curio (a feather, or the mystery seed's bloom) into this visit's journal entry; permanent, like a stone on the cairn.
 - `write` -- write <note> -- add a line to the shared journal for future visitors.
 - `read` -- read journal -- read the journal (needs light unless you're holding it); shows a spread of entries rather than all of them, and `read journal all` shows the lot; anything tucked into a shown entry (see `tuck`) is named alongside it.  _(free -- costs no time)_
+- `leave` -- leave egg out -- leave a carried egg (raw or cooked, she's not fussy) by the fence overnight for whoever the night brings; one-way, and at most one offering out at a time.
 - `look` / `l` / `examine` / `x` -- look [thing] -- describe the room, or examine one thing (dark hides all but what you hold); "look actions" works the same as "actions".  _(free -- costs no time)_
 - `map` -- map -- show a hand-drawn layout of the outer world (hut/yard/forest's edge/riverbank), plus a hint of the unmapped forest beyond its edge.  _(free -- costs no time)_
 - `go` / `move` -- go <exit> -- move through a named exit (you can also just type the exit name; "inside" works anywhere "in" does).
@@ -39,7 +40,7 @@
 - `wish` -- wish <something> -- speak a wish to the statue, deep in the forest; it changes nothing and confirms nothing, ever.
 - `add` / `stoke` -- add wood -- feed carried firewood into the hearth, raising its fuel (offered even with none carried, so the refusal teaches where it comes from).
 - `shape` -- shape clay into <name> -- shape a carried lump of raw clay into something of your own naming; permanent, and yours to carry.
-- `name` -- name cat <name> / name chicken <name> -- name the cat or the chicken; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has).
+- `name` -- name cat <name> / name chicken <name> / name fox <name> -- name an animal you've encountered; the name is kept for every future visit ("name <name>" alone still names the cat, as it always has). Naming the fox unlocks once she's been seen, and doesn't require standing anywhere near her -- she's never present to stand near.
 
 ## Autonomous behaviors
 *These run on their own every tick, whether or not you act.*
@@ -50,6 +51,7 @@
 - **cat_replay** -- Autonomous: rarely, if something the cat has already played with (a curio previously given away, see cmd_give's "plays" reaction) is lying in its current room, the cat bats at it again.
 - **chicken_idle** -- Autonomous: ambient yard-life, purely cosmetic.
 - **chicken_lay** -- Autonomous: now and then, an egg.
+- **fox_tending** -- Autonomous, attached to the yard itself (there being no fox entity to attach it to): resolves a waiting offering the moment night falls -- always, from the first offering onward, since an untouched offering would just rebuild the egg clutter one room over -- and, entirely independently, rolls a rare gift once trust has crossed its ceiling.
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice as fast on any tick it spends a unit of stored water.
 - **patch_state** -- Autonomous: the vegetable patch describes itself by what's growing in it, including whether it was just watered.
