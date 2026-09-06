@@ -18,6 +18,11 @@ reads that note and harvests the crop.
   invariant checker.
 - `content.py` — Emberworld itself: the verbs, the autonomous behaviors, and
   the world as assembled fresh.
+- `content_common.py` — pure helpers shared by content.py, cat.py,
+  curios.py, journal.py, pots.py, and drivers.py without any of them
+  importing each other: name-resolution (`find_visible`/`_carrying`/
+  `_room_here`), the actor's hunger bands, and `banded()`, the shared
+  walker behind every count/height-banded description in the game.
 - `cat.py` — the cat as its own self-contained subsystem: its constants,
   behaviors, verbs, and how it's built into a fresh world.
 - `chicken.py` — the chicken, cat.py's sibling subsystem: a gentle
