@@ -982,6 +982,33 @@ in/out exit pair `_cat_go` knows how to narrate — an unwritten behavior
 is the actual mechanism keeping the chicken in place, not a location
 check anywhere).
 
+**BUG WE HIT, from real play, well after ship: eggs really did pile up
+with no cap, and it was worse than the design assumed.**
+`CHICKEN_SPEC.md`'s original design goal #3 modeled eggs on unharvested
+potatoes — "sit harmlessly if ignored... pile up freely" — reasoning
+that `CHICKEN_LAY_CHANCE` (0.06) was small enough per tick not to
+matter. It doesn't matter *per tick*; across every tick of every hand's
+play with nothing ever throttling the source, a live lineage
+accumulated a dozen raw eggs regardless (introducing the fox, whose
+`leave egg out` gives eggs a second use, didn't fix this either — it
+only added a sink that absorbs at most one egg a night, well under the
+chicken's own average output). Every *other* producer in this game
+already avoids exactly this: the mystery seed caps at one in play,
+`fox_tending`'s own gifts cap at one unclaimed. The chicken never got
+the same restraint because nothing about its original design goal
+(a source with zero cost, zero neediness) implied it needed one — a
+gap in the original reasoning, not a bug in the sense of code doing the
+wrong thing. `CHICKEN_EGG_CAP` (5) closes it: `chicken_lay` skips its
+roll once that many *raw* eggs already exist anywhere in the world
+(`_raw_eggs_in_world`, name-substring-and-`_is_raw`, the same convention
+`COOKABLES`/`find_visible` already use for "egg"). Cooked eggs don't
+count — a boiled egg is already committed to being eaten soon, not part
+of the surplus this exists to prevent. Not a nest, not a container:
+production simply pauses once there's already a glut, and resumes the
+moment one gets eaten, offered to the fox, or stored away — no chore,
+no pressure, the same "producer just naturally matches demand" shape
+the mystery seed's own restraint already has.
+
 **Eggs are not curios.** Same reasoning as raw/shaped clay: an egg is
 produced by the world on its own schedule, not found-and-disposed-of, so
 it stays off the shelf/cairn/give-to-cat/tuck-in-journal system entirely

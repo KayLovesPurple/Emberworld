@@ -13,6 +13,7 @@ built."
 """
 
 from world import Entity, BEHAVIORS
+from content_common import _is_raw
 
 
 def _chicken_cap(chicken):
@@ -54,16 +55,39 @@ def chicken_idle(world, chicken):
 # docs/CHICKEN_SPEC.md's "The chicken itself".
 CHICKEN_LAY_CHANCE = 0.06
 
+# Superseded design decision, from real play: eggs used to pile up with no
+# cap at all (CHICKEN_SPEC.md's original design goal #3, "eggs behave
+# exactly like potatoes... pile up freely"). 0.06 reads as "small enough"
+# per tick, but with nothing ever throttling the source, a live lineage
+# accumulated a dozen anyway -- the one thing every other producer in this
+# game gets and the chicken didn't: the mystery seed caps at one in play,
+# the fox's own gifts cap at one unclaimed. This is that same restraint,
+# not a nest or a collection mechanic (CHICKEN_SPEC.md's own "explicitly
+# not in scope" for those still holds -- there's no new container, no new
+# verb, just a ceiling on the passive roll). Cooked eggs don't count: a
+# boiled egg is already committed to being eaten soon, not part of the
+# surplus this exists to prevent.
+CHICKEN_EGG_CAP = 5
+
 CHICKEN_LAY_LINES = (
     "{chicken} clucks once, pleased with itself -- there's a fresh egg in the straw.",
     "{chicken} steps back from a fresh egg, ruffling her feathers.",
 )
 
 
+def _raw_eggs_in_world(world):
+    return sum(1 for e in world.entities.values()
+               if "egg" in e.name.lower() and _is_raw(e))
+
+
 def chicken_lay(world, chicken):
-    """Autonomous: now and then, an egg. See CHICKEN_LAY_CHANCE's comment
-    for why this never rides on another action's roll."""
+    """Autonomous: now and then, an egg -- but not while the world's
+    already holding CHICKEN_EGG_CAP raw ones. See CHICKEN_LAY_CHANCE's
+    comment for why this never rides on another action's roll, and
+    CHICKEN_EGG_CAP's for why it's capped at all."""
     if world.rng.random() >= CHICKEN_LAY_CHANCE:
+        return
+    if _raw_eggs_in_world(world) >= CHICKEN_EGG_CAP:
         return
     world.add(Entity(world.fresh_id("egg"), "an egg",
                       "a small brown egg, still warm", location=chicken.location,

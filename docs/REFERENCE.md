@@ -50,7 +50,7 @@
 - **cat_idle** -- Autonomous: a content, well-fed cat occasionally does a small idle cat-thing -- purely cosmetic ambient life, never while it's hungry.
 - **cat_replay** -- Autonomous: rarely, if something the cat has already played with (a curio previously given away, see cmd_give's "plays" reaction) is lying in its current room, the cat bats at it again.
 - **chicken_idle** -- Autonomous: ambient yard-life, purely cosmetic.
-- **chicken_lay** -- Autonomous: now and then, an egg.
+- **chicken_lay** -- Autonomous: now and then, an egg -- but not while the world's already holding CHICKEN_EGG_CAP raw ones.
 - **fox_tending** -- Autonomous, attached to the yard itself (there being no fox entity to attach it to): resolves a waiting offering the moment night falls -- always, from the first offering onward, since an untouched offering would just rebuild the egg clutter one room over -- and, entirely independently, rolls a rare gift once trust has crossed its ceiling.
 - **burning** -- Autonomous: a lit fuel source (the hearth) burns down and goes out.
 - **growing** -- Autonomous: a planted crop ages each tick and eventually ripens -- twice as fast on any tick it spends a unit of stored water.

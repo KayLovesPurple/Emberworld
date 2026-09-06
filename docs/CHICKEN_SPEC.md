@@ -24,8 +24,18 @@ mouth" for the original framing this spec resolved.
    feeding, never has any need at all. If it is ever given a need,
    something has gone wrong — see "A trap explicitly not being built"
    below.
-3. Eggs behave exactly like potatoes: sit harmlessly if ignored, no cap,
-   no decay, pile up freely; cooked at a lit hearth, eaten for food.
+3. Eggs behave like potatoes: sit harmlessly if ignored, no decay, cooked
+   at a lit hearth, eaten for food. **Superseded in part** — "no cap,
+   pile up freely" turned out to be wrong in real play: a live lineage
+   accumulated a dozen raw eggs regardless, since nothing ever throttled
+   the *source* the way every other producer in this game does (the
+   mystery seed's one-in-play restraint, the fox's own one-unclaimed-gift
+   restraint). `CHICKEN_LAY_CHANCE` reads as "small enough" per tick, but
+   with no ceiling it only ever goes up. `chicken_lay` now skips its roll
+   once `CHICKEN_EGG_CAP` raw eggs already exist anywhere in the world —
+   see docs/ARCHITECTURE.md's "The chicken" for the full reasoning. This
+   is a ceiling on production, not a container or collection mechanic;
+   see "Explicitly NOT in scope" below, which still holds.
 4. The chicken is a fixed resident of the yard from world-start, same as
    the cat is a fixed resident of the hut — not something acquired,
    found, or unlocked.
@@ -177,7 +187,11 @@ penalty for ignoring them.
   future change should not casually attach a `chicken_wander` behavior
   without revisiting this doc's design-goal #5.
 - **A nest, or any egg-capacity/collection mechanic** — eggs behave like
-  loose potatoes, not like a curio shelf; no container to manage.
+  loose potatoes, not like a curio shelf; no container to manage. Still
+  true even after `CHICKEN_EGG_CAP` (see design goal #3 above): that's a
+  ceiling on the chicken's own production, not a container anything gets
+  put into or taken out of — an egg still just sits wherever it lands
+  until eaten, offered, or stored, exactly as before.
 - **Any interaction with the shelf/cairn/give-to-cat/tuck-in-journal
   system** — same exclusion as clay; an egg is a food item, not a curio.
 - **Multiple chickens, or a chicken-breeding mechanic** — one chicken,

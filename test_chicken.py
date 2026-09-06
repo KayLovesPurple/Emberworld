@@ -12,8 +12,8 @@ Run it either way:
 import json
 
 from world import World, Entity, check_world
-from chicken import (CHICKEN_IDLE_CHANCE, CHICKEN_LAY_CHANCE, chicken_idle,
-                     chicken_lay, ensure_chicken, build_chicken)
+from chicken import (CHICKEN_IDLE_CHANCE, CHICKEN_LAY_CHANCE, CHICKEN_EGG_CAP,
+                     chicken_idle, chicken_lay, ensure_chicken, build_chicken)
 from content import COOKABLES, EGG_FOOD_VALUE, POTATO_FOOD_VALUE, cmd_cook, cmd_eat, cmd_name
 from _test_helpers import fresh, run
 
@@ -107,14 +107,53 @@ def test_chicken_lay_never_fires_with_a_never_rng():
     assert len(w.entities) == before
 
 
-def test_eggs_pile_up_with_no_cap_across_repeated_forced_lays():
+def test_egg_laying_stops_once_the_cap_of_raw_eggs_is_reached():
+    """Superseded design decision, from real play: eggs used to pile up
+    with no cap at all (mirroring unharvested potatoes) -- a live lineage
+    accumulated a dozen of them regardless, since nothing ever throttled
+    the source the way the mystery seed's "one in play" restraint or the
+    fox's own "one unclaimed gift" restraint already do for everything
+    else that gets produced. chicken_lay now skips its roll once raw eggs
+    already in the world reach CHICKEN_EGG_CAP."""
     w, actor = fresh()
     w.rng = _Always()
     chicken = w.get("chicken")
     for _ in range(12):
         chicken_lay(w, chicken)
     eggs = [e for e in w.entities.values() if e.name == "an egg"]
-    assert len(eggs) == 12, "eggs should pile up freely, same as unharvested potatoes"
+    assert len(eggs) == CHICKEN_EGG_CAP
+
+
+def test_egg_laying_resumes_once_a_raw_egg_is_dealt_with():
+    w, actor = fresh()
+    w.rng = _Always()
+    chicken = w.get("chicken")
+    for _ in range(CHICKEN_EGG_CAP + 3):
+        chicken_lay(w, chicken)
+    eggs = [e for e in w.entities.values() if e.name == "an egg"]
+    assert len(eggs) == CHICKEN_EGG_CAP
+    w.entities.pop(eggs[0].id)
+    chicken_lay(w, chicken)
+    eggs = [e for e in w.entities.values() if e.name == "an egg"]
+    assert len(eggs) == CHICKEN_EGG_CAP
+
+
+def test_the_egg_cap_does_not_count_cooked_eggs():
+    """A boiled egg is already committed to being eaten soon -- it isn't
+    part of the surplus the cap exists to prevent, so it shouldn't block
+    a fresh one from being laid."""
+    w, actor = fresh()
+    w.rng = _Always()
+    chicken = w.get("chicken")
+    for _ in range(CHICKEN_EGG_CAP):
+        chicken_lay(w, chicken)
+    for e in w.entities.values():
+        if e.name == "an egg":
+            e.name = "a boiled egg"
+            e.attrs["food"] = EGG_FOOD_VALUE
+    chicken_lay(w, chicken)
+    raw = [e for e in w.entities.values() if e.name == "an egg"]
+    assert len(raw) == 1, "a fresh egg should still be laid with no raw eggs in the way"
 
 
 def test_chicken_and_its_eggs_survive_a_save_load_roundtrip():
