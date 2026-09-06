@@ -809,6 +809,30 @@ def test_select_nudge_does_not_fire_when_the_statue_is_not_reachable():
     assert statue_nudged is False
 
 
+def test_wish_nudge_text_falls_back_to_the_plain_nudge_with_nothing_done_yet():
+    assert drv._wish_nudge_text([]) == drv._WISH_NUDGE
+
+
+def test_wish_nudge_text_names_real_things_from_the_visits_did_list():
+    """The ungrounded nudge alone still came back as stock fountain material
+    ("a bountiful harvest") even after the in-world hint dropped the
+    fountain simile -- the same fix _leave_signoff already uses (grounding
+    in `did` so it can't confabulate) applied here too."""
+    text = drv._wish_nudge_text(["harvest", "feed cat", "gather wood"])
+    assert "feed cat" in text and "gather wood" in text
+    assert "harvest" not in text, "only the most recent couple of things, not the whole visit"
+    assert text != drv._WISH_NUDGE
+
+
+def test_select_nudge_grounds_the_wish_nudge_in_did_when_something_happened():
+    w, actor = fresh()
+    _at_the_statue(w, actor)
+    nudge, statue_nudged = drv._select_nudge(
+        w, actor, drv.deque(maxlen=5), "", False, did=["harvest", "feed cat"])
+    assert "feed cat" in nudge
+    assert statue_nudged is True
+
+
 # ===========================================================================
 # 2c. SELF-NAMING -- optional, captured once at session start via one small
 #     call. Never forced: a refusal, an empty reply, or anything that

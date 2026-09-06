@@ -2757,6 +2757,37 @@ sign-off catches it regardless of whether the hand followed through —
 a safety net that fires unconditionally at departure, not a stricter
 instruction hoping for better compliance.
 
+**The statue's wish nudge, and grounding it the same way the sign-off
+already had to be.** `STATUE_DISCOVERY_TEXT`/`STATUE_WISH_HINT` (content.py)
+used to end on "the way you'd toss a coin in a fountain" -- dropped after
+real wishes came back as stock fountain-wish material ("a good harvest,"
+"a safe journey home"), several for things the wisher was already
+carrying. That alone wasn't enough: real wishes kept landing as generic
+fountain material even once the in-world hint stopped naming a fountain,
+because the word "wish" alone still pulls toward that genre. `_select_nudge`
+(drivers.py) adds a second, meta-only lever the in-world text can't use --
+a nudge, fired once per visit on the first otherwise-quiet turn the
+statue's reachable (never repeated, so a rare discovery doesn't become a
+repeated chore, and yielding to a stuck warning or a real tending need
+first), that can say "today" outright instead of relying on folk-magic
+phrasing to imply it.
+
+**BUG WE HIT (predictably, in hindsight): the ungrounded version of that
+nudge still came back generic.** "If there's something from today you
+wish you had" gives the model nothing concrete to react to -- it still
+has to invent what "today" contained, and defaults to the same genre the
+wording was trying to avoid. This is the exact shape `did`-grounding
+already fixed for the sign-off, so the fix is the same fix, applied a
+second time: `_wish_nudge_text(did)` names the visit's last couple of
+`did` entries directly in the nudge ("Today so far: harvested a potato,
+fed the cat. If any of that... is something you wish you had..."),
+falling back to the plain ungrounded wording only when nothing's
+happened yet this visit (a fresh arrival truly has nothing to name). Not
+the whole `did` list -- a long recitation would crowd out the actual ask
+-- just enough to give the model something real to either pick up or
+consciously set aside, same "grounded, not inventing" discipline as the
+sign-off itself.
+
 ## Where to go next (deferred, but planned)
 
 The mechanical file-split (engine / content / drivers, described above) is

@@ -704,6 +704,23 @@ _WISH_NUDGE = (
 )
 
 
+def _wish_nudge_text(did):
+    """_WISH_NUDGE, grounded in what this visit's `did` list actually
+    contains so far -- the same fix that already keeps the sign-off from
+    confabulating, applied here since the ungrounded version alone still
+    came back as stock fountain material ("a bountiful harvest") even
+    after the in-world hint stopped naming a fountain. Naming 1-2 real
+    things from today gives the model something to react to instead of
+    inventing a wish from a blank slate. Falls back to the plain nudge
+    when nothing's happened yet this visit -- there's nothing to name."""
+    if not did:
+        return _WISH_NUDGE
+    recent = ", ".join(did[-2:])
+    return (f"\n(The statue's within reach. Today so far: {recent}. If any "
+            "of that -- or anything else today -- is something you wish "
+            "you had, some people leave that with it -- no obligation.)")
+
+
 def _curiosity_nudge(location):
     """The quiet-turn nudge for the given room id, naming real scenery there
     instead of a generic exhortation. Falls back to the old generic line for
@@ -712,7 +729,7 @@ def _curiosity_nudge(location):
     return _QUIET_NUDGES.get(location, _CURIOSITY_NUDGE_FALLBACK)
 
 
-def _select_nudge(w, actor, history, tending, wish_nudge_given):
+def _select_nudge(w, actor, history, tending, wish_nudge_given, did=()):
     """What (if anything) goes in the turn's nudge slot, in priority order:
     a stuck warning, then -- once per visit, and only on an otherwise quiet
     turn -- the statue's wish nudge if it's currently reachable, then the
@@ -728,7 +745,7 @@ def _select_nudge(w, actor, history, tending, wish_nudge_given):
     if tending:
         return ("", False)
     if not wish_nudge_given and _statue_reachable(w, actor):
-        return (_WISH_NUDGE, True)
+        return (_wish_nudge_text(did), True)
     return (_curiosity_nudge(actor.location), False)
 
 
@@ -808,7 +825,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
             turns_left = turns - i
             actions = w.available_actions(actor)
             tending = _tending_note(w)
-            nudge, statue_nudged = _select_nudge(w, actor, history, tending, wish_nudge_given)
+            nudge, statue_nudged = _select_nudge(w, actor, history, tending, wish_nudge_given, did)
             wish_nudge_given = wish_nudge_given or statue_nudged
             known = ""
             if journal_text is not None:
