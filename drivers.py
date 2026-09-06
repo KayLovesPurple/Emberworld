@@ -19,7 +19,7 @@ from datetime import datetime
 from collections import deque
 
 from world import World, WorldInvariantError, IncompatibleSaveError, SAVE, SAVE_VERSION, check_world
-from content import build_world, ensure_shelf, ensure_cairn, ensure_riverbank, ensure_charm_string, ensure_chicken, ensure_pot, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in
+from content import build_world, ensure_shelf, ensure_cairn, ensure_riverbank, ensure_charm_string, ensure_chicken, ensure_pot, VERBS, FREE_VERBS, HEARTH_LOW_FUEL, LAMP_LOW_FUEL, _day_stamp, _crop_in, _statue_reachable
 from journal import journal_view
 from cat import CAT_MEOW_THRESHOLD, ensure_cat_replay
 from content_common import actor_self_care_note
@@ -686,6 +686,23 @@ _CURIOSITY_NUDGE_FALLBACK = (
     "something you haven't tried, or wander somewhere new.)"
 )
 
+# Fires once per visit, the first quiet turn the statue is reachable --
+# not every such turn, which would turn a rare discovery into a repeated
+# chore and undercut the "no pressure" the statue's own design insists on
+# (see README's "wishing-statue" section). Unlike the ambient in-world
+# hint (STATUE_DISCOVERY_TEXT/STATUE_WISH_HINT in content.py), this is
+# meta -- never shown to a human player -- so it can say "today" outright
+# instead of relying on folk-magic phrasing to imply it. Added after real
+# wishes kept coming back as stock fountain material ("a bountiful
+# harvest") even once the in-world hint stopped naming a fountain: the
+# word "wish" alone pulls toward that genre, and dropping the simile
+# wasn't enough on its own to anchor a wish to anything this visit
+# actually contained.
+_WISH_NUDGE = (
+    "\n(The statue's within reach. If there's something from today you "
+    "wish you had, some people leave that with it -- no obligation.)"
+)
+
 
 def _curiosity_nudge(location):
     """The quiet-turn nudge for the given room id, naming real scenery there
@@ -693,6 +710,26 @@ def _curiosity_nudge(location):
     any location without a bespoke entry -- there are only two rooms today,
     but a future room should degrade gracefully, not crash the turn loop."""
     return _QUIET_NUDGES.get(location, _CURIOSITY_NUDGE_FALLBACK)
+
+
+def _select_nudge(w, actor, history, tending, wish_nudge_given):
+    """What (if anything) goes in the turn's nudge slot, in priority order:
+    a stuck warning, then -- once per visit, and only on an otherwise quiet
+    turn -- the statue's wish nudge if it's currently reachable, then the
+    room's ordinary curiosity nudge, else nothing (something is already
+    tending). Returns (nudge_text, statue_nudged_this_turn) so the caller
+    can latch its own wish_nudge_given from the second value without this
+    function needing to hold state itself."""
+    if _looks_stuck(history):
+        return ("\n(You keep repeating the same free action and nothing "
+                 "is changing. Free actions like look/read never pass time "
+                 "-- use `wait` to let the world move, or do something new.)",
+                 False)
+    if tending:
+        return ("", False)
+    if not wish_nudge_given and _statue_reachable(w, actor):
+        return (_WISH_NUDGE, True)
+    return (_curiosity_nudge(actor.location), False)
 
 
 def _tending_note(world):
@@ -763,6 +800,7 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
 
     history = deque(maxlen=5)
     journal_text = None                       # once read, kept in view so it needn't re-read
+    wish_nudge_given = False                  # the statue nudge fires once per visit, not per turn
     did = []           # visit-long, ordered, NOT deduped -- what really happened
     all_thoughts = []  # visit-long raw thoughts, filtered at departure -- see _flagged_thoughts
     try:
@@ -770,14 +808,8 @@ def llm_agent(turns=30, model=None, think=True, show_thoughts=False,
             turns_left = turns - i
             actions = w.available_actions(actor)
             tending = _tending_note(w)
-            if _looks_stuck(history):
-                nudge = ("\n(You keep repeating the same free action and nothing "
-                         "is changing. Free actions like look/read never pass time "
-                         "-- use `wait` to let the world move, or do something new.)")
-            elif not tending:
-                nudge = _curiosity_nudge(actor.location)
-            else:
-                nudge = ""
+            nudge, statue_nudged = _select_nudge(w, actor, history, tending, wish_nudge_given)
+            wish_nudge_given = wish_nudge_given or statue_nudged
             known = ""
             if journal_text is not None:
                 known = ("\nThe journal (you've already read it, it won't change) "

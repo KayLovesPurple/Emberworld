@@ -769,6 +769,46 @@ def test_curiosity_nudge_falls_back_gracefully_for_an_unknown_location():
     assert drv._curiosity_nudge("nowhere-yet") != ""
 
 
+def _at_the_statue(w, actor):
+    w.act(actor, "go out")
+    w.act(actor, "go forest")
+    from content import STATUE_MIN_DEPTH
+    w.forest_depth = STATUE_MIN_DEPTH
+    w.statue_found_this_session = True
+
+
+def test_select_nudge_gives_the_wish_nudge_once_when_the_statue_is_reachable():
+    w, actor = fresh()
+    _at_the_statue(w, actor)
+    nudge, statue_nudged = drv._select_nudge(w, actor, drv.deque(maxlen=5), "", False)
+    assert nudge == drv._WISH_NUDGE
+    assert statue_nudged is True
+
+
+def test_select_nudge_does_not_repeat_once_already_given_this_visit():
+    w, actor = fresh()
+    _at_the_statue(w, actor)
+    nudge, statue_nudged = drv._select_nudge(w, actor, drv.deque(maxlen=5), "", True)
+    assert nudge != drv._WISH_NUDGE
+    assert statue_nudged is False
+
+
+def test_select_nudge_yields_to_tending_over_the_wish_nudge():
+    w, actor = fresh()
+    _at_the_statue(w, actor)
+    nudge, statue_nudged = drv._select_nudge(
+        w, actor, drv.deque(maxlen=5), "(Right now: you're hungry.)", False)
+    assert nudge == ""
+    assert statue_nudged is False
+
+
+def test_select_nudge_does_not_fire_when_the_statue_is_not_reachable():
+    w, actor = fresh()
+    nudge, statue_nudged = drv._select_nudge(w, actor, drv.deque(maxlen=5), "", False)
+    assert nudge != drv._WISH_NUDGE
+    assert statue_nudged is False
+
+
 # ===========================================================================
 # 2c. SELF-NAMING -- optional, captured once at session start via one small
 #     call. Never forced: a refusal, an empty reply, or anything that
