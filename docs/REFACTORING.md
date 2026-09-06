@@ -22,17 +22,19 @@ world.py that each module appends its backfill to, iterated by
 `ACTION_SOURCES`, in case order ever matters (it shouldn't today, but a
 registry that silently reorders is how it starts mattering).
 
-## 2. A shared `banded()` helper
+## 2. A shared `banded()` helper — **done**
 
 `_cairn_description` (curios.py), `_charm_string_description`
-(curios.py), and `_bloom_description` (content.py) are three
+(curios.py), and `_bloom_description` (content.py) were three
 byte-identical walk-the-`(threshold, line)`-bands loops; the hearth and
-lamp hand-roll the same idea. One small helper in content_common.py
-collapses them — and it's about to earn its keep four more times: the
-crossing's prose tiers, the fox's trust stages, and the cat's corner's
-deepening line all want exactly this shape. Do this one *before* the
-feature queue if possible, so the new features are born on the helper
-rather than adding a fourth and fifth copy.
+lamp hand-roll the same idea but don't fit the helper's exact shape
+closely enough to be worth forcing (see docs/ARCHITECTURE.md's note on
+this). `banded(bands, value)` in content_common.py collapses the three —
+generic infrastructure, not owned by any one caller, same reasoning
+`find_visible`/`_carrying`/`_room_here` already moved there for. Ready to
+earn its keep four more times: the crossing's prose tiers, the fox's
+trust stages, and the cat's corner's deepening line all want exactly this
+shape.
 
 ## 3. Data-key the calm verbs by room
 
@@ -107,7 +109,7 @@ refusal string would catch silent drift.
 
 ## The order, if doing them as a batch
 
-2 (banded) → 1 (ENSURES) → 4 (LOOK_OVERRIDES) → 3 (calm pools) →
+~~2 (banded)~~ → 1 (ENSURES) → 4 (LOOK_OVERRIDES) → 3 (calm pools) →
 5 (VisitState) as one small-change run; then 7 and 6 as the two big
 mechanical moves; 8 whenever the verb surface is next quiet. Run the
 full test suite plus `--fuzz` after each one, per ARCHITECTURE.md's

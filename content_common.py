@@ -1,7 +1,8 @@
 """
-content_common.py -- helpers shared by content.py, cat.py, curios.py, and
-drivers.py without importing any of them (breaks the import cycles a
-subject module would otherwise create with content.py, the hub).
+content_common.py -- helpers shared by content.py, cat.py, curios.py,
+journal.py, pots.py, and drivers.py without any of them importing each
+other (breaks the import cycles a subject module would otherwise create
+with content.py, the hub).
 
 Keep this file free of verb handlers and build_world knowledge except what
 can be expressed as pure functions on World/Entity. find_visible/_carrying/
@@ -10,6 +11,28 @@ they're name-resolution infrastructure every verb in the game reaches
 through, not curio-specific, so they belong at this shared layer rather
 than in either subject module.
 """
+
+# REFACTORING.md item 2: _cairn_description (curios.py),
+# _charm_string_description (curios.py), and _bloom_description
+# (content.py) were three byte-identical walk-the-(threshold, line)-bands
+# loops, differing only in which table and value they closed over. One
+# shared helper here instead -- generic infrastructure, not owned by any
+# one of its callers, the same reasoning find_visible/_carrying/_room_here
+# already moved here for.
+def banded(bands, value):
+    """The line for the highest threshold `value` has reached or passed,
+    walking an ascending `((threshold, line), ...)` table. `bands[0]`'s
+    threshold should be the lowest `value` could ever be (0, for every
+    current caller) so there's always a match. Order matters -- bands must
+    already be sorted ascending by threshold, since this walks them in
+    order and keeps the last one satisfied rather than searching for the
+    best fit."""
+    text = bands[0][1]
+    for threshold, line in bands:
+        if value >= threshold:
+            text = line
+    return text
+
 
 # Actor hunger rises 1/tick via content.py's hungering behavior; cap matches
 # that behavior so thresholds here cannot drift from the simulation.

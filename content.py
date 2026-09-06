@@ -24,7 +24,7 @@ from content_common import (
     _the, _is_raw, _is_cooked, LAST_POTATO_BEAT, _patch_has_crop,
     _last_potato_beat, day_stamp as _day_stamp,
     PRESENCE_RULES, PRESENCE_LAST, _always_present, _room_here,
-    find_visible, _carrying,
+    find_visible, _carrying, banded,
 )
 from curios import (
     FOUND_ITEMS, _found_description,
@@ -929,11 +929,7 @@ BLOOM_BANDS = (
 
 
 def _bloom_description(growth):
-    text = BLOOM_BANDS[0][1]
-    for threshold, line in BLOOM_BANDS:
-        if growth >= threshold:
-            text = line
-    return text
+    return banded(BLOOM_BANDS, growth)
 
 
 # What it becomes -- fixed the instant it's planted, hidden until it opens.
@@ -1345,10 +1341,10 @@ STATUE_DISCOVERY_CHANCE = 0.25   # was 0.15; real play found the wait too long.
 # for something you don't have; the hint now says that outright instead of
 # naming a genre that happens to imply it.
 STATUE_DISCOVERY_TEXT = (
-    "Between two trunks stands something that isn't a tree -- a weathered "
+    "Between two trunks stands a shape that isn't a tree -- a weathered "
     "stone figure, worn past recognizing, moss thick in its folds. However "
-    "long it's stood here, it was long before you. Something about it makes "
-    "you think people have stood here and wished for something they didn't "
+    "long it's stood here, it was long before you. It has the look of a "
+    "place where people have stood and wished for something they didn't "
     "have."
 )
 

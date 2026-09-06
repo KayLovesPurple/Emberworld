@@ -16,7 +16,7 @@ just this file.
 """
 
 from world import Entity, VERBS
-from content_common import _the, find_visible, _carrying
+from content_common import _the, find_visible, _carrying, banded
 from cat import _cat_cap
 
 
@@ -510,11 +510,7 @@ CAIRN_BANDS = (
 
 
 def _cairn_description(height_cm):
-    text = CAIRN_BANDS[0][1]
-    for threshold, line in CAIRN_BANDS:
-        if height_cm >= threshold:
-            text = line
-    return text
+    return banded(CAIRN_BANDS, height_cm)
 
 
 def ensure_cairn(world):
@@ -599,11 +595,7 @@ CHARM_BANDS = (
 
 
 def _charm_string_description(count):
-    text = CHARM_BANDS[0][1]
-    for threshold, line in CHARM_BANDS:
-        if count >= threshold:
-            text = line
-    return text
+    return banded(CHARM_BANDS, count)
 
 
 # BUG WE HIT: a hand carrying an eligible curio but no twine had no way to

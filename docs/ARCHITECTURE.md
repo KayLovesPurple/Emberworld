@@ -293,6 +293,55 @@ journal.py's `VERBS.update` now runs at a different point in the import
 chain, same cosmetic reordering the curio-economy split saw for its own
 verbs, not a content change).
 
+## `banded()` — one shared (threshold, line) walker
+
+REFACTORING.md item 2, the first of the agreed code-health batch.
+`_cairn_description` (curios.py), `_charm_string_description` (curios.py),
+and `_bloom_description` (content.py) were three byte-identical loops:
+
+```python
+text = TABLE[0][1]
+for threshold, line in TABLE:
+    if value >= threshold:
+        text = line
+return text
+```
+
+— differing only in which table and value each closed over. `banded(bands,
+value)`, in content_common.py, is that loop, written once. Lives at the
+shared layer rather than in curios.py (where two of the three callers
+already are) for the same reason `find_visible`/`_carrying`/`_room_here`
+moved there during the curio-economy split: it's generic infrastructure a
+future caller in *any* subject module should be able to reach without
+that module needing to depend on curios.py for something that isn't
+curio-specific at all. `_cairn_description`/`_charm_string_description`/
+`_bloom_description` themselves stay — each is still its own function,
+naming its own table, callable exactly as before — now one-line wrappers
+around the shared walker instead of three copies of its body.
+
+**Why the hearth and lamp weren't converted too.** `hearth_state`
+(content.py) bands by fuel level like the three above, but the resemblance
+stops at "also uses thresholds": it branches on `lit`/unlit *first*, picks
+between three different fallback strings per branch (some from
+`hearth.attrs`, not a fixed table), appends a cook-hint conditionally, and
+mutates `hearth.description` directly rather than returning a string.
+`_lamp_state_tag` is shorter still — three cases, no table at all. Forcing
+either into `banded()`'s shape would mean bending the helper to fit a
+caller it doesn't really match, or bending the caller to fit the helper —
+worse in both directions than just leaving two genuinely different-shaped
+functions alone. `banded()` exists for callers that are *actually* "walk a
+table of `(threshold, line)` pairs," not every function with a numeric
+threshold anywhere in it.
+
+No behavior change, by construction — same inputs, same outputs, pinned by
+each of the three wrappers' own existing tests (already exercising every
+band boundary) plus three new direct tests of `banded()` itself
+(test_hut_basics.py, since content_common.py has no single topical test
+home of its own: below-first-threshold, exact-threshold and above-highest,
+and a single-band table). Full suite green (599 tests, +3 for `banded()`
+itself), fuzzer clean, `docs/REFERENCE.md` unchanged (none of the three
+wrapped functions has a docstring to regenerate from).
+
 ## The core model
 
 Everything in the world — rooms, the lamp, the cat, you — is one type:

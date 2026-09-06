@@ -25,7 +25,7 @@ from content import (
     POT_ID, POT_DESCRIPTION, ensure_pot,
 )
 from cat import CAT_HUNGER_CAP
-from _test_helpers import fresh, run
+from _test_helpers import fresh, run, _Unlucky
 
 
 # ===========================================================================
@@ -103,8 +103,12 @@ def test_cooking_targets_the_raw_potato_not_an_already_cooked_one():
 def test_eat_with_no_argument_asks_what_rather_than_quoting_empty_string():
     """Real-play bug: bare `eat` fell straight to the not-found branch with
     arg="", producing "You have no '' to eat." -- same class of fix as
-    cmd_wish/cmd_write's own "<verb> what?" guard for a missing argument."""
+    cmd_wish/cmd_write's own "<verb> what?" guard for a missing argument.
+    `eat` still ticks the clock (it's not a FREE_VERB), so a stray cat-idle
+    line can land on the same result -- _Unlucky keeps that roll from
+    firing, same as this file's other exact-match refusal checks."""
     w, actor = fresh()
+    w.rng = _Unlucky()
     result = w.act(actor, "eat")
     assert result == "Eat what? e.g.  eat broiled potato"
 
@@ -925,6 +929,37 @@ def test_pot_survives_a_save_load_roundtrip():
     reloaded = World.from_data(w.to_data())
     pot = reloaded.get(POT_ID)
     assert pot is not None and pot.location == "hut"
+
+
+# ===========================================================================
+# BANDED() -- the shared (threshold, line) walker behind the cairn, the
+# charm-string, and the mystery seed's bloom (REFACTORING.md item 2): three
+# byte-identical loops collapsed into one, in content_common.py since it's
+# generic infrastructure, not owned by any one of its callers. Each
+# caller's own tests (test_forest_edge.py, test_curios.py,
+# test_journal_and_seed.py) already pin the real band tables end to end;
+# these pin the generic walker itself.
+# ===========================================================================
+def test_banded_returns_the_first_lines_text_below_its_own_threshold():
+    from content_common import banded
+    bands = ((0, "empty"), (5, "some"), (10, "full"))
+    assert banded(bands, -1) == "empty"
+    assert banded(bands, 0) == "empty"
+
+
+def test_banded_returns_the_highest_threshold_reached_or_passed():
+    from content_common import banded
+    bands = ((0, "empty"), (5, "some"), (10, "full"))
+    assert banded(bands, 4) == "empty"
+    assert banded(bands, 5) == "some"
+    assert banded(bands, 9) == "some"
+    assert banded(bands, 10) == "full"
+    assert banded(bands, 1000) == "full"
+
+
+def test_banded_works_with_a_single_band():
+    from content_common import banded
+    assert banded(((0, "the only line"),), 999) == "the only line"
 
 
 # ---------------------------------------------------------------------------
